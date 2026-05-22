@@ -1,6 +1,7 @@
 ---
 title: "ডকুমেন্টেশন ইঞ্জিন গাইড"
 description: "Next.js 16, Tailwind CSS v4 এবং Framer Motion দিয়ে তৈরি আর্কিটেকচার নলেজ বেস।"
+category: "Guide"
 ---
 
 # স্বাগতম আমাদের সেন্ট্রাল নলেজ বেস-এ

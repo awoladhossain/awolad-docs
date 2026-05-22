@@ -8,6 +8,7 @@ interface Doc {
   slug: string;
   title: string;
   description: string;
+  category: string;
 }
 
 // ফেইড-ইন এবং সাটল (Subtle) স্প্রিং ট্রানজিশন কন্টেইনার
@@ -55,9 +56,14 @@ export default function AnimatedGrid({ docs }: { docs: Doc[] }) {
                   <div className="p-2.5 bg-black/35 rounded-xl border border-white/10 text-slate-500 group-hover:text-emerald-300 group-hover:bg-emerald-500/5 group-hover:border-emerald-400/20 transition-all duration-300">
                     <FileText className="h-5 w-5" />
                   </div>
-                  <span className="text-[10px] sm:text-[11px] font-mono tracking-widest text-slate-500 uppercase bg-black/35 px-3 py-1 rounded-full border border-white/10 group-hover:border-emerald-400/15 group-hover:text-emerald-300 transition-all duration-300">
-                    REFERENCE: {doc.slug.replace(/-/g, '_').toUpperCase()}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] sm:text-[11px] font-mono tracking-widest text-slate-500 uppercase bg-black/35 px-3 py-1 rounded-full border border-white/10 group-hover:border-emerald-400/15 group-hover:text-emerald-300 transition-all duration-300">
+                      {doc.category}
+                    </span>
+                    <span className="hidden text-[10px] font-mono tracking-widest text-slate-600 uppercase sm:inline">
+                      {doc.slug.replace(/-/g, '_')}
+                    </span>
+                  </div>
                 </div>
                 <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-emerald-400 transform group-hover:translate-x-1.5 transition-transform duration-300" />
               </div>

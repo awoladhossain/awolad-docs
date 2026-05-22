@@ -4,6 +4,12 @@ import path from 'path';
 
 const contentDirectory = path.join(process.cwd(), 'content');
 
+export interface DocMeta {
+  title: string;
+  description: string;
+  category?: string;
+}
+
 export async function getDocBySlug(slug: string) {
   const fullPath = path.join(contentDirectory, `${slug}.md`);
 
@@ -16,7 +22,7 @@ export async function getDocBySlug(slug: string) {
 
   return {
     slug,
-    meta: data as { title: string; description: string },
+    meta: data as DocMeta,
     content,
   };
 }

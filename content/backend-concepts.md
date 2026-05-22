@@ -1,6 +1,7 @@
 ---
 title: 'Backend Concepts'
 description: 'এই নোটটা backend interview, system design, production debugging, এবং senior-level thinking মাথায় রেখে সাজানো।'
+category: 'Backend'
 ---
 
 # Backend Concepts: Interview + Senior-Level Notes

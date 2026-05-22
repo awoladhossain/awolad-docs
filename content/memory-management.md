@@ -1,6 +1,7 @@
 ---
 title: "Memory Management"
 description: "Pointers, stack, heap, process memory layout, garbage collection, memory leak, dangling pointer এবং double pointer নিয়ে একটি structured guide।"
+category: "Programming"
 ---
 
 # Memory Management

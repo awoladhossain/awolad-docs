@@ -1,8 +1,39 @@
 import AnimatedGrid from '@/components/AnimatedGrid';
 import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
-import { BookOpen, Database, FileText } from 'lucide-react';
+import Link from 'next/link';
+import { BookOpen, ChevronLeft, ChevronRight, Database, FileText } from 'lucide-react';
 
-export default async function HomePage() {
+interface HomePageProps {
+  searchParams: Promise<{
+    category?: string | string[];
+    page?: string | string[];
+  }>;
+}
+
+const PAGE_SIZE = 6;
+
+function getQueryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildHomeHref(category: string, page = 1) {
+  const params = new URLSearchParams();
+
+  if (category !== 'All') {
+    params.set('category', category);
+  }
+
+  if (page > 1) {
+    params.set('page', String(page));
+  }
+
+  const query = params.toString();
+
+  return query ? `/?${query}` : '/';
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const query = await searchParams;
   const slugs = getAllDocSlugs();
 
   const docs = await Promise.all(
@@ -14,9 +45,24 @@ export default async function HomePage() {
         description:
           doc?.meta?.description ||
           `Structured notes and practical references from ${slug}.md.`,
+        category: doc?.meta?.category || 'General',
       };
     }),
   );
+
+  const sortedDocs = docs.sort((a, b) => a.title.localeCompare(b.title));
+  const categories = ['All', ...Array.from(new Set(sortedDocs.map((doc) => doc.category))).sort()];
+  const requestedCategory = getQueryValue(query.category) || 'All';
+  const selectedCategory = categories.includes(requestedCategory) ? requestedCategory : 'All';
+  const requestedPage = Number(getQueryValue(query.page) || '1');
+  const filteredDocs =
+    selectedCategory === 'All'
+      ? sortedDocs
+      : sortedDocs.filter((doc) => doc.category === selectedCategory);
+  const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, requestedPage || 1), totalPages);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const visibleDocs = filteredDocs.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_32%),radial-gradient(circle_at_82%_16%,rgba(20,184,166,0.1),transparent_28%),#09090b] text-white selection:bg-emerald-500/20 selection:text-emerald-200 antialiased font-jakarta">
@@ -59,7 +105,7 @@ export default async function HomePage() {
           </p>
         </header>
 
-        <section className="mb-10 flex items-center justify-between border-b border-emerald-400/10 pb-5">
+        <section className="mb-6 flex items-center justify-between border-b border-emerald-400/10 pb-5">
           <div className="flex items-center gap-3">
             <FileText className="h-5 w-5 text-emerald-400" />
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
@@ -74,7 +120,107 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <AnimatedGrid docs={docs} />
+        <div className="mb-8 flex flex-wrap gap-2">
+          {categories.map((category) => {
+            const active = category === selectedCategory;
+            const count =
+              category === 'All'
+                ? sortedDocs.length
+                : sortedDocs.filter((doc) => doc.category === category).length;
+
+            return (
+              <Link
+                key={category}
+                href={buildHomeHref(category)}
+                className={`
+                  inline-flex
+                  items-center
+                  gap-2
+                  rounded-full
+                  border
+                  px-3
+                  py-2
+                  text-xs
+                  font-semibold
+                  transition-colors
+                  ${
+                    active
+                      ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200'
+                      : 'border-white/10 bg-black/25 text-slate-500 hover:border-white/20 hover:text-slate-200'
+                  }
+                `}
+              >
+                <span>{category}</span>
+                <span className="font-mono text-[10px] text-slate-500">{count}</span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <AnimatedGrid docs={visibleDocs} />
+
+        <div className="mt-10 flex flex-col gap-4 border-t border-emerald-400/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-500">
+            Showing {visibleDocs.length} of {filteredDocs.length} documents
+            {selectedCategory !== 'All' ? ` in ${selectedCategory}` : ''}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href={buildHomeHref(selectedCategory, currentPage - 1)}
+              aria-disabled={currentPage === 1}
+              className={`
+                inline-flex
+                h-10
+                items-center
+                gap-2
+                rounded-lg
+                border
+                px-3
+                text-sm
+                font-medium
+                transition-colors
+                ${
+                  currentPage === 1
+                    ? 'pointer-events-none border-white/5 text-slate-700'
+                    : 'border-white/10 text-slate-400 hover:border-emerald-400/25 hover:text-white'
+                }
+              `}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Link>
+
+            <span className="min-w-20 text-center text-xs font-mono uppercase tracking-wider text-slate-600">
+              {currentPage} / {totalPages}
+            </span>
+
+            <Link
+              href={buildHomeHref(selectedCategory, currentPage + 1)}
+              aria-disabled={currentPage === totalPages}
+              className={`
+                inline-flex
+                h-10
+                items-center
+                gap-2
+                rounded-lg
+                border
+                px-3
+                text-sm
+                font-medium
+                transition-colors
+                ${
+                  currentPage === totalPages
+                    ? 'pointer-events-none border-white/5 text-slate-700'
+                    : 'border-white/10 text-slate-400 hover:border-emerald-400/25 hover:text-white'
+                }
+              `}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       </div>
 
       <footer className="max-w-5xl mx-auto px-6 py-14 border-t border-emerald-400/10 text-[11px] font-mono text-slate-600 tracking-widest uppercase flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
