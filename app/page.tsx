@@ -224,8 +224,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <footer className="max-w-5xl mx-auto px-6 py-14 border-t border-emerald-400/10 text-[11px] font-mono text-slate-600 tracking-widest uppercase flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
-        <div>© {new Date().getFullYear()} MD Core Docs</div>
-        <div className="flex items-center gap-6">
+        <div className="text-center sm:text-left">
+          © {new Date().getFullYear()} MD Core Docs by{' '}
+          <span className="text-emerald-300">Awolad Hossain</span>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:justify-end">
+          <a
+            href="mailto:awoladh04@gmail.com"
+            className="text-slate-500 transition-colors hover:text-emerald-300"
+          >
+            awoladh04@gmail.com
+          </a>
+          <span className="text-slate-800">•</span>
           <span className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Personal Knowledge Base
