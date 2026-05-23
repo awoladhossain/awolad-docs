@@ -1,36 +1,141 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MD Core Docs
 
-## Getting Started
+Markdown দিয়ে বানানো একটি personal documentation hub. Database design, SQL, backend concepts, memory management এবং engineering notes এক জায়গায় সাজিয়ে পড়ার জন্য এই site তৈরি করা হয়েছে।
 
-First, run the development server:
+প্রজেক্টটি **Next.js 16**, **React 19**, **Tailwind CSS v4**, **MDX/Markdown**, **Framer Motion** এবং **Lucide React** ব্যবহার করে বানানো।
+
+## কী আছে এখানে
+
+- `content/` ফোল্ডারের `.md` ফাইল থেকে automatic docs page তৈরি হয়
+- Home page-এ সব document card হিসেবে দেখা যায়
+- Category filter এবং pagination আছে
+- প্রতিটি docs page-এ sidebar, table of contents এবং styled markdown content আছে
+- Markdown frontmatter থেকে title, description এবং category নেওয়া হয়
+- Static route generation ব্যবহার করা হয়েছে, তাই docs দ্রুত load হয়
+
+## Tech Stack
+
+- Next.js 16 App Router
+- React 19
+- TypeScript
+- Tailwind CSS v4
+- MDX rendering with `next-mdx-remote`
+- Frontmatter parsing with `gray-matter`
+- Animation with `framer-motion`
+- Icons with `lucide-react`
+
+## Project Structure
+
+```txt
+app/
+  page.tsx              # Home page with docs list, category filter, pagination
+  docs/[slug]/page.tsx  # Individual documentation page
+  layout.tsx            # Root layout and metadata
+  globals.css           # Global styles
+
+components/
+  AnimatedGrid.tsx      # Animated document grid
+
+content/
+  *.md                  # Markdown documentation files
+
+lib/
+  markdown.ts           # Markdown file loader and frontmatter parser
+```
+
+## Local Setup
+
+প্রথমে dependency install করুন:
+
+```bash
+npm install
+```
+
+Development server চালু করুন:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+তারপর browser-এ খুলুন:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```txt
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Available Scripts
 
-## Learn More
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Local development server চালায়।
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Production build তৈরি করে।
 
-## Deploy on Vercel
+```bash
+npm run start
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Production build locally run করে।
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+```
+
+ESLint দিয়ে code check করে।
+
+## নতুন Document যোগ করার নিয়ম
+
+`content/` ফোল্ডারে নতুন `.md` ফাইল তৈরি করুন। ফাইলের নামই URL slug হবে।
+
+উদাহরণ:
+
+```txt
+content/system-design.md
+```
+
+এই ফাইলটি পাওয়া যাবে:
+
+```txt
+/docs/system-design
+```
+
+প্রতিটি markdown file-এর শুরুতে frontmatter দিন:
+
+```md
+---
+title: "System Design Notes"
+description: "Scalability, caching, database, queue এবং distributed system নিয়ে notes."
+category: "Backend"
+---
+
+# System Design Notes
+
+এখানে আপনার documentation লিখুন।
+```
+
+## Current Documents
+
+- Backend Concepts
+- ডাটাবেজ ডিজাইন ও SQL কনসেপ্ট
+- ডকুমেন্টেশন ইঞ্জিন গাইড
+- Memory Management
+
+## Deployment
+
+Production build check করতে:
+
+```bash
+npm run build
+```
+
+Next.js support করে এমন যেকোনো platform-এ deploy করা যাবে, যেমন Vercel বা নিজের Node.js server।
+
+## Notes
+
+এই project মূলত personal knowledge base হিসেবে তৈরি। নতুন topic যোগ করতে শুধু `content/` ফোল্ডারে markdown file রাখলেই site automatically সেটি index করবে।
