@@ -1,5 +1,5 @@
 ---
-title: "ডকুমেন্টেশন ইঞ্জিন গাইড"
+title: "Documentation Guide"
 description: "Next.js 16, Tailwind CSS v4 এবং Framer Motion দিয়ে তৈরি আর্কিটেকচার নলেজ বেস।"
 category: "Guide"
 ---

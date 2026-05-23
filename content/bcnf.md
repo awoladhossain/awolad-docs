@@ -1,5 +1,5 @@
 ---
-title: "ডাটাবেজ ডিজাইন ও SQL কনসেপ্ট"
+title: "Database Design & SQL Concept"
 description: "নর্মালাইজেশন, BCNF, N+1 Query Problem, রিলেশনশিপ, referential action, WHERE, HAVING এবং GROUP BY নিয়ে একটি সংক্ষিপ্ত প্রফেশনাল গাইড।"
 category: "Database"
 ---
