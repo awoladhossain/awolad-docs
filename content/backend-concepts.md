@@ -12,8 +12,9 @@ category: 'Backend'
 
 ### Core Idea
 
-- **HTTP (HyperText Transfer Protocol):** Client এবং server-এর মধ্যে request-response communication protocol।
-- **HTTPS:** HTTP-এর secure version। এখানে HTTP traffic TLS/SSL দিয়ে encrypted থাকে।
+- **HTTP (HyperText Transfer Protocol):** Client এবং server-এর মধ্যে request-response communication protocol।এটি একটি অ্যাপ্লিকেশন লেয়ার প্রোটোকল যা ক্লায়েন্ট (ব্রাউজার) এবং সার্ভারের মধ্যে ডেটা আদান-প্রদান করে। এটি Stateless এবং ডেটা পাঠায় Plain Text আকারে।
+
+- **HTTPS:** HTTP-এর secure version। এখানে HTTP traffic TLS/SSL দিয়ে encrypted থাকে। এটি মূলত HTTP-র একটি সুরক্ষিত সংস্করণ। এখানে HTTP-র নিচে একটি সিকিউরিটি লেয়ার থাকে যাকে বলা হয় TLS (Transport Layer Security)। আগে একে SSL বলা হতো, তবে এখন TLS-ই স্ট্যান্ডার্ড।
 
 ### HTTP কীভাবে কাজ করে
 
@@ -24,14 +25,22 @@ Client -> HTTP Request -> Server
 Client <- HTTP Response <- Server
 ```
 
-একটি HTTP request-এ সাধারণত থাকে:
+**The Handshake Steps:**
+
+- Client Hello: ক্লায়েন্ট সার্ভারকে বলে, "আমি এই TLS ভার্সন এবং এই Cipher Suites সাপোর্ট করি।"
+- Server Hello & Certificate: সার্ভার তার Public Key এবং একটি Digital Certificate পাঠায়।
+- Authentication: ব্রাউজার চেক করে দেখে যে সার্টিফিকেটটি ট্রাস্টেড কোনো CA (Certificate Authority) দ্বারা সাইন করা কি না।
+- Key Exchange: এখানেই ম্যাজিক ঘটে। ক্লায়েন্ট এবং সার্ভার মিলে একটি Session Key তৈরি করে। (এখানে Asymmetric Encryption যেমন RSA বা Diffie-Hellman ব্যবহার হয়)।
+- Encrypted Session: একবার Session Key তৈরি হয়ে গেলে, পরবর্তী সব ডেটা Symmetric Encryption দিয়ে আদান-প্রদান হয় কারণ এটি অনেক ফাস্ট।
+
+**একটি HTTP request-এ সাধারণত থাকে:**
 
 - Method: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`
 - URL/path
 - Headers
 - Body, যদি লাগে
 
-একটি HTTP response-এ থাকে:
+**একটি HTTP response-এ থাকে:**
 
 - Status code: `200`, `201`, `400`, `401`, `404`, `500`
 - Headers
