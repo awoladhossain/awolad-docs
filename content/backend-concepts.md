@@ -68,6 +68,10 @@ HTTPS শুধু security না। Modern browser এবং protocol support-
 - HTTP/3 QUIC-এর উপর চলে, সেটাও secure transport ব্যবহার করে।
 - TLS termination কোথায় হবে, যেমন load balancer, Nginx, API Gateway, এটা architecture decision।
 - Internal service-to-service communication-এও অনেক company mTLS ব্যবহার করে।
+- Symmetric vs Asymmetric Hybrid Model: HTTPS শুধুমাত্র Asymmetric Encryption ব্যবহার করে না।" কারণ Asymmetric (Public-Private Key) অনেক স্লো এবং কম্পিউটেশনাল কস্ট বেশি। তাই এটি শুধু Handshake এর সময় ব্যবহার হয়। একবার কানেকশন সেটআপ হয়ে গেলে, আসল ডেটা ট্রান্সফার হয় Symmetric Encryption (যেমন AES) দিয়ে।
+- SNI (Server Name Indication): একটি আইপি অ্যাড্রেসে যদি একাধিক ডোমেইন হোস্ট করা থাকে (Virtual Hosting), তবে সার্ভার কীভাবে বুঝবে কোন ডোমেইনের সার্টিফিকেট দেখাতে হবে? SNI টেকনোলজি ক্লায়েন্টকে হ্যান্ডশেকের শুরুতেই ডোমেইন নেম পাঠানোর সুযোগ দেয়।
+- Forward Secrecy: যদি ভবিষ্যতে কোনোভাবে সার্ভারের প্রাইভেট কি (Private Key) লিক হয়, তবে কি আগের রেকর্ড করা সব ট্রাফিক হ্যাক হয়ে যাবে? না, যদি Perfect Forward Secrecy (PFS) এনাবল থাকে। এটি প্রতি সেশনের জন্য আলাদা কি জেনারেট করে।
+- Performance Overhead: অনেকে মনে করে HTTPS অনেক স্লো। কিন্তু HTTP/2 বা HTTP/3 (QUIC) শুধুমাত্র HTTPS-এই কাজ করে, যা আসলে সাইটের লোডিং স্পিড অনেক বাড়িয়ে দেয়।
 
 ### Common Mistakes
 
