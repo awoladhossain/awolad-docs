@@ -2142,6 +2142,118 @@ flowchart TD
 
 ---
 
+## ৩৫. Ultimate Docker CLI Cheat Sheet (ডকার কমান্ডের সম্পূর্ণ চিট-শীট)
+
+ডকার ইকোসিস্টেমের দৈনন্দিন কাজ এবং অ্যাডভান্সড ট্রাবলশুটিংয়ের জন্য প্রয়োজনীয় সব কমান্ড ক্যাটাগরি অনুযায়ী সংকলন করে এই চিট-শীটটি প্রস্তুত করা হয়েছে। এটি যেকোনো সময় কুইক রেফারেন্স হিসেবে ব্যবহারের উপযোগী।
+
+```mermaid
+flowchart TD
+    subgraph CheatSheetCategories [Docker Command Ecosystem]
+        direction TB
+        C1["Container Ops <br>(run, exec, ps, logs, rm)"]
+        C2["Image Ops <br>(build, pull, rmi, tag)"]
+        C3["Volume & Net <br>(create, ls, inspect, prune)"]
+        C4["System Ops <br>(stats, df, system prune)"]
+        C5["Compose Ops <br>(up, down, logs, ps)"]
+    end
+```
+
+### ১. Container Lifecycle Management (কন্টেইনার লাইফসাইকেল কমান্ড)
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| **`docker run`** | নতুন কন্টেইনার তৈরি করে রান করে। | `docker run -d -p 80:80 --name web nginx` |
+| **`docker start`** | স্টপ হয়ে থাকা কন্টেইনার পুনরায় সচল করে। | `docker start web` |
+| **`docker stop`** | রানিং কন্টেইনার নিরাপদভাবে স্টপ করে (`SIGTERM`)। | `docker stop web` |
+| **`docker restart`** | কন্টেইনার রিস্টার্ট করে। | `docker restart web` |
+| **`docker kill`** | কন্টেইনার জোরপূর্বক সাথে সাথে বন্ধ করে (`SIGKILL`)। | `docker kill web` |
+| **`docker pause`** | কন্টেইনারের সব প্রসেস সাসপেন্ড/স্থগিত করে রাখে। | `docker pause web` |
+| **`docker unpause`** | স্থগিত কন্টেইনার পুনরায় রানিং মোডে আনে। | `docker unpause web` |
+| **`docker rm`** | স্টপড কন্টেইনার ফাইল সিস্টেম থেকে ডিলেট করে। | `docker rm web` |
+| **`docker rm -f`** | রানিং কন্টেইনার জোরপূর্বক ডিলেট করে। | `docker rm -f web` |
+| **`docker ps`** | রানিং কন্টেইনারগুলোর তালিকা দেখায়। | `docker ps` |
+| **`docker ps -a`** | স্টপ এবং রানিং সব কন্টেইনারের তালিকা দেখায়। | `docker ps -a` |
+| **`docker ps -q`** | শুধুমাত্র কন্টেইনারগুলোর আইডি (IDs) দেখায়। | `docker ps -q` |
+
+---
+
+### ২. Image Operations (ডকার ইমেজ কমান্ডসমূহ)
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| **`docker build`** | Dockerfile থেকে নতুন ডকার ইমেজ বিল্ড করে। | `docker build -t my-app:v1 .` |
+| **`docker images`** | লোকাল মেশিনে স্টোর থাকা ইমেজের তালিকা দেখায়। | `docker images` |
+| **`docker rmi`** | লোকাল ইমেজ ডিলেট করে। | `docker rmi my-app:v1` |
+| **`docker pull`** | ডকার হাব বা রেজিস্ট্রি থেকে ইমেজ ডাউনলোড করে। | `docker pull alpine` |
+| **`docker push`** | লোকাল ইমেজ ডকার হাবে বা নিজস্ব রেজিস্ট্রিতে পাঠায়। | `docker push username/my-app:v1` |
+| **`docker tag`** | ইমেজের নতুন নাম বা ট্যাগ ডিফাইন করে। | `docker tag my-app:v1 username/my-app:v1` |
+| **`docker history`** | ইমেজের লেয়ারগুলো এবং তাদের সাইজ দেখায়। | `docker history alpine` |
+| **`docker save`** | ইমেজকে tar ফাইলে এক্সপোর্ট করে সেভ করে। | `docker save -o app.tar my-app:v1` |
+| **`docker load`** | tar ফাইল থেকে ইমেজ ইমপোর্ট করে ডকারে লোড করে। | `docker load -i app.tar` |
+
+---
+
+### ৩. Volume & Data Persistence (ভলিউম কমান্ডসমূহ)
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| **`docker volume create`** | কন্টেইনারের বাইরে পারসিস্টেন্ট ভলিউম তৈরি করে। | `docker volume create db_data` |
+| **`docker volume ls`** | তৈরি করা সব ভলিউমের তালিকা দেখায়। | `docker volume ls` |
+| **`docker volume inspect`** | ভলিউমের লোকাল ডিরেক্টরি পাথ ও ডিটেইলস দেখায়। | `docker volume inspect db_data` |
+| **`docker volume rm`** | নির্দিষ্ট ভলিউম ডিলেট করে। | `docker volume rm db_data` |
+| **`docker volume prune`** | অব্যবহৃত (Orphaned) সব ভলিউম ডিলেট করে মেমরি ফ্রী করে। | `docker volume prune -f` |
+
+---
+
+### ৪. Network Configuration (নেটওয়ার্ক কমান্ডসমূহ)
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| **`docker network create`** | নতুন ভার্চুয়াল নেটওয়ার্ক সাবনেট তৈরি করে। | `docker network create --driver bridge my-net` |
+| **`docker network ls`** | ডকার নেটওয়ার্কগুলোর তালিকা দেখায়। | `docker network ls` |
+| **`docker network inspect`** | নেটওয়ার্কের আন্ডারে থাকা কন্টেইনার ও আইপি দেখায়। | `docker network inspect my-net` |
+| **`docker network connect`** | একটি রানিং কন্টেইনারকে নতুন নেটওয়ার্কে যুক্ত করে। | `docker network connect my-net web` |
+| **`docker network disconnect`**| নেটওয়ার্ক থেকে কন্টেইনারের কানেকশন বিচ্ছিন্ন করে। | `docker network disconnect my-net web` |
+| **`docker network rm`** | ডকার নেটওয়ার্ক ডিলিট করে। | `docker network rm my-net` |
+| **`docker network prune`** | অব্যবহৃত সব ভার্চুয়াল নেটওয়ার্ক ডিলেট করে। | `docker network prune -f` |
+
+---
+
+### ৫. Deep Diagnostics & System Cleaning (সিস্টেম ক্লিন ও ডিবাগিং)
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| **`docker exec -it`** | রানিং কন্টেইনারের শেলের ভেতর ঢুকে কমান্ড রান করে। | `docker exec -it web sh` |
+| **`docker logs`** | কন্টেইনারের কনসোল আউটপুট/লগ দেখায়। | `docker logs web` |
+| **`docker logs -f`** | কন্টেইনারের লাইভ রিয়েল-টাইম লগ মনিটর করে। | `docker logs -f web` |
+| **`docker inspect`** | কন্টেইনারের আইপি, পোর্ট, এনভায়রনমেন্ট ও মেটাডাটা দেখায়। | `docker inspect web` |
+| **`docker stats`** | রানিং কন্টেইনারগুলোর মেমরি ও সিপিইউ রিয়েল-টাইমে দেখায়। | `docker stats` |
+| **`docker cp`** | কন্টেইনার ও হোস্টের মধ্যে ফাইল কপি আদান-প্রদান করে। | `docker cp index.html web:/usr/share/nginx/html/` |
+| **`docker port`** | কন্টেইনারের পোর্ট ম্যাপিং ও হোস্ট পোর্ট দেখায়। | `docker port web` |
+| **`docker top`** | কন্টেইনারের ভেতরে বর্তমানে রানিং প্রসেসগুলোর লিস্ট দেখায়। | `docker top web` |
+| **`docker diff`** | কন্টেইনারের ফাইলসিস্টেমে হওয়া পরিবর্তনগুলোর তালিকা দেখায়। | `docker diff web` |
+| **`docker system df`** | কন্টেইনার, ইমেজ ও ভলিউমের মোট ডিস্ক ব্যবহারের হিসাব দেখায়। | `docker system df` |
+| **`docker system prune`** | অব্যবহৃত কন্টেইনার, ইমেজ, ক্যাশ এবং নেটওয়ার্ক এক ক্লিকে ক্লিন করে। | `docker system prune -a --volumes -f` |
+
+---
+
+### ৬. Docker Compose Orchestration (ডকার কম্পোজ অর্কেস্ট্রেশন কমান্ড)
+
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| **`docker compose up`** | docker-compose.yml ফাইলের সব সার্ভিস ক্রিয়েট ও রান করে। | `docker compose up` |
+| **`docker compose up -d`** | সার্ভিসগুলো ব্যাকগ্রাউন্ডে (Detached Mode) সচল করে। | `docker compose up -d` |
+| **`docker compose up --build`**| ইমেজ রিবিল্ড করে সম্পূর্ণ স্ট্যাক চালু করে। | `docker compose up --build -d` |
+| **`docker compose down`** | সার্ভিসগুলো স্টপ করে সব নেটওয়ার্ক ও কন্টেইনার ডিলেট করে। | `docker compose down` |
+| **`docker compose down -v`** | কন্টেইনার ও নেটওয়ার্কের সাথে ডাটাবেস ভলিউমও ডিলিট করে। | `docker compose down -v` |
+| **`docker compose ps`** | কম্পোজ ফাইলের আন্ডারে থাকা সার্ভিসগুলোর স্ট্যাটাস দেখায়। | `docker compose ps` |
+| **`docker compose logs -f`** | সব সার্ভিসের কনসোল লগ রিয়েল-টাইমে কম্বাইনড করে দেখায়। | `docker compose logs -f` |
+| **`docker compose exec`** | কম্পোজ সার্ভিসের ভেতর ঢুকে ইন্টারঅ্যাক্টিভ কমান্ড রান করে। | `docker compose exec backend sh` |
+| **`docker compose config`** | কম্পোজ ফাইলের কোনো সিনট্যাক্স এরর আছে কিনা তা ভ্যালিডেট করে। | `docker compose config` |
+| **`docker compose restart`** | সব ডকার কম্পোজ সার্ভিস রিস্টার্ট করে। | `docker compose restart` |
+
+---
+
 ## 💡 Senior Architect Insights & Best Practices Summary
 
 > "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি. কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
