@@ -2115,6 +2115,71 @@ flowchart TD
 
 ---
 
+### ঝ. Enterprise Database Infrastructure & Security (ডাটাবেস অবকাঠামো, ডেটা এনক্রিপশন ও ডেডলক প্রতিরোধ)
+একটি প্রোডাকশন সিস্টেমে ডেটার সর্বোচ্চ নিরাপত্তা (Encryption), উচ্চ প্রাপ্যতা (High Availability) এবং কনকারেন্সি জনিত ডেডলক (Deadlock) এড়াতে সিস্টেম আর্কিটেক্টরা যে সমস্ত মেকানিজম ব্যবহার করেন তার বাস্তব ব্যাখ্যা ও কোড নিচে দেওয়া হলো:
+
+#### ১. Read/Write Splitting & Connection Routing (উচ্চ প্রাপ্যতা ও লোড ব্যালেন্সিং)
+* **সমস্যা:** একটি ই-কমার্স সাইটে রাইট রিকোয়েস্ট (অর্ডার প্লেস করা) এর চেয়ে রিড রিকোয়েস্ট (প্রোডাক্ট দেখা, সার্চ করা) প্রায় ৯০% বেশি থাকে। সমস্ত কুয়েরি যদি একটিমাত্র ডাটাবেস সার্ভারে হিট করে, তবে সিপিইউ ওভারহেড ১০০% হয়ে সাইট ডাউন হয়ে যাবে।
+* **সমাধান:** আমরা একটি **Primary DB (Write-only)** এবং একাধিক **Read Replicas (Read-only)** সেটআপ করব। অ্যাপ্লিকেশন বা মিডিয়াম-অ্যাওয়ার মিডলওয়্যার (যেমন Pgpool-II) রাইট কোয়েরিগুলোকে পাঠাবে প্রাইমারিতে এবং রিড কোয়েরিগুলোকে রেপ্লিকাতে ডিস্ট্রিবিউট করবে:
+```mermaid
+flowchart TD
+    App[Backend Node/Go Application] --> Router["Database Connection Router <br> (e.g. pgpool / ProxySQL)"]
+    Router -->|All INSERT/UPDATE/DELETE/Transactions| Primary["Primary DB <br>(Write/Read & WAL Generator)"]
+    Router -->|All SELECT/Read Queries| Replica1["Read Replica 1 <br>(Read-only)"]
+    Router -->|All SELECT/Read Queries| Replica2["Read Replica 2 <br>(Read-only)"]
+    Primary -->|Asynchronous Streaming Replication| Replica1
+    Primary -->|Asynchronous Streaming Replication| Replica2
+
+    style Primary fill:#7f1d1d,stroke:#ef4444,color:#fff
+    style Replica1 fill:#065f46,stroke:#10b981,color:#fff
+    style Replica2 fill:#065f46,stroke:#10b981,color:#fff
+    style Router fill:#1e3a8a,stroke:#3b82f6,color:#fff
+```
+
+#### ২. Sensitive Data Encryption: Column-Level Encryption using `pgcrypto`
+* **সমস্যা (ডাটা লিক প্রতিরোধ):** কাস্টমারের অত্যন্ত স্পর্শকাতর ডেটা (যেমন: ব্যাংক অ্যাকাউন্ট, জাতীয় পরিচয়পত্র বা ফোন নম্বর) যদি ডাটাবেস হ্যাক হওয়ার কারণে লিক হয়ে যায়, তবে কোম্পানির বিশাল আইনি জরিমানা হতে পারে।
+* **সমাধান (Column-Level Encryption):** আমরা ডাটাবেসের `pgcrypto` এক্সটেনশন ব্যবহার করে স্পর্শকাতর ডাটাকে AES-256 এনক্রিপশনের মাধ্যমে এনক্রিপ্ট করে সেভ করব। ডাটাবেস অ্যাডমিনও কুয়েরি করে সরাসরি এই ডেটা দেখতে পাবেন না, ডেটা রিড করতে হলে নির্দিষ্ট সিক্রেট পাসফ্রেজ (Secret Passphrase) পাস করতে হবে:
+```sql
+-- ক. pgcrypto এক্সটেনশন এনাবেল করা
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- খ. এনক্রিপ্টেড ফোন নম্বর স্টোর করতে users টেবিলে বাইনারি কলাম যোগ করা
+ALTER TABLE user_profiles ADD COLUMN encrypted_phone bytea;
+
+-- গ. ডাটা এনক্রিপ্ট করে ইনসার্ট করা (AES-256 Symmetric Encryption)
+UPDATE user_profiles 
+SET encrypted_phone = pgp_sym_encrypt('01712345678', 'MySuperSecureSecretKey123')
+WHERE user_id = 42;
+
+-- ঘ. ডাটা ডিক্রিপ্ট করে রিড করা:
+SELECT pgp_sym_decrypt(encrypted_phone, 'MySuperSecureSecretKey123') AS decrypted_phone 
+FROM user_profiles 
+WHERE user_id = 42;
+```
+
+#### ৩. Concurrency: Deadlock Detection & Deterministic Locking Order (ডেডলক প্রতিরোধ)
+* **সমস্যা (Deadlock):**
+  * ট্রানজেকশন ১: প্রোডাক্ট ক লক করে প্রোডাক্ট খ লক করার চেষ্টা করছে।
+  * ট্রানজেকশন ২: প্রোডাক্ট খ লক করে প্রোডাক্ট ক লক করার চেষ্টা করছে।
+  * উভয়ই একে অপরের লক করা পণ্যের রিলিজ হওয়ার জন্য অনন্তকাল অপেক্ষা করতে থাকবে। একে বলে **Deadlock**। আরডিবিএমএস ইঞ্জিন তখন বাধ্য হয়ে যেকোনো ১টি ট্রানজেকশন বাতিল (Abort with Error 40P01) করে চক্রটি ভেঙে দেয়।
+* **সমাধান (Deterministic Locking Order):** ডেডলক এড়ানোর সুবর্ণ নিয়ম হলো—**সমস্ত ট্রানজেকশনে রো লকিং অবশ্যই একই সুনির্দিষ্ট ক্রমানুসারে (Sorting Order) হতে হবে**।
+  * কার্টে থাকা পণ্যগুলোর আইডির অ্যারে `[5, 2, 8]`-কে লকিংয়ের আগে আরোহী ক্রমানুসারে সর্ট করে `[2, 5, 8]` করতে হবে। এর ফলে ট্রানজেকশন ১ এবং ট্রানজেকশন ২ উভয়ই প্রথমে আইডি ২-কে লক করবে, আইডি ৫ বা ৮-কে আগে লক করতেই পারবে না, ফলে ডেডলক ঘটা গাণিতিকভাবে অসম্ভব হয়ে যাবে!
+```sql
+-- ব্যাকএন্ডে সর্ট করা আইডি ব্যবহার করে লক করা:
+BEGIN;
+
+-- প্রোডাক্ট আইডিগুলো [2, 5, 8] সর্ট করে নিয়ে এক কুয়েরিতে লক করা
+SELECT * FROM products 
+WHERE id IN (2, 5, 8) 
+ORDER BY id ASC -- 💡 সর্টিং অর্ডার লক সিকোয়েন্স সুনির্দিষ্ট করে!
+FOR UPDATE;
+
+-- কাজ শেষ করে কমিট
+COMMIT;
+```
+
+---
+
 ## 💡 Systems Architect Database Insights
 
 ১. **Avoid SELECT * in Production:** প্রোডাকশন কোয়েরিতে কখনোই `SELECT *` ব্যবহার করবেন না। এটি আপনার প্রয়োজনীয় কলামের বাইরেও বিশাল ডাটা ডিস্ক ও নেটওয়ার্ক ওভারহেডের মাধ্যমে ট্রাভার্স করায়, যা সকেটের আইও পারফরম্যান্স ধ্বংস করে। সর্বদা কলামের নাম সুনির্দিষ্টভাবে উল্লেখ করুন (`SELECT id, name`).
