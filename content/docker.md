@@ -2384,6 +2384,70 @@ ON CONFLICT (role_name) DO NOTHING;
 
 ---
 
+### ১০. Multi-Architecture Builds with Docker Buildx (মাল্টি-আর্কিটেকচার ইমেজ বিল্ড)
+
+আধুনিক ক্লাউড ও ডেভলপমেন্ট এনভায়রনমেন্টে সবচেয়ে সাধারণ এবং বিরক্তিকর সমস্যাগুলোর একটি হলো সিপিইউ আর্কিটেকচার ম্যাচ না করা (CPU Architecture Mismatch)। 
+
+```mermaid
+flowchart TD
+    subgraph BuildxFlow [Multi-Architecture Building via Docker Buildx]
+        HostDev["Local Apple Silicon Mac <br>(arm64 Architecture)"]
+        BuildxEngine["Docker Buildx Engine <br>(QEMU Emulation)"]
+        DockerRegistry["Docker Hub Registry <br>(Multi-Arch Manifest Tag)"]
+        
+        subgraph CloudServers [Target Production Nodes]
+            NodeIntel["AWS AMD64 Node <br>(Runs Intel/AMD Image)"]
+            NodeGraviton["AWS ARM64 Node <br>(Runs Graviton/ARM Image)"]
+        end
+        
+        HostDev --->|1. docker buildx build --platform ...| BuildxEngine
+        BuildxEngine --->|2. Compiles dual layers| DockerRegistry
+        DockerRegistry --->|3. Pulls amd64| NodeIntel
+        DockerRegistry --->|4. Pulls arm64| NodeGraviton
+    end
+```
+
+#### কেন কন্টেইনারে `exec format error` দেখায়?
+আপনি যদি আপনার লোকাল **Apple Silicon Mac (M1/M2/M3)** মেশিনে নরমাল `docker build` চালান, তবে তৈরি হওয়া ডকার ইমেজটি হবে **`linux/arm64`** আর্কিটেকচারের। এখন এই ইমেজটি যখন আপনি প্রোডাকশন সার্ভারে (যেমন: AWS, GCP বা সাধারণ VPS যা সাধারণত Intel/AMD বা **`linux/amd64`** প্রসেসরে চলে) ডেপ্লয় করবেন, কন্টেইনারটি বুট হওয়ার সাথে সাথে নিচের ক্র্যাশ এররটি দিয়ে বন্ধ হয়ে যাবে:
+```text
+standard_init_linux.go:228: exec user process caused: exec format error
+```
+এর মানে হলো হোস্ট ওএসের সিপিইউ কন্টেইনারের ওএসের কম্পাইল্ড আর্কিটেকচার রিড করতে পারছে না।
+
+#### সমাধান: Docker Buildx & QEMU Emulation
+**Docker Buildx** হলো ডকারের একটি অত্যন্ত শক্তিশালী প্লাগইন যা QEMU এমুলেশন ব্যবহার করে একই সাথে একাধিক হার্ডওয়্যার আর্কিটেকচারের জন্য (যেমন: `amd64` এবং `arm64`) ইমেজ বিল্ড করতে পারে। এটি সম্পূর্ণ বিল্ড কমপ্লিট করে একটি সিঙ্গেল "Multi-Arch Manifest" ট্যাগ দিয়ে ইমেজটি রেজিস্ট্রিতে পুশ করে দেয়। পরবর্তীতে যে ওএস ইমেজটি পুল করবে, ডকার হাব অটোমেটিকালি তার আর্কিটেকচার অনুযায়ী সঠিক লেয়ারটি সার্ভারে ডেলিভার করবে।
+
+#### ক. Buildx বিল্ডার ড্রাইভার ক্রিয়েট ও সচল করা:
+প্রথমবার মাল্টি-আর্কিটেকচার ইমেজ তৈরির জন্য আমাদের একটি কাস্টম বিল্ডার তৈরি করতে হবে (ডিফল্ট বিল্ডার মাল্টি-প্ল্যাটফর্ম সাপোর্ট করে না):
+
+```bash
+# ১. 'saas-builder' নামে নতুন বিল্ডেক্স নোড তৈরি করা
+docker buildx create --name saas-builder --driver docker-container --use
+
+# ২. বিল্ডারটি সচল ও বুটস্ট্র্যাপ করা (এটি ব্যাকগ্রাউন্ডে QEMU কনফিগার করবে)
+docker buildx inspect --bootstrap
+```
+*সফল হলে টার্মিনালে `Platforms: linux/amd64, linux/arm64, linux/riscv64, ...` সাপোর্ট লিস্ট শো করবে।*
+
+#### খ. একই সাথে উভয় আর্কিটেকচারের ইমেজ বিল্ড ও পুশ করা:
+Dockerfile-এ কোনো চেঞ্জ না করে নিচের সিঙ্গেল কমান্ড দিয়ে আমরা দুটি প্ল্যাটফর্মের ইমেজ তৈরি করে সরাসরি ডকার রেজিস্ট্রিতে সাবমিট করে দেব:
+
+```bash
+# NestJS ব্যাকএন্ডের জন্য একই সাথে Intel ও Apple Silicon দুই ধরনের ইমেজ বিল্ড করা
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t username/saas-backend:v1 \
+  --push \
+  ./backend
+```
+* **`--platform linux/amd64,linux/arm64`:** ডকারকে বলে দেয় একই সাথে ইন্টেল ও এআরএম দুই আর্কিটেকচারেই কোড কম্পাইল করতে।
+* **`--push`:** ডকার লোকাল স্টোরেজ একই সাথে দুটি ভিন্ন আর্কিটেকচার হোল্ড করতে পারে না বলে বিল্ডেক্স ইমেজ দুটিকে সরাসরি রিমোট রেজিস্ট্রিতে পুশ করে দেয়।
+* **`./backend`:** আমাদের সোর্স ডিরেক্টরি লোকেশন।
+
+এর ফলে, আপনার ইমেজটি AWS Graviton (ARM64) বা সাধারণ Intel/AMD (AMD64) উভয় হোস্টে কোনো পরিবর্তন ছাড়াই সফলভাবে চলবে এবং কোনো দিনও `exec format error` হবে না।
+
+---
+
 ## ৩৫. Ultimate Docker CLI Cheat Sheet (ডকার কমান্ডের সম্পূর্ণ চিট-শীট)
 
 ডকার ইকোসিস্টেমের দৈনন্দিন কাজ এবং অ্যাডভান্সড ট্রাবলশুটিংয়ের জন্য প্রয়োজনীয় সব কমান্ড ক্যাটাগরি অনুযায়ী সংকলন করে এই চিট-শীটটি প্রস্তুত করা হয়েছে। এটি যেকোনো সময় কুইক রেফারেন্স হিসেবে ব্যবহারের উপযোগী।
