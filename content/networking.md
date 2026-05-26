@@ -74,9 +74,9 @@ TCP (Transmission Control Protocol) হলো ইন্টারনেটের 
 ```mermaid
 sequenceDiagram
     autonumber
-    Client->>Server: SYN (Synchronize Sequence Number - Client SEQ = X)
+    Client->>Server: "SYN (Synchronize Sequence Number - Client SEQ = X)"
     Note over Server: Packet enters SYN Backlog Queue
-    Server->>Client: SYN-ACK (Server SEQ = Y, ACK = X + 1)
+    Server->>Client: "SYN-ACK (Server SEQ = Y, ACK = X + 1)"
     Note over Client: Client is now ESTABLISHED
     Client->>Server: ACK (ACK = Y + 1)
     Note over Server: Packet moves to Accept Queue
@@ -128,11 +128,11 @@ flowchart TD
 sequenceDiagram
     autonumber
     Note over Client, Server: Connection Active
-    Client->>Server: FIN (Close Connection)
+    Client->>Server: "FIN (Close Connection)"
     Server->>Client: ACK
     Server->>Client: FIN
     Client->>Server: ACK
-    Note over Client: Enters TIME_WAIT (Duration: 2 * MSL - typically 60s)
+    Note over Client: "Enters TIME_WAIT (Duration: 2 * MSL - typically 60s)"
     Note over Client: Port cannot be reused yet!
 ```
 
@@ -483,15 +483,15 @@ flowchart TD
 sequenceDiagram
     autonumber
     rect rgb(240, 248, 255)
-        Note over Client, Server: TLS 1.2 Handshake (2 RTT)
+        Note over Client, Server: "TLS 1.2 Handshake (2 RTT)"
         Client->>Server: Client Hello (Supported Ciphers)
         Server->>Client: Server Hello + Certificate
-        Client->>Server: Client Key Exchange (Pre-master secret)
-        Server->>Client: Session Finished (Encrypted)
+        Client->>Server: "Client Key Exchange (Pre-master secret)"
+        Server->>Client: "Session Finished (Encrypted)"
     end
     rect rgb(255, 240, 245)
-        Note over Client, Server: TLS 1.3 Handshake (1 RTT)
-        Client->>Server: Client Hello + Key Share Guess (Calculates DH keys in advance)
+        Note over Client, Server: "TLS 1.3 Handshake (1 RTT)"
+        Client->>Server: "Client Hello + Key Share Guess (Calculates DH keys in advance)"
         Server->>Client: Server Hello + Key Share Accept + Session Finished
     end
 ```
@@ -671,16 +671,16 @@ UDS হলো ওএসের কার্নেল ফাইলসিস্ট�
 sequenceDiagram
     autonumber
     rect rgb(240, 255, 240)
-        Note over Browser, Server: Simple Request (GET /api/public)
-        Browser->>Server: GET /api/public (Origin: app.awolad.com)
-        Server->>Browser: HTTP 200 (Access-Control-Allow-Origin: *)
+        Note over Browser, Server: "Simple Request (GET /api/public)"
+        Browser->>Server: "GET /api/public (Origin: app.awolad.com)"
+        Server->>Browser: "Access-Control-Allow-Origin: *"
         Note over Browser: Browser renders the response safely
     end
     rect rgb(255, 240, 240)
-        Note over Browser, Server: Non-Simple Request (POST /api/users with JSON)
-        Browser->>Server: OPTIONS /api/users (Preflight Request)
+        Note over Browser, Server: "Non-Simple Request (POST /api/users with JSON)"
+        Browser->>Server: "OPTIONS /api/users (Preflight Request)"
         Server->>Browser: HTTP 200 OK (Allowed Origins/Headers)
-        Browser->>Server: POST /api/users (Actual Request)
+        Browser->>Server: "POST /api/users (Actual Request)"
         Server->>Browser: HTTP 201 Created
     end
 ```
@@ -926,14 +926,14 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    Client->>Server: Send 64KB Data (TCP Window = 64KB)
+    Client->>Server: "Send 64KB Data (TCP Window = 64KB)"
     Note over Server: Server buffer is FULL! Application is stuck!
-    Server->>Client: TCP ACK (Receive Window rwnd = 0)
+    Server->>Client: "TCP ACK (Receive Window rwnd = 0)"
     Note over Client: Zero Window! Client halts all data transmission!
-    Client->>Server: TCP Zero Window Probe (1-byte heartbeat)
-    Server->>Client: TCP ACK (rwnd = 0 - Still full)
+    Client->>Server: "TCP Zero Window Probe (1-byte heartbeat)"
+    Server->>Client: "TCP ACK (rwnd = 0 - Still full)"
     Note over Server: Application reads data! Buffer clears!
-    Server->>Client: TCP Window Update (rwnd = 32KB)
+    Server->>Client: "TCP Window Update (rwnd = 32KB)"
     Client->>Server: Resume sending data...
 ```
 
@@ -959,9 +959,9 @@ TCP হ্যান্ডশেকের সময় এবং প্রতিট�
 ```mermaid
 sequenceDiagram
     autonumber
-    Resolver->>AuthServer: What is awolad.com? (Tx ID: 0x4F12)
-    Hacker->>Resolver: FAKE: awolad.com is 99.99.99.99 (Tx ID: 0x4F12) [Wins the Race]
-    AuthServer-->>Resolver: REAL: awolad.com is 104.21.3.4
+    Resolver->>AuthServer: "What is awolad.com? (Tx ID: 0x4F12)"
+    Hacker->>Resolver: "FAKE: awolad.com is 99.99.99.99 (Tx ID: 0x4F12) [Wins the Race]"
+    AuthServer-->>Resolver: "REAL: awolad.com is 104.21.3.4"
     Note over Resolver: Resolver cache is POISONED with Hacker's IP!
 ```
 
@@ -981,8 +981,8 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    Client->>Server: TLS ClientHello (Supported: h2, http/1.1 + ALPN Extension)
-    Server->>Client: TLS ServerHello (Selected: h2 + ALPN Negotiation Success)
+    Client->>Server: "TLS ClientHello (Supported: h2, http/1.1 + ALPN Extension)"
+    Server->>Client: "TLS ServerHello (Selected: h2 + ALPN Negotiation Success)"
     Note over Client, Server: Connection established over HTTP/2 in 0 extra RTT!
 ```
 
@@ -1080,8 +1080,10 @@ BGP হাইজ্যাকিং ঠেকাতে আধুনিক বি�
 ```mermaid
 sequenceDiagram
     autonumber
-    Hacker (Spoofed IP)->>Server: TCP SYN (Creates half-open socket)
-    Server->>Hacker (Spoofed IP): TCP SYN-ACK (Waiting for ACK...)
+    participant Hacker as Hacker (Spoofed IP)
+    participant Server as Server
+    Hacker->>Server: "TCP SYN (Creates half-open socket)"
+    Server->>Hacker: "TCP SYN-ACK (Waiting for ACK...)"
     Note over Server: SYN Backlog Queue fills up! <br> No memory for real users! Server Crashes!
 ```
 
@@ -1093,13 +1095,16 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
+    participant Hacker as Hacker (Spoofed IP)
+    participant Server as Server
+    participant RealClient as Real Client
     Note over Server: SYN Backlog is FULL! Active SYN Cookies mode!
-    Hacker (Spoofed IP)->>Server: TCP SYN
+    Hacker->>Server: TCP SYN
     Note over Server: Server DOES NOT allocate memory! <br> Encodes connection parameters inside SYN-ACK ISN!
-    Server->>Hacker (Spoofed IP): TCP SYN-ACK (ISN = Crypto Cookie)
+    Server->>Hacker: "TCP SYN-ACK (ISN = Crypto Cookie)"
     Note over Server: No RAM lost. Connection request forgotten for now.
     Note over RealClient: Real client returns final ACK with Cookie + 1
-    RealClient->>Server: TCP ACK (Cookie + 1)
+    RealClient->>Server: "TCP ACK (Cookie + 1)"
     Note over Server: Decrypts & validates Cookie in ACK. <br> Allocates socket RAM only NOW!
 ```
 
@@ -1223,8 +1228,8 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    Client->>Server: Send Packets 1, 2, 3 (Lost!), 4, 5
-    Server->>Client: ACK 2 (Since Packet 3 is missing, cannot ACK 4 or 5!)
+    Client->>Server: "Send Packets 1, 2, 3 (Lost!), 4, 5"
+    Server->>Client: "ACK 2 (Since Packet 3 is missing, cannot ACK 4 or 5!)"
     Note over Client: Cumulative ACK forces client to resend 3, 4, and 5!
     Client->>Server: Resends Packets 3, 4, 5 (Waste of Bandwidth!)
 ```
@@ -1238,8 +1243,8 @@ SACK সচল থাকলে রিসিভার সেন্ডারকে
 ```mermaid
 sequenceDiagram
     autonumber
-    Client->>Server: Send Packets 1, 2, 3 (Lost!), 4, 5
-    Server->>Client: ACK 2 + SACK Block: [4 to 5 received]
+    Client->>Server: "Send Packets 1, 2, 3 (Lost!), 4, 5"
+    Server->>Client: "ACK 2 + SACK Block: [4 to 5 received]"
     Note over Client: Client sees 4 and 5 are safe! Only resends packet 3!
     Client->>Server: Resends Packet 3 ONLY!
 ```
@@ -1302,16 +1307,16 @@ Nginx বা Kafka-র মতো হাই-পারফরম্যান্স 
 sequenceDiagram
     autonumber
     rect rgb(20, 20, 30)
-    Note over App, NIC: Standard I/O (4 Memory Copies & Context Switches)
-    App->>Kernel: read() Disk File
+    Note over App, NIC: "Standard I/O (4 Memory Copies & Context Switches)"
+    App->>Kernel: "read() Disk File"
     Kernel->>App: Copy File Data to User Memory Buffer
     App->>Kernel: write() Socket Data
     Kernel->>NIC: Copy Data to NIC Memory Buffer
     end
     
     rect rgb(10, 30, 20)
-    Note over App, NIC: Zero-Copy sendfile() (1 Direct DMA Copy, 0 Context Switch Overhead!)
-    App->>Kernel: sendfile() System Call
+    Note over App, NIC: "Zero-Copy sendfile() (1 Direct DMA Copy, 0 Context Switch Overhead!)"
+    App->>Kernel: "sendfile() System Call"
     Kernel->>NIC: Direct DMA Copy PageCache to Network NIC Buffer
     end
 ```
@@ -1328,9 +1333,9 @@ sequenceDiagram
     Sender->>Receiver: Packet 1 Sent
     Sender->>Receiver: Packet 2 Sent
     Note over Receiver: Router queues packets nicely
-    Receiver->>Sender: ACK 1 Received (Triggers Sender to send Packet 3!)
+    Receiver->>Sender: "ACK 1 Received (Triggers Sender to send Packet 3!)"
     Sender->>Receiver: Packet 3 Sent
-    Receiver->>Sender: ACK 2 Received (Triggers Sender to send Packet 4!)
+    Receiver->>Sender: "ACK 2 Received (Triggers Sender to send Packet 4!)"
     Note over Sender, Receiver: ACKs act as the natural heartbeat/clock of the network!
 ```
 
