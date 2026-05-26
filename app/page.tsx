@@ -10,7 +10,7 @@ interface HomePageProps {
   }>;
 }
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 4;
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -63,6 +63,33 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const currentPage = Math.min(Math.max(1, requestedPage || 1), totalPages);
   const startIndex = (currentPage - 1) * PAGE_SIZE;
   const visibleDocs = filteredDocs.slice(startIndex, startIndex + PAGE_SIZE);
+
+  // Helper to generate dynamic page ranges with ellipses
+  const getPageNumbers = () => {
+    const delta = 1;
+    const range = [];
+    const rangeWithDots = [];
+    let l;
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
+        range.push(i);
+      }
+    }
+
+    for (const i of range) {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    }
+    return rangeWithDots;
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#09090b] text-white selection:bg-emerald-500/20 selection:text-emerald-200 antialiased">
@@ -218,59 +245,97 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             {selectedCategory !== 'All' ? ` in ${selectedCategory}` : ''}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center gap-2">
+            {/* Previous Button */}
             <Link
               href={buildHomeHref(selectedCategory, currentPage - 1)}
               aria-disabled={currentPage === 1}
               className={`
                 inline-flex
                 h-9
+                w-9
                 items-center
-                gap-1.5
+                justify-center
                 rounded-xl
                 border
-                px-3.5
-                text-xs
-                font-semibold
                 transition-all
                 ${
                   currentPage === 1
-                    ? 'pointer-events-none border-white/[0.03] text-zinc-800'
-                    : 'border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:border-emerald-500/30 hover:text-white hover:bg-emerald-500/5'
+                    ? 'pointer-events-none border-white/[0.03] text-zinc-800 bg-white/[0.01]'
+                    : 'border-white/[0.05] bg-white/[0.02] text-zinc-400 hover:border-emerald-500/30 hover:text-white hover:bg-emerald-500/5'
                 }
               `}
+              title="Previous Page"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Previous
+              <ChevronLeft className="h-4 w-4" />
             </Link>
 
-            <span className="text-[11px] font-mono text-zinc-500 tracking-wider">
-              PAGE {currentPage} OF {totalPages}
-            </span>
+            {/* Page Number Pills */}
+            <div className="flex items-center gap-1.5">
+              {getPageNumbers().map((pageNum, index) => {
+                if (pageNum === '...') {
+                  return (
+                    <span
+                      key={`dots-${index}`}
+                      className="inline-flex h-9 w-9 items-center justify-center text-xs font-semibold text-zinc-600 font-mono"
+                    >
+                      ...
+                    </span>
+                  );
+                }
 
+                const pageActive = pageNum === currentPage;
+                return (
+                  <Link
+                    key={`page-${pageNum}`}
+                    href={buildHomeHref(selectedCategory, Number(pageNum))}
+                    className={`
+                      inline-flex
+                      h-9
+                      w-9
+                      items-center
+                      justify-center
+                      rounded-xl
+                      border
+                      text-xs
+                      font-mono
+                      font-bold
+                      transition-all
+                      ${
+                        pageActive
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-md shadow-emerald-950/20'
+                          : 'border-white/[0.05] bg-white/[0.02] text-zinc-400 hover:border-white/10 hover:text-white hover:bg-white/[0.05]'
+                      }
+                    `}
+                  >
+                    {pageNum}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Next Button */}
             <Link
               href={buildHomeHref(selectedCategory, currentPage + 1)}
               aria-disabled={currentPage === totalPages}
               className={`
                 inline-flex
                 h-9
+                w-9
                 items-center
-                gap-1.5
+                justify-center
                 rounded-xl
                 border
-                px-3.5
-                text-xs
-                font-semibold
                 transition-all
                 ${
                   currentPage === totalPages
-                    ? 'pointer-events-none border-white/[0.03] text-zinc-800'
-                    : 'border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:border-emerald-500/30 hover:text-white hover:bg-emerald-500/5'
+                    ? 'pointer-events-none border-white/[0.03] text-zinc-800 bg-white/[0.01]'
+                    : 'border-white/[0.05] bg-white/[0.02] text-zinc-400 hover:border-emerald-500/30 hover:text-white hover:bg-emerald-500/5'
                 }
               `}
+              title="Next Page"
             >
-              Next
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
         </div>
