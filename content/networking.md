@@ -409,6 +409,162 @@ ip a
 
 ---
 
+## ১১. eBPF & XDP: লিনাক্স কার্নেল বাইপাস নেটওয়ার্কিং (eBPF & XDP Kernel Bypass)
+
+ট্রেডিশনাল লিনাক্স কার্নেল নেটওয়ার্কিং স্ট্যাক অত্যন্ত ভারী। নেটওয়ার্ক কার্ডে (NIC) যখন কোনো প্যাকেট আসে, কার্নেলকে সেটি রিসিভ করতে একটি ভারী **`sk_buff` (Socket Buffer Struct)** ডাটা স্ট্রাকচার তৈরি করতে হয়, ইন্টারাপ্ট হ্যান্ডলার রান করতে হয় এবং প্যাকেটটিকে কার্নেল স্পেসের নানা স্তরে প্রসেস করে ওপরে পাঠাতে হয়। 
+* হাই-ভলিউম ডিডস (DDoS) অ্যাটাকের সময় কোটি কোটি ক্ষতিকর প্যাকেট কার্নেলের এই প্রসেস ক্ষমতাকে ব্লক করে সম্পূর্ণ ওএস ক্র্যাশ করে দেয়।
+
+```mermaid
+flowchart TD
+    subgraph TraditionalStack [Traditional Linux Network Stack]
+        NIC1["Physical NIC"] ---> Driver1["NIC Driver"]
+        Driver1 ---> KernelStack["Heavy Linux Kernel Network Stack <br>(Allocates sk_buff, processes IP/TCP)"]
+        KernelStack --->|Context Switch| UserApp["User Space Application <br>(Nginx / Go / Node)"]
+    end
+    
+    subgraph eBPFStack [Modern eBPF & XDP Kernel Bypass]
+        NIC2["Physical NIC"] ---> XDPProg["XDP eBPF Program <br>(Runs directly inside NIC Driver!)"]
+        XDPProg --->|Action: XDP_DROP <br> Drops DDoS packets in nanoseconds| DropPacket["Discard Packet <br>(Zero Memory Allocated)"]
+        XDPProg --->|Action: XDP_PASS| UserApp2["User Space App"]
+    end
+end
+```
+
+### সমাধান: XDP (eXpress Data Path) ও eBPF
+আধুনিক হাই-পারফরম্যান্স সিস্টেম (যেমন Cloudflare বা Kubernetes-এর Cilium CNI) ব্যবহার করে **XDP** ও **eBPF (Extended Berkeley Packet Filter)**। 
+* **কিভাবে কাজ করে?** eBPF লিনাক্স কার্নেলের ভেতর একটি সুরক্ষিত স্যান্ডবক্সড ভার্চুয়াল মেশিন সচল করে। XDP-এর সাহায্যে আমরা লিনাক্স কার্নেলের মেইন মেমরি ও এঞ্জিন সচল হওয়ার আগেই সরাসরি নেটওয়ার্ক কার্ডের **ড্রাইভার স্তরে (NIC Driver level)** একটি কাস্টম সি বা রাস্ট কোড রান করতে পারি। 
+* **কেন এটি চরম ফাস্ট?** প্যাকেট ড্রাইভার স্তরে আসামাত্র eBPF প্রোগ্রাম সেটি রিড করে সেকেন্ডের শতকোটি ভাগের এক ভাগে (Nanoseconds) সিদ্ধান্ত নিতে পারে যে প্যাকেটটি আসল নাকি ফেইক। ফেইক হলে সেটিকে সাথে সাথে **`XDP_DROP`** সিগন্যাল দিয়ে ড্রপ করে দেয়। এর জন্য কার্নেলকে কোনো সকেট মেমরি বরাদ্দ বা কনটেক্সট সুইচ করতে হয় না। ক্লাউডফ্লেয়ার এই প্রযুক্তি ব্যবহার করে সেকেন্ডে কোটি কোটি অ্যাটাক প্যাকেট কোনো ল্যাটেন্সি ছাড়াই ড্রপ করে দেয়।
+
+---
+
+## ১২. Anycast Routing & BGP (এনিকাস্ট রাউটিং-এর ভেতরের জাদু)
+
+আপনি যদি ক্লাউডফ্লেয়ারের ডিএনএস আইপি **`1.1.1.1`** অথবা গুগলের **`8.8.8.8`** আইপিতে পিন্গ করেন, তবে আপনার পিসিতে ল্যাটেন্সি দেখাবে মাত্র ২-৫ মিলি-সেকেন্ড। এর মানে হলো ১.১.১.১ সার্ভারটি ফিজিক্যালি আপনার শহরের বা দেশের খুব কাছাকাছি কোনো ডেটা সেন্টারে অবস্থিত। 
+* **আশ্চর্যজনক বিষয়:** আমেরিকার কোনো ব্যক্তি যখন ১.১.১.১-এ কানেক্ট হয়, সেও মাত্র ২ মিলি-সেকেন্ডে তার কাছে অবস্থিত আমেরিকার ফিজিক্যাল সার্ভারেই কানেক্ট হয়! 
+* **কীভাবে একই আইপি অ্যাড্রেস একই সাথে সারা বিশ্বের শত শত ডেটা সেন্টারে রানিং থাকে?** এর পেছনের জাদুকরী প্রোটোকল হলো **Anycast Routing** এবং **BGP (Border Gateway Protocol)**।
+
+```mermaid
+flowchart TD
+    subgraph AnycastEcosystem [Anycast BGP Global Routing]
+        UserBD["User in Bangladesh <br>(Requests 1.1.1.1)"]
+        UserUS["User in New York <br>(Requests 1.1.1.1)"]
+        
+        subgraph ISPBD [ISP in Bangladesh]
+            BGPBD["BGP Router BD"]
+        end
+        subgraph ISPUS [ISP in New York]
+            BGPUS["BGP Router US"]
+        end
+        
+        DC_Dhaka["Cloudflare Dhaka DC <br>(Broadcasts 1.1.1.1 via BGP)"]
+        DC_NY["Cloudflare New York DC <br>(Broadcasts 1.1.1.1 via BGP)"]
+        
+        UserBD ---> ISPBD
+        ISPBD --->|Shortest Path| DC_Dhaka
+        
+        UserUS ---> ISPUS
+        ISPUS --->|Shortest Path| DC_NY
+    end
+end
+```
+
+### Anycast কীভাবে কাজ করে?
+সাধারণত ইন্টারনেটে একটি আইপি কেবল একটি নির্দিষ্ট ডিভাইসের জন্য বরাদ্দ থাকে (Unicast)। কিন্তু Anycast নেটওয়ার্কে গুগলের বা ক্লাউডফ্লেয়ারের সমস্ত গ্লোবাল ডেটা সেন্টার নিজেদের রাউটার থেকে গ্লোবাল ইন্টারনেট প্রোভাইডারদের কাছে অ্যানাউন্স করে যে: **“১.১.১.১ আইপিটি আমার কাছে রয়েছে।”**
+* ইন্টারনেট রাউটারগুলো যখন **BGP (Border Gateway Protocol)** দিয়ে গ্লোবাল নেটওয়ার্ক ম্যাপ তৈরি করে, তখন বাংলাদেশের ইন্টারনেট গেটওয়ে দেখে যে তার সবচেয়ে কাছে রয়েছে ঢাকার ডেটা সেন্টারটি। 
+* রাউটার অটোমেটিকালি ট্রাফিককে সবচেয়ে কম দূরত্ব বা কম হপের ঢাকার ডেটা সেন্টারে রাউট করে দেয়। 
+* একই সাথে নিউ ইয়র্কের গেটওয়ে দেখে যে তার সবচেয়ে কাছাকাছি ১.১.১.১ হলো নিউ ইয়র্কের ডেটা সেন্টারটি।
+* এভাবেই একই আইপি এড্রেস ব্যবহার করে কোটি কোটি ইউজারকে সম্পূর্ণ আলাদা ফিজিক্যাল লোকেশনে রাউট করে ইন্টারনেটের গতি অবিশ্বাস্য মাত্রায় বাড়িয়ে দেওয়া হয়।
+
+---
+
+## ১৩. TLS 1.2 বনাম TLS 1.3: ক্রিপ্টোগ্রাফি হ্যান্ডশেক ল্যাটেন্সি অপ্টিমাইজেশন
+
+আমরা যখনই HTTPS সিকিউর কানেকশন তৈরি করি, ব্রাউজার ও সার্ভারকে নিজেদের মধ্যে একটি জটিল গাণিতিক চুক্তি বা এনক্রিপশন কি এক্সচেঞ্জ করতে হয়। একে **TLS Handshake** বলে। 
+* **TLS 1.2** প্রোটোকলে এই হ্যান্ডশেক সম্পন্ন করতে নেটওয়ার্কে **২ বার রাউন্ড ট্রিপ (2 RTT - Round Trip Time)** করতে হতো। 
+* **TLS 1.3** এসে এই ল্যাটেন্সি অর্ধেক কমিয়ে দিয়ে **১ আরটিটি (1 RTT)** তে নিয়ে এসেছে!
+
+```mermaid
+sequenceDiagram
+    autonumber
+    rect rgb(240, 248, 255)
+        Note over Client, Server: TLS 1.2 Handshake (2 RTT)
+        Client->>Server: Client Hello (Supported Ciphers)
+        Server->>Client: Server Hello + Certificate
+        Client->>Server: Client Key Exchange (Pre-master secret)
+        Server->>Client: Session Finished (Encrypted)
+    end
+    rect rgb(255, 240, 245)
+        Note over Client, Server: TLS 1.3 Handshake (1 RTT)
+        Client->>Server: Client Hello + Key Share Guess (Calculates DH keys in advance)
+        Server->>Client: Server Hello + Key Share Accept + Session Finished
+    end
+```
+
+### TLS 1.3 কীভাবে ১ আরটিটি-তে হ্যান্ডশেক সম্পন্ন করে?
+* **TLS 1.2-এর মেথড:** প্রথমে ক্লায়েন্ট তার সাপোর্টেড সিকিউরিটি এলগরিদম (Cipher Suites) পাঠাত। সার্ভার সেখান থেকে একটি সিলেক্ট করে ব্যাক করত (১ম রাউন্ড ট্রিপ)। এরপর ক্লায়েন্ট একটি সিক্রেট কি (Key Exchange) বানিয়ে পাঠাত এবং সার্ভার কনফার্ম করত (২য় রাউন্ড ট্রিপ)।
+* **TLS 1.3-এর ম্যাজিক:** আধুনিক যুগে সিকিউর এলগরিদমের সংখ্যা অনেক কমে এসেছে এবং সবাই মূলত ডিফ-হেলম্যান (Diffie-Hellman Key Exchange) অ্যালগরিদম ব্যবহার করে। TLS 1.3 এ ক্লায়েন্ট প্রথম প্যাকেটে (`Client Hello`) শুধু এলগরিদমের লিস্টই পাঠায় না, বরং সে নিজে থেকেই একটি কি এক্সচেঞ্জ অনুমান করে নিজের পাবলিক কি পার্টটি সাথে সাথে পাঠিয়ে দেয়। 
+* সার্ভার সেই অনুমানকৃত কি (Key Share) এক্সেপ্ট করে নিজের পাবলিক কি ও সার্টিফিকেটসহ প্রথম প্যাকেটেই হ্যান্ডশেক ডান করে দেয়। এর ফলে অতিরিক্ত একটি ট্রাভেল টাইম (RTT) সম্পূর্ণরূপে বেঁচে যায় এবং মোবাইল নেটওয়ার্কে ওয়েবসাইট অনেক ফাস্ট লোড হয়।
+
+---
+
+## ১৪. HTTP/2 Frame-Level Mechanics ও HPACK কম্প্রেশন
+
+আমরা জানি HTTP/2 একটি সিঙ্গেল কানেকশনের আন্ডারে মাল্টিপ্লেক্সিং সাপোর্ট করে। কিন্তু এর পেছনে আসল মেমরি অপ্টিমাইজেশন কীভাবে ঘটে? HTTP/2 প্রতিটি প্লেইন টেক্সট HTTP রিকোয়েস্টকে বাইনারি ফরম্যাটে ছোট ছোট **Frames**-এ ভাগ করে ফেলে।
+
+```mermaid
+flowchart LR
+    subgraph RequestAsFrames [HTTP/2 Binary Frame Multiplexing]
+        direction LR
+        Frame1["Stream 1: HEADERS Frame <br>(GET /index.html)"] ---> TCPStream["Single TCP Stream"]
+        Frame2["Stream 3: DATA Frame <br>(Image bytes)"] ---> TCPStream
+        Frame3["Stream 1: DATA Frame <br>(HTML bytes)"] ---> TCPStream
+    end
+```
+
+### HTTP/2 ফ্রেমের প্রকারভেদ:
+১. **HEADERS Frame:** এপিআই বা পেজের সব রিকোয়েস্ট হেডার বহন করে।
+২. **DATA Frame:** এপিআই রেসপন্সের আসল পে-লোড বা বডি (JSON, HTML বা ইমেজ বাইনারি) বহন করে।
+৩. **RST_STREAM Frame:** কোনো কানেকশন ক্লোজ না করেই নির্দিষ্ট একটি স্ট্রিমকে ফোর্সফুলি ক্যানসেল করতে এটি ব্যবহার করা হয় (যেমন ইউজার পেজ চেঞ্জ করলে ইমেজ ডাউনলোড মাঝপথে স্টপ করতে)।
+
+### HPACK (কুখ্যাত হেডার ডুপ্লিকেশন দূর করা):
+HTTP/1.1 এ আপনি যখনই এপিআই রিকোয়েস্ট পাঠান, প্রতিবার ব্রাউজার হেডার হিসেবে বিশাল আকারের ইউজার এজেন্ট (`User-Agent: Mozilla/5.0...`), কুকি, এক্সেপ্ট টাইপ প্লেইন টেক্সটে পাঠাত। এটি প্রচুর ব্যান্ডউইথ নষ্ট করত।
+* **HPACK সমাধান:** HTTP/2 ব্যবহার করে HPACK অ্যালগরিদম। এটি সার্ভার ও ক্লায়েন্ট দুই প্রান্তেই একটি **Static Table** (সাধারণ হেডারগুলোর একটি প্রি-ডিফাইনড ইনডেক্স লিস্ট) এবং একটি ডাইনামিক **Dynamic Table** মেইনটেইন করে।
+* যখন ক্লায়েন্ট ২য় বার রিকোয়েস্ট পাঠায়, সে প্লেইন টেক্সটে হেডার না পাঠিয়ে শুধু টেবিলের ইনডেক্স নম্বর পাঠায় (যেমন: `Header Index 2 = GET`)। HPACK হফম্যান কোডিং ব্যবহার করে হেডার সাইজ প্রায় ৮৫% থেকে ৯৫% পর্যন্ত কমিয়ে দেয়।
+
+---
+
+## ১৫. WebSocket বনাম Server-Sent Events (SSE): রিয়েল-টাইম আর্কিটেকচার মেকানিক্স
+
+রিয়েল-টাইম লাইভ ডাটা পুশ করার জন্য আমরা এই দুটি প্রোটোকল ব্যবহার করি। সিস্টেম লেভেলে এদের মেকানিক্স সম্পূর্ণ ভিন্ন:
+
+```mermaid
+flowchart TD
+    subgraph WebSocketFlow [WebSocket Architecture - Full Duplex]
+        direction TB
+        W1["1. HTTP Handshake Request <br>(Upgrade: websocket)"] ---> W2["2. HTTP 101 Switching Protocols"]
+        W2 ---> W3["3. Raw Bi-directional TCP Stream <br>(Framed, Masked WebSockets)"]
+    end
+    
+    subgraph SSEFlow [SSE Architecture - Half Duplex]
+        direction TB
+        S1["1. Standard HTTP Request <br>(Accept: text/event-stream)"] ---> S2["2. HTTP 200 Keep-Alive Stream"]
+        S2 ---> S3["3. Read-Only Server Event Push <br>(Plain text UTF-8 events)"]
+    end
+end
+```
+
+### ১. WebSocket:
+* **কীভাবে কাজ করে?** এটি প্রথমে একটি স্ট্যান্ডার্ড HTTP হ্যান্ডশেক দিয়ে শুরু করে এবং রিকোয়েস্ট হেডারে থাকে `Upgrade: websocket`। সার্ভার যদি রাজি থাকে, সে রেসপন্স কোড দেয় **`101 Switching Protocols`**। 
+* এর সাথে সাথেই ওএসের কার্নেল টিসিপি কানেকশনটির এইচটিটিপি প্রোটোকল র্যাপার খুলে দিয়ে সরাসরি একটি র (Raw) দ্বিমুখী **Full-Duplex TCP Pipe** তৈরি করে ফেলে। এরপর ক্লায়েন্ট ও সার্ভার যেকোনো মুহূর্তে একে অপরকে ফ্রেম ছুঁড়ে মারতে পারে।
+* **ব্যবহার:** লাইভ চ্যাট অ্যাপ্লিকেশন, মাল্টিপ্লেয়ার গেমস, ফাইন্যান্সিয়াল ট্রেডিং টার্মিনাল।
+
+### ২. Server-Sent Events (SSE):
+* **কীভাবে কাজ করে?** এটি কোনো স্পেশাল প্রোটোকল নয়। এটি সাধারণ HTTP/1.1 বা HTTP/2 কানেকশন ব্যবহার করে। ক্লায়েন্ট সার্ভারকে একটি রিকোয়েস্ট পাঠিয়ে বলে তার রেসপন্সের MIME টাইপ হবে **`text/event-stream`** এবং কানেকশন টাইপ হবে **`Keep-Alive`**।
+* সার্ভার কানেকশনটি বন্ধ না করে অবিরত প্লেইন টেক্সট ফরম্যাটে স্ট্রিম আকারে ইভেন্ট বা ডাটা ক্লায়েন্টের দিকে ছুঁড়তে থাকে। এটি সম্পূর্ণ **One-Way (Read-only from server)**। ক্লায়েন্ট সার্ভারকে কোনো ডাটা এই পাইপ দিয়ে ব্যাক করতে পারে না (ডাটা ব্যাক করতে হলে ক্লায়েন্টকে আরেকটি প্যারালাল এপিআই রিকোয়েস্ট করতে হয়)।
+* **ব্যবহার:** লাইভ নোটিফিকেশন ফিড, লাইভ স্কোর আপডেট, ChatGPT-এর মতো রিয়েল-টাইম AI টেক্সট স্ট্রিমিং।
+
+---
+
 ## 💡 Systems Architect Networking Insights
 
 1. **Keep-Alive Optimization:** এপিআই কল করার সময় প্রতিবার নতুন TCP কানেকশন তৈরি না করে সর্বদা **HTTP Keep-Alive** সচল রাখুন। এটি হ্যান্ডশেকের ওভারহেড কমিয়ে দিয়ে এপিআই রেসপন্স স্পিড প্রায় ৩ গুণ বাড়িয়ে দেবে।
