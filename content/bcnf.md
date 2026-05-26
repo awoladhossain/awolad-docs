@@ -75,14 +75,14 @@ sequenceDiagram
     actor App as Backend Application
     participant DB as Database Engine
 
-    App->>DB: 1. SELECT * FROM posts LIMIT 10; (Parent Query)
+    App->>DB: 1. SELECT * FROM posts LIMIT 10 (Parent Query)
     DB-->>App: Returns 10 Post Rows
     
     rect rgb(30, 20, 20)
         Note over App, DB: N+1 Loop Starts (Repeated N Times)
-        App->>DB: 2. SELECT * FROM comments WHERE post_id = 1;
+        App->>DB: 2. SELECT * FROM comments WHERE post_id = 1
         DB-->>App: Returns comments for post 1
-        App->>DB: 3. SELECT * FROM comments WHERE post_id = 2;
+        App->>DB: 3. SELECT * FROM comments WHERE post_id = 2
         DB-->>App: Returns comments for post 2
         App->>DB: ... Repeat up to Post 10 ...
     end
