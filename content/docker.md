@@ -1114,6 +1114,156 @@ sequenceDiagram
 
 ---
 
+## ২২. Swap Memory Control & Swappiness (সোয়াপ মেমরি ও সোয়াপিনেস টিউনিং)
+
+আমরা যখন কন্টেইনারে মেমরি লিমিট করি (যেমন: `-m 500m`), ব্যাকগ্রাউন্ডে কার্নেলের মেমরি সিগ্রুপ সচল হয়। তবে মেমরি লিমিটের সাথে **Swap Memory (সোয়াপ মেমরি)** কীভাবে ইন্টারঅ্যাক্ট করে, তা অনেকেই জানেন না।
+
+```mermaid
+flowchart TD
+    subgraph RAM_Swap_Dynamics [Docker Memory vs. Swap Limits]
+        direction TB
+        AppMem[Container Allocates Memory]
+        
+        subgraph CGroups_Lim [CGroups Limits Checked]
+            MemLimit["RAM Limit (-m 500m)"]
+            SwapLimit["Swap Limit --memory-swap"]
+        end
+        
+        AppMem -->|Exceeds RAM Limit| SwapCheck{Is Swap Enabled?}
+        SwapCheck -->|Yes: --memory-swap=1g| UseSwap[Writes anonymous pages <br>to Host Swap Space]
+        SwapCheck -->|No: --memory-swap=500m| OOMKill[Trigger OOM Killer / Exit Code 137]
+    end
+
+    style MemLimit fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style SwapLimit fill:#7c2d12,stroke:#f97316,color:#fff
+    style OOMKill fill:#7f1d1d,stroke:#ef4444,color:#fff
+```
+
+### ১. Swap Limits (`--memory-swap`)
+ডিফল্ট অবস্থায় আপনি যদি কন্টেইনারে ৫00MB র‍্যাম লিমিট করে সোয়াপ লিমিট সেট না করেন, তবে ডকার কন্টেইনারটিকে হোস্টের অতিরিক্ত ৫০০MB সোয়াপ স্পেস ব্যবহার করতে দেয় (মোট ১GB ভার্চুয়াল মেমরি)। 
+- **সোয়াপ নিষ্ক্রিয় করার নিয়ম:** আপনি যদি চান মেমরি লিমিট ওভারফ্লো হওয়ামাত্রই যেন প্রসেসটি ক্র্যাশ করে এবং কোনো হোস্ট সোয়াপ ব্যবহার না করে, তবে `--memory-swap` ভ্যালু মেমরি লিমিটের সমান করে দেবেন:
+  ```bash
+  # র‍্যাম ৫০০MB এবং সোয়াপ ০ (সোয়াপ সম্পূর্ণ অফ)
+  docker run -d -m 500m --memory-swap=500m nginx
+  ```
+
+### ২. Swappiness টিউনিং (`--memory-swappiness`)
+সোয়াপিনেস হলো একটি ইন্টিজার ভ্যালু (০ থেকে ১০০) যা লিনাক্স কার্নেলকে নির্দেশ দেয় কন্টেইনারের র‍্যাম পেজগুলো হোস্টের হার্ডডিস্ক সোয়াপে ট্রান্সফার করতে সে কতটা ব্যাকুল বা এগ্রেসিভ হবে।
+- **`--memory-swappiness=0`:** কার্নেল কন্টেইনারের র‍্যাম পেজগুলো কোনো অবস্থাতেই সোয়াপে পাঠাবে না, যদি না র‍্যাম একদম ১০০% ফুরিয়ে ওএম কিলার ট্রিগার হওয়ার উপক্রম হয়। এটি অ্যাপ্লিকেশনের পারফরম্যান্স সর্বোচ্চ হাই রাখে।
+- **`--memory-swappiness=100`:** কার্নেল অত্যন্ত এগ্রেসিভলি কন্টেইনারের অব্যবহৃত র‍্যাম পেজগুলো সোয়াপে পাঠিয়ে দিয়ে কন্টেইনারের র‍্যাম খালি রাখবে। এটি পারফরম্যান্স কিছুটা কমিয়ে দেয় কিন্তু সাডেন ওএম কিল (OOM kill) প্রতিরোধে সাহায্য করে।
+
+---
+
+## ২৩. Docker Storage Drivers Deep-Dive: overlay2 vs. devicemapper vs. btrfs vs. zfs
+
+আমরা OverlayFS সম্পর্কে জেনেছি, কিন্তু অপারেটিং সিস্টেম ও আইও (I/O) থ্রুপুটের ওপর ভিত্তি করে ডকার ব্যাকগ্রাউন্ডে ভিন্ন ভিন্ন স্টোরেজ ইঞ্জিন ব্যবহার করতে পারে। এদের আর্কিটেকচারাল পার্থক্য জানা প্রডাকশন স্টোরেজ ডিজাইনের জন্য অত্যন্ত জরুরি:
+
+| Storage Driver | Architecture Level | Copy-on-Write (CoW) Mechanics | Best Use Case | Pros & Cons |
+| :--- | :--- | :--- | :--- | :--- |
+| **`overlay2`** | **File-level** | লিনাক্স ইউনিয়ন মাউন্ট ব্যবহার করে ফাইল সিস্টেমে ডিরেক্টরি লেয়ার তৈরি করে। | আধুনিক লিনাক্স ডিস্ট্রিবিউশন (ডিফল্ট স্ট্যান্ডার্ড)। | **Pros:** অত্যন্ত ফাস্ট, লো মেমরি ওভারহেড, হোস্ট পেজ ক্যাশ শেয়ার করতে পারে। <br>**Cons:** অতিরিক্ত ফাইলসিস্টেম অ্যাকশনে ইনোড নিঃশেষ হওয়ার ঝুঁকি। |
+| **`devicemapper`** | **Block-level** | লিনাক্স LVM thin provisioning ব্যবহার করে কন্টেইনারের জন্য ভার্চুয়াল ব্লক ডিভাইস বানায়। | লিনাক্সের পুরাতন কার্নেল বা এন্টারপ্রাইজ আরএইচইএল (RHEL) সিস্টেম। | **Pros:** ব্লক লেভেলে কাজ করায় ডাটাবেস রাইটে লক কনটেনশন কম। <br>**Cons:** সেটআপ করা জটিল (Direct-LVM), পেজ ক্যাশ শেয়ার করতে পারে না, র‍্যাম বেশি খায়। |
+| **`btrfs` / `zfs`** | **Filesystem-level** | ওএস লেভেলের CoW ফাইলসিস্টেমের সাব-ভলিউম এবং স্ন্যাপশট ব্যবহার করে। | ডকার হোস্টে যদি ইতিমধ্যে Btrfs বা ZFS ফাইলসিস্টেম সেটআপ করা থাকে। | **Pros:** ইমেজ বিল্ডিং ও স্ন্যাপশট তৈরি করতে সুপার ফাস্ট। <br>**Cons:** ZFS-এর মেমরি ফুটপ্রিন্ট অনেক বেশি, কার্নেলের সাথে ডিপ টাইট ইন্টিগ্রেশন প্রয়োজন। |
+| **`vfs`** | **None** | কোনো CoW মেকানিজম নেই। প্রতিটা লেয়ারে ফাইল সম্পূর্ণ কপি করে ডিরেক্টরি ডুপ্লিকেট করে। | ডিবাগিং, ক্যাওস টেস্টিং ও ফাইল সিস্টেম ড্রাইভার টেস্ট। | **Pros:** জটিল কার্নেল ফিচারের ওপর ডিপেন্ডেন্সি নেই। <br>**Cons:** অত্যন্ত ধীরগতির, ডিস্ক স্পেস চোখের পলকে শেষ করে ফেলে। |
+
+---
+
+## ২৪. Namespace Sharing across Containers: Pod Architecture Internals (শেয়ার্ড নেমস্পেস)
+
+কুবারনেটিস (Kubernetes)-এর একদম মৌলিক একক হলো **Pod (পড)**। একটি পডের মূল রহস্য হলো তার ভেতরে থাকা একাধিক কন্টেইনার একে অপরের সাথে সম্পূর্ণ আইসোলেটেড ফাইল সিস্টেমে থাকলেও তারা একই নেটওয়ার্ক আইপি (`localhost`) এবং ইন্টার-প্রসেস কমিউনিকেশন (`IPC`) স্পেস শেয়ার করে। 
+
+ডকার ডেমোনের সাহায্যে আমরা কীভাবে ম্যানুয়ালি একটি কুবারনেটিস টাইপ **Pod Namespace Sharing** আর্কিটেকচার তৈরি করতে পারি?
+
+```mermaid
+flowchart TD
+    subgraph PauseContainer [Pause / Infra Container <br>Holds the sandbox namespaces open]
+        NetNS["Network Namespace <br>(IP: 172.17.0.5)"]
+        IPCNS["IPC Namespace <br>(Shared Memory)"]
+    end
+
+    subgraph AppContainer [Application Container - Nginx]
+        AppFile["Private RootFS"]
+    end
+
+    subgraph SidecarContainer [Sidecar Container - Log Shipper]
+        SideFile["Private RootFS"]
+    end
+
+    AppContainer -->|Joins Network & IPC| PauseContainer
+    SidecarContainer -->|Joins Network & IPC| PauseContainer
+
+    style PauseContainer fill:#065f46,stroke:#10b981,color:#fff
+    style NetNS fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style IPCNS fill:#7c2d12,stroke:#f97316,color:#fff
+```
+
+### ধাপ ১: অবকাঠামো বা Pause কন্টেইনার তৈরি করা
+প্রথমে আমরা একটি অত্যন্ত লাইটওয়েট বেস কন্টেইনার তৈরি করব, যার একমাত্র কাজ হলো নেটওয়ার্ক ও আইপিসি নেমস্পেসগুলোকে জীবিত ধরে রাখা (একে কুবারনেটিসের ভাষায় **Pause** বা **Infra Container** বলে):
+```bash
+docker run -d --name pause-infra alpine sleep infinity
+```
+
+### ধাপ ২: অ্যাপ্লিকেশন কন্টেইনারকে ওই নেমস্পেসে যুক্ত করা
+এবার আমরা আমাদের মেইন অ্যাপ্লিকেশন কন্টেইনার (Nginx) চালু করব, তবে তাকে নিজস্ব নেটওয়ার্ক ও আইপিসি না দিয়ে সরাসরি `pause-infra`-এর নেমস্পেসে জয়েন করিয়ে দেব:
+```bash
+docker run -d --name app-nginx --net=container:pause-infra --ipc=container:pause-infra nginx
+```
+
+### ধাপ ৩: সাইডকার কন্টেইনার জয়েন করানো
+এবার আমরা একটি চাইল্ড বা হেল্পার (Sidecar) কন্টেইনার রান করব যা একই নেটওয়ার্ক শেয়ার করবে:
+```bash
+docker run -it --name helper-sidecar --net=container:pause-infra alpine ash
+```
+
+#### শেয়ার্ড মেকানিক্সের প্রমাণ:
+আপনি যদি `helper-sidecar` কন্টেইনারের শেলের ভেতর ঢুকে টাইপ করেন:
+```bash
+# লোকালহোস্টের ৮০ পোর্টে কার্ল করা (এটি সরাসরি মেইন Nginx কন্টেইনারের রেসপন্স নিয়ে আসবে!)
+apk add curl && curl localhost:80
+```
+আশ্চর্যজনকভাবে দেখতে পাবেন সাইডকার কন্টেইনারটি `localhost` ব্যবহার করেই সরাসরি মেইন অ্যাপের ডাটা রিড করতে পারছে! কারণ তারা একই ভার্চুয়াল নেটওয়ার্ক কার্ড এবং আইপি শেয়ার করছে। কুবারনেটিস প্রতিটা পডের ভেতরে ঠিক এই আন্ডার-দ্য-হুড ডকার মেকানিজমটি ব্যবহার করে সাইডকার প্যাটার্ন তৈরি করে।
+
+---
+
+## ২৫. Multi-Host Container Networking: VxLAN Overlay Networks
+
+আমাদের কন্টেইনারগুলো যখন দুটি সম্পূর্ণ ভিন্ন ফিজিক্যাল সার্ভারে (Host A এবং Host B) থাকে, তখন তারা একে অপরের সাথে ব্রিজ নেটওয়ার্কের মাধ্যমে সরাসরি কথা বলতে পারে না। এই সমস্যার সমাধানে ডকার **VxLAN (Virtual Extensible LAN) Overlay Network** ব্যবহার করে একটি ডিস্ট্রিবিউটেড ভার্চুয়াল ফ্ল্যাট নেটওয়ার্ক তৈরি করে।
+
+```mermaid
+flowchart LR
+    subgraph HostA [Physical Host A - IP: 192.168.1.100]
+        ContA["Container A <br>IP: 10.0.0.2"]
+    end
+
+    subgraph PhysicalNetwork [Physical L3 Network / Switch]
+        EncapsulatedPacket["UDP Encapsulated Packet <br>Destination Host B (Port 4789)"]
+    end
+
+    subgraph HostB [Physical Host B - IP: 192.168.1.200]
+        ContB["Container B <br>IP: 10.0.0.3"]
+    end
+
+    ContA --->|Sends Frame to 10.0.0.3| HostA
+    HostA -->|Wraps inside VxLAN Tunnel| EncapsulatedPacket
+    EncapsulatedPacket --> HostB
+    HostB -->|Strips UDP Header & delivers frame| ContB
+
+    style HostA fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style HostB fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style EncapsulatedPacket fill:#7c2d12,stroke:#f97316,color:#fff
+```
+
+### কীভাবে VxLAN টানেলিং কাজ করে (The Tunneling Mechanics):
+
+1. **The Distributed Key-Value Store:** ওভারলে নেটওয়ার্ক তৈরি করার সময় ডকার ডেমোনগুলোর মধ্যে একটি Raft বা ডিস্ট্রিবিউটেড কে-ভ্যালু ডাটাবেস ব্যাকগ্রাউন্ডে চালু থাকে। এটি ট্র্যাকিং করে কোন কন্টেইনার আইপিটি কোন ফিজিক্যাল হোস্ট আইপির আন্ডারে রানিং আছে।
+2. **Encapsulation (প্যাকেট মোড়ানো):** Host A-তে থাকা Container A যখন Host B-তে থাকা Container B-কে (`10.0.0.3`) একটি প্যাকেট পাঠায়, Host A-এর কার্নেল ড্রাইভার দেখতে পায় এটি একটি ওভারলে নেটওয়ার্ক কল।
+   - কার্নেল মূল ইথারনেট ফ্রেমটিকে অক্ষত রেখে তার মাথার ওপর একটি স্পেসিফিক **VxLAN Header** ও **Layer 4 UDP Header** (ডিফল্ট পোর্ট **৪৭৮৯**) পরিয়ে দেয়।
+   - এই প্যাকেটের গন্তব্য আইপি হয় ফিজিক্যাল Host B-এর রিয়েল আইপি (`192.168.1.200`)।
+3. **Transmission:** ফিজিক্যাল নেটওয়ার্ক বা ইন্টারনেট কেবল এই সাধারণ UDP প্যাকেটটিকে হোস্ট A থেকে হোস্ট B-তে রাউট করে নিয়ে যায়।
+4. **Decapsulation (প্যাকেট খোলা):** Host B যখন ফিজিক্যাল পোর্ট ৪৭৮৯-এ প্যাকেটটি রিসিভ করে, হোস্টের ওভারলে কার্নেল ড্রাইভার বাইরের UDP হেডারটি ছিঁড়ে ফেলে ভেতরের মূল ইথারনেট ফ্রেমটি বের করে নেয়।
+5. **Delivery:** কার্নেল তখন ফ্রেমটি সরাসরি Container B-এর লোকাল নেটওয়ার্ক নেমস্পেসের ভার্চুয়াল `eth0` ইন্টারফেসে পুশ করে দেয়। Container B মনে করে সে একই লোকাল সুইচের ভেতরে বসে সরাসরি পিন টু পিন ডাটা রিসিভ করেছে, মাঝখানের নেটওয়ার্ক রাউটিংয়ের কোনো জটিলতাই সে টেরও পায় না।
+
+---
+
 ## 💡 Senior Architect Insights & Best Practices Summary
 
 > "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি। কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
@@ -1123,3 +1273,4 @@ sequenceDiagram
 ৩. **Read-Only Root Filesystem:** সিকিউরিটি আরও জোরদার করতে কন্টেইনারের রুট ফাইলসিস্টেম রিড-অনলি হিসেবে মাউন্ট করতে পারেন (`--read-only`), শুধুমাত্র প্রয়োজনীয় নির্দিষ্ট লগ বা টেম্প ডিরেক্টরিগুলোকে ভলিউম দিয়ে ওপেন রেখে।
 
 ---
+
