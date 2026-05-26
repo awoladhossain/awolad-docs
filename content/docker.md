@@ -2028,6 +2028,120 @@ spec:
 
 ---
 
+### ৬. Core Docker & Orchestration Commands for the Cluster (সার্ভিস ব্যবস্থাপনার কমান্ড গাইড)
+
+এই কন্টেইনারাইজড অ্যাপ্লিকেশন ক্লাস্টারটি লোকাল এবং কুবারনেটিস ক্লাউড ওএসে রান, ডিবাগ, ডাটাবেস মাইগ্রেশন এবং মনিটর করার জন্য সমস্ত প্রয়োজনীয় কমান্ড নিচে দেওয়া হলো:
+
+```mermaid
+flowchart TD
+    subgraph CommandsGuide [Stack Operation Lifecycle]
+        direction LR
+        Build["1. Build & Up <br>docker compose up --build -d"]
+        Migrate["2. DB Migration <br>docker compose exec nestjs-api ..."]
+        Debug["3. Live Diagnostics <br>docker stats / logs"]
+        Deploy["4. Cloud Production <br>kubectl apply -f ..."]
+        
+        Build --> Migrate --> Debug --> Deploy
+    end
+```
+
+#### ১. লোকাল ডেভেলপমেন্ট স্ট্যাক চালানো (Docker Compose)
+* **BuildKit সচল করে সম্পূর্ণ প্রজেক্ট বিল্ড ও রান করা:**
+  ```bash
+  # ব্যাকগ্রাউন্ডে কন্টেইনার ক্লাস্টার চালু করার জন্য
+  DOCKER_BUILDKIT=1 docker compose up --build -d
+  ```
+* **লাইভ লগ দেখা (Real-time Logs):**
+  ```bash
+  # সব কন্টেইনারের লগ একসাথে দেখতে
+  docker compose logs -f
+  
+  # শুধুমাত্র NestJS ব্যাকএন্ড কন্টেইনারের লগ দেখতে
+  docker compose logs -f nestjs-api
+  ```
+* **জিরো-ডাউনটাইমে একটি নির্দিষ্ট সার্ভিস রিবিল্ড করা:**
+  ```bash
+  # অন্য সার্ভিস সচল রেখে শুধু NestJS ব্যাকএন্ড রিবিল্ড করা
+  docker compose up -d --no-deps --build nestjs-api
+  ```
+* **কন্টেইনার ক্লাস্টার সম্পূর্ণ স্টপ ও ক্লিন করা:**
+  ```bash
+  # কন্টেইনার স্টপ এবং তৈরি করা সমস্ত ভলিউম সহ ডেটা ডিলিট করতে
+  docker compose down -v
+  ```
+
+#### ২. ডিবাগিং এবং গভীর ডায়াগনস্টিকস
+* **চলতি কন্টেইনারের শেলের (bash/sh) ভেতর ঢোকা:**
+  ```bash
+  # NestJS কন্টেইনারে অ্যাক্সেস করে ইন্টারনাল ফাইলসিস্টেম চেক করা
+  docker compose exec nestjs-api sh
+  ```
+* **কন্টেইনারগুলোর মেমরি ও সিপিইউ রিয়েল-টাইমে মনিটর করা (cgroups inspect):**
+  ```bash
+  # কোন কন্টেইনার কত মেমরি ও সিপিইউ খাচ্ছে তা দেখতে
+  docker stats
+  ```
+* **ডকার নেটওয়ার্ক ও কন্টেইনার আইপি এড্রেসসমূহ চেক করা:**
+  ```bash
+  # আমাদের তৈরি 'saas-network' সাবনেট ও তার কানেক্টেড কন্টেইনার আইপি দেখতে
+  docker network inspect my-doc-site_saas-network
+  ```
+* **কন্টেইনারের মেমরি হেলথ স্ট্যাটাস দেখা (Healthcheck Status):**
+  ```bash
+  # কন্টেইনারের হেলথ চেক রেজাল্ট JSON ফরম্যাটে দেখতে
+  docker inspect --format='{{json .State.Health}}' nestjs_backend
+  ```
+
+#### ৩. ডাটাবেস মাইগ্রেশন ও ডাটা অ্যাক্সেস কমান্ড
+* **কন্টেইনারের ভেতর থেকে ডাটাবেস মাইগ্রেশন রান করা:**
+  ```bash
+  # NestJS কন্টেইনারের ভেতর দিয়ে Prisma/TypeORM মাইগ্রেশন চালানো
+  docker compose exec nestjs-api npm run db:migrate
+  ```
+* **সরাসরি PostgreSQL ডাটাবেস শেলে অ্যাক্সেস করা:**
+  ```bash
+  # কন্টেইনারের রানিং Postgres ক্লায়েন্টে ঢোকা
+  docker compose exec postgres-db psql -U postgres -d saas_db
+  ```
+* **Redis লাইভ কানেকশন ও ক্যাশ টেস্টিং:**
+  ```bash
+  # Redis কন্টেইনারে পিং করে রেসপন্স চেক করা
+  docker compose exec redis-cache redis-cli ping
+  ```
+
+#### ৪. ক্লাউড প্রোডাকশন কমান্ডস (Kubernetes Orchestration)
+* **কুবারনেটিসের জন্য সিকিউর সিক্রেট তৈরি করা:**
+  ```bash
+  # ডাটাবেস ও স্ট্রাইপ এপিআই কি ক্রিপ্টোগ্রাফিক সিক্রেট হিসেবে হোস্ট করা
+  kubectl create secret generic db-credentials --from-literal=database-url="postgresql://..."
+  kubectl create secret generic stripe-secrets --from-literal=api-key="sk_test_..."
+  ```
+* **কুবারনেটিসে সার্ভিসগুলো ডেপ্লয় করা:**
+  ```bash
+  # সম্পূর্ণ ডিপ্লয়মেন্ট কুবারনেটিস ক্লাস্টারে সাবমিট করা
+  kubectl apply -f k8s-deployment.yaml
+  ```
+* **পড ও মেমরি স্ট্যাটাস পর্যবেক্ষণ করা:**
+  ```bash
+  # রানিং পড ও তাদের রেপ্লিকা স্ট্যাটাস দেখতে
+  kubectl get pods -o wide
+  
+  # কন্টেইনার বুট হতে কোনো এরর খেলে তার ডিটেইলস জানা
+  kubectl describe deployment nestjs-api-deployment
+  ```
+* **কুবারনেটিসে লাইভ কন্টেইনার লগ মনিটর করা:**
+  ```bash
+  # ডিপ্লয়মেন্টের লাইভ লগ ট্র্যাকিং
+  kubectl logs -f deployment/nestjs-api-deployment
+  ```
+* **চলতি কুবারনেটিস পডের ভেতরে সরাসরি কমান্ড চালানো:**
+  ```bash
+  # কুবারনেটিস কন্টেইনারের ভেতরে ইন্টারঅ্যাক্টিভ শেল ওপেন করা
+  kubectl exec -it <pod_name> -- sh
+  ```
+
+---
+
 ## 💡 Senior Architect Insights & Best Practices Summary
 
 > "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি. কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
