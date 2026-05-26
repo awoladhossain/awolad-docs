@@ -1577,6 +1577,294 @@ Snapshot Isolation (যা বেশিরভাগ ডাটাবেসের 
 
 ---
 
+## ৬১. Real-World Case Study: High-Throughput E-Commerce System (১২টি টেবিলের রিয়েল-লাইফ আর্কিটেকচার ও অপারেশনস)
+এতক্ষণ আমরা থিওরি এবং সিস্টেমস লেভেলের যেসব আর্কিটেকচার শিখেছি, তা একটি বাস্তব প্রোডাকশন-গ্রেড ই-কমার্স সিস্টেমের **১২টি নরমালাইজড টেবিল** দিয়ে আমরা হাতে-কলমে ইমপ্লিমেন্ট করব। এখানে আমরা DDL স্কিমা তৈরি করা থেকে শুরু করে জটিল ACID ট্রানজেকশন, অ্যাডভান্সড জয়েনিং, কাস্টম ট্রিগার এবং কুয়েরি পারফরম্যান্স প্রোফাইলিং কভার করব।
+
+### ক. ১২টি টেবিলের Entity-Relationship (ER) ডায়াগ্রাম
+
+```mermaid
+erDiagram
+    users ||--|| user_profiles : "has profile"
+    users ||--o{ orders : "places"
+    users ||--o{ shipping_addresses : "saves"
+    users ||--o{ reviews : "writes"
+    categories ||--o{ categories : "parent category"
+    categories ||--o{ products : "contains"
+    products ||--o{ order_items : "sold in"
+    products ||--o{ reviews : "has reviews"
+    products ||--o{ inventory_logs : "stock change log"
+    orders ||--o{ order_items : "contains items"
+    orders ||--|| payments : "has payment"
+    orders ||--|| shipments : "tracked by"
+```
+
+---
+
+### খ. DDL Script: SQL Table Creation (PostgreSQL)
+নিচে প্রোডাকশন-রেডি স্কিমা তৈরির SQL স্ক্রিপ্ট দেওয়া হলো। এতে ফিজিক্যাল রিলেশনশিপ রক্ষা করতে Primary Key, Foreign Key, Unique Constraints এবং Check Constraints ব্যবহার করা হয়েছে:
+
+```sql
+-- ১. Users Table (কোর ইউজার অথেনটিকেশন)
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) DEFAULT 'customer' CHECK (role IN ('customer', 'admin', 'seller')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ২. User Profiles Table (১:১ রিলেশনশিপ)
+CREATE TABLE user_profiles (
+    user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    full_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) UNIQUE,
+    billing_address TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ৩. Categories Table (সেলফ-রেফারেনশিয়াল ক্যাটাগরি)
+CREATE TABLE categories (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    parent_id INT REFERENCES categories(id) ON DELETE SET NULL
+);
+
+-- ৪. Products Table (১:N রিলেশনশিপ উইথ ক্যাটাগরি)
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    sku VARCHAR(100) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(12, 2) NOT NULL CHECK (price >= 0),
+    stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ৫. Shipping Addresses Table (১:N রিলেশনশিপ)
+CREATE TABLE shipping_addresses (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    address_line TEXT NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    postal_code VARCHAR(20) NOT NULL,
+    is_default BOOLEAN DEFAULT FALSE
+);
+
+-- ৬. Orders Table (১:N রিলেশনশিপ উইথ ইউজার)
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE RESTRICT,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')),
+    total_amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00 CHECK (total_amount >= 0),
+    payment_status VARCHAR(50) DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid', 'paid', 'refunded')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ৭. Order Items Table (N:M Junction Table between Orders and Products)
+CREATE TABLE order_items (
+    id SERIAL PRIMARY KEY,
+    order_id INT REFERENCES orders(id) ON DELETE CASCADE,
+    product_id INT REFERENCES products(id) ON DELETE RESTRICT,
+    quantity INT NOT NULL CHECK (quantity > 0),
+    unit_price DECIMAL(12, 2) NOT NULL CHECK (unit_price >= 0),
+    UNIQUE (order_id, product_id) -- একই অর্ডার আইটেমে একই প্রোডাক্ট ডুপ্লিকেট হবে না
+);
+
+-- ৮. Payments Table (১:১ বা ১:N রিলেশনশিপ উইথ অর্ডার)
+CREATE TABLE payments (
+    id SERIAL PRIMARY KEY,
+    order_id INT REFERENCES orders(id) ON DELETE RESTRICT,
+    payment_method VARCHAR(50) NOT NULL,
+    transaction_id VARCHAR(100) UNIQUE NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'refunded')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ৯. Shipments Table (১:১ রিলেশনশিপ উইথ অর্ডার)
+CREATE TABLE shipments (
+    id SERIAL PRIMARY KEY,
+    order_id INT UNIQUE REFERENCES orders(id) ON DELETE RESTRICT,
+    shipping_carrier VARCHAR(100) NOT NULL,
+    tracking_number VARCHAR(100) UNIQUE,
+    status VARCHAR(50) DEFAULT 'picked' CHECK (status IN ('picked', 'in_transit', 'out_for_delivery', 'delivered')),
+    shipped_at TIMESTAMP
+);
+
+-- ১০. Inventory Logs Table (ইনভেন্টরি অডিট ট্র্যাকিং)
+CREATE TABLE inventory_logs (
+    id SERIAL PRIMARY KEY,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    stock_change INT NOT NULL, -- যেমন +৫০ (রিস্টক) বা -২ (অর্ডার প্লেস)
+    reason VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ১১. Reviews Table (N:M রিলেশনশিপ উইথ ইউজার ও প্রোডাক্ট)
+CREATE TABLE reviews (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    product_id INT REFERENCES products(id) ON DELETE CASCADE,
+    rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, product_id) -- এক ইউজার এক প্রোডাক্টে মাত্র একবার রিভিউ দিতে পারবেন
+);
+
+-- ১২. Coupons Table (ডিসকাউন্ট কুপন)
+CREATE TABLE coupons (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    discount_percent INT NOT NULL CHECK (discount_percent BETWEEN 1 AND 100),
+    active_until TIMESTAMP NOT NULL
+);
+```
+
+---
+
+### গ. Core DML Operations: বাস্তব জীবনের কোড
+
+#### ১. ACID Transaction: অর্ডার প্লেস এবং স্টক আপডেট (Atomic Checkout)
+যখন ক্লায়েন্ট অর্ডার করে, তখন আমাদের একসাথে `orders` টেবিলে রো ক্রিয়েট করতে হবে, `order_items` লিখতে হবে, এবং প্রোডাক্টের মেইন `stock` কমিয়ে `inventory_logs`-এ অডিট লিখতে হবে। এটি একটি সিঙ্গেলে ACID ট্রানজেকশনে প্রটেক্ট করা আবশ্যক:
+
+```sql
+BEGIN;
+
+-- ক. অর্ডার তৈরি করা (ইউজার আইডি ১)
+INSERT INTO orders (user_id, status, total_amount, payment_status)
+VALUES (1, 'pending', 1299.00, 'unpaid')
+RETURNING id; -- ধরা যাক এই অর্ডারের রিটার্ন আইডি হলো ৪২
+
+-- খ. অর্ডারের আইটেম এন্ট্রি (প্রোডাক্ট আইডি ৫, পরিমাণ ১টি, মূল্য ১২৯৯.০০)
+INSERT INTO order_items (order_id, product_id, quantity, unit_price)
+VALUES (42, 5, 1, 1299.00);
+
+-- গ. ফিজিক্যাল স্টক চেক ও ডিক্রিমেন্ট (Concurrency Safety Lock)
+UPDATE products 
+SET stock = stock - 1 
+WHERE id = 5 AND stock >= 1; 
+-- ⚠️ যদি stock >= 1 ট্রু না হয়, তবে কোনো রো আপডেট হবে না। অ্যাপ্লিকেশন তখন রোলব্যাক করবে।
+
+-- ঘ. অডিট লগে ইনভেন্টরি ট্র্যাকিং যুক্ত করা
+INSERT INTO inventory_logs (product_id, stock_change, reason)
+VALUES (5, -1, 'Order placed. Order ID: 42');
+
+COMMIT;
+```
+
+#### ২. অ্যাডভান্সড জয়েনিং কোয়েরি (All Joins in One Query)
+নিচে একটি চমৎকার অ্যানালিটিক্যাল কোয়েরি দেওয়া হলো যা গ্রাহকদের মোট অর্ডারের সংখ্যা ও খরচ বের করে (INNER, LEFT, ও ANTI Joins ব্যবহার করে):
+
+```sql
+-- ক. INNER & LEFT JOIN: গ্রাহক ও তাদের অর্ডারের পরিসংখ্যান
+SELECT 
+    u.id AS user_id,
+    up.full_name,
+    COUNT(o.id) AS total_orders,
+    COALESCE(SUM(o.total_amount), 0.00) AS total_spent
+FROM users u
+INNER JOIN user_profiles up ON u.id = up.user_id
+LEFT JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, up.full_name
+ORDER BY total_spent DESC;
+
+-- খ. ANTI JOIN (NOT EXISTS): যে সমস্ত গ্রাহক জীবনে একটিও অর্ডার করেননি তাদের তালিকা বের করা
+SELECT u.id, up.full_name, u.email 
+FROM users u
+INNER JOIN user_profiles up ON u.id = up.user_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM orders o WHERE o.user_id = u.id
+);
+```
+
+#### ৩. সেলফ-জয়েন (SELF JOIN): ক্যাটাগরি হায়ারার্কি প্যারেন্ট বের করা
+```sql
+SELECT 
+    child.name AS SubCategory,
+    parent.name AS ParentCategory
+FROM categories child
+LEFT JOIN categories parent ON child.parent_id = parent.id;
+```
+
+---
+
+### ঘ. Advanced Database Automations (ট্রিগার ও প্রসিডিউর)
+
+#### ১. ট্রানজেকশনাল স্টক অটো-আপডেট ট্রিগার
+আমাদের অ্যাপ্লিকেশন লেভেলে ম্যানুয়ালি স্টক কমাতে হবে না, আমরা ডাটাবেস কার্নেলে একটি ট্রিগার সেট করব যা `order_items`-এ ডাটা ইনসার্ট হওয়ার সাথে সাথে স্বয়ংক্রিয়ভাবে স্টক কমাবে ও ইনভেন্টরি লগ লিখবে:
+
+```sql
+-- ক. ট্রিগার ফাংশন তৈরি
+CREATE OR REPLACE FUNCTION trg_update_stock_on_order()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- ১. ফিজিক্যাল প্রোডাক্টের স্টক কমানো
+    UPDATE products 
+    SET stock = stock - NEW.quantity
+    WHERE id = NEW.product_id;
+
+    -- ২. ইনভেন্টরি অডিট লগ লেখা
+    INSERT INTO inventory_logs (product_id, stock_change, reason)
+    VALUES (NEW.product_id, -NEW.quantity, CONCAT('Auto-stock deduct. Order ID: ', NEW.order_id));
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- খ. order_items টেবিলের ওপর ট্রিগার সেটআপ
+CREATE TRIGGER after_order_item_insert
+AFTER INSERT ON order_items
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_stock_on_order();
+```
+
+---
+
+### ঙ. Performance Profiling: ইনডেক্সিং এবং কুয়েরি অ্যানালাইসিস
+
+#### ১. high-cardinality ফরেন কি কলামগুলোতে ইনডেক্স তৈরি (Concurrency Performance)
+```sql
+CREATE INDEX CONCURRENTLY idx_orders_user_id ON orders(user_id);
+CREATE INDEX CONCURRENTLY idx_order_items_product_id ON order_items(product_id);
+```
+
+#### ২. EXPLAIN ANALYZE দিয়ে কুয়েরি প্রোফাইলিং ভ্যালিডেশন
+চলুন দেখি নির্দিষ্ট ইউজারের সমস্ত অর্ডার ফিল্টারিং অপ্টিমাইজ হয়েছে কিনা:
+```sql
+EXPLAIN (ANALYZE, BUFFERS) 
+SELECT * FROM orders WHERE user_id = 42;
+```
+* **আউটপুট ভ্যালিডেশন:** এখানে অপ্টিমাইজার `Sequential Scan` (যা সম্পূর্ণ টেবিল স্ক্যান করে) বাদ দিয়ে আমাদের তৈরি `Index Scan using idx_orders_user_id` ব্যবহার করবে, যা রিড ল্যাটেন্সি ১০০ms থেকে ০.২ms-এ নামিয়ে আনবে!
+
+#### ৩. Materialized View: দৈনিক ক্যাটাগরি ভিত্তিক সেলস অ্যানালিটিক্স ক্যাশিং
+ই-কমার্স সাইটের ড্যাশবোর্ডে প্রতিদিনের ক্যাটাগরি-ভিত্তিক সেলস রিপোর্ট রিয়েল-টাইমে কুয়েরি করলে মেইন ডাটাবেস স্লো হয়ে যায়। তাই আমরা একটি Materialized View তৈরি করে ডাটা ক্যাশ করব:
+
+```sql
+CREATE MATERIALIZED VIEW mv_daily_sales_category AS
+SELECT 
+    o.created_at::DATE AS sales_date,
+    c.name AS category_name,
+    COUNT(DISTINCT o.id) AS total_orders,
+    SUM(oi.quantity * oi.unit_price) AS daily_revenue
+FROM orders o
+INNER JOIN order_items oi ON o.id = oi.order_id
+INNER JOIN products p ON oi.product_id = p.id
+INNER JOIN categories c ON p.category_id = c.id
+WHERE o.status != 'cancelled'
+GROUP BY o.created_at::DATE, c.name;
+
+-- কুইক রিড ইনডেক্স সেটআপ
+CREATE UNIQUE INDEX idx_mv_sales_date_category ON mv_daily_sales_category(sales_date, category_name);
+```
+
+* **রিফ্রেশ শিডিউল:** ব্যাকগ্রাউন্ডে ক্রন-জব বা জিরো-ডাউনটাইমে মেইন টেবিলের ওপর কোনো লক না ফেলে ভিউটি রিফ্রেশ করার কমান্ড:
+  ```sql
+  REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_sales_category;
+  ```
+
+---
+
 ## 💡 Systems Architect Database Insights
 
 ১. **Avoid SELECT * in Production:** প্রোডাকশন কোয়েরিতে কখনোই `SELECT *` ব্যবহার করবেন না। এটি আপনার প্রয়োজনীয় কলামের বাইরেও বিশাল ডাটা ডিস্ক ও নেটওয়ার্ক ওভারহেডের মাধ্যমে ট্রাভার্স করায়, যা সকেটের আইও পারফরম্যান্স ধ্বংস করে। সর্বদা কলামের নাম সুনির্দিষ্টভাবে উল্লেখ করুন (`SELECT id, name`).
@@ -1584,6 +1872,7 @@ Snapshot Isolation (যা বেশিরভাগ ডাটাবেসের 
 ৩. **Connection Pooling is Mandatory:** অ্যাপ্লিকেশন থেকে প্রতিবার কোয়েরি করার সময় নতুন নতুন ডাটাবেস কানেকশন হ্যান্ডশেক এড়াতে সর্বদা **Connection Pool** (যেমন: PgBouncer বা HikariCP) ব্যবহার করুন। এটি ডাটাবেস সার্ভারের সিপিইউ এবং র‍্যামের ওভারহেড প্রায় ৫ গুণ কমিয়ে দেয়।
 
 ---
+
 
 
 
