@@ -1937,6 +1937,83 @@ SELECT * FROM orders;
 
 ---
 
+### ছ. Enterprise Database Project Advanced Features (বাস্তব প্রোডাকশন প্রজেক্টের আরও ৩টি গুরুত্বপূর্ণ মাস্টারক্লাস কনসেপ্ট)
+বাস্তব প্রোডাকশন সিস্টেমে ফ্ল্যাশ সেল (Flash Sale) হ্যান্ডেল করতে ডাবল-বুকিং রোদ করা, জিরো-ডাউনটাইমে ডাটাবেস মাইগ্রেশন সম্পন্ন করা এবং বিদ্যুৎ গতিতে প্রোডাক্ট সার্চ এনাবেল করার জন্য নিচের ৩টি এডভান্সড কনসেপ্ট ও কোড ইমপ্লিমেন্টেশন কভার করা হলো:
+
+#### ১. Concurrency: PG Advisory Locks দিয়ে ফ্ল্যাশ সেল ও ডাবল-বুকিং প্রতিরোধ
+* **সমস্যা (Race Condition):** একটি ফ্ল্যাশ সেলে ১টি প্রোডাক্ট মাত্র ১০ পিস স্টকে আছে। কিন্তু একই সেকেন্ডে ২০০০ গ্রাহক একসাথে "Buy Now" বাটন চাপলেন।
+  * আমরা যদি সাধারণ `SELECT stock FROM products` চালিয়ে অ্যাপ্লিকেশন মেমরিতে চেক করি, তবে ২০০০ থ্রেডই একই সময়ে দেখবে `stock = 10` এবং সবাই একসাথে অর্ডার প্লেস করে ফেলবে! এর ফলে **ওভারসোল্ড বা ডাবল-বুকিং (Double-booking)** ঘটবে, যা ব্যবসায়ের জন্য একটি বড় বিপর্যয়।
+* **সমাধান (PostgreSQL Advisory Locks):** রো-লেভেল এক্সক্লুসিভ লক বা ভারী টেবিল লকিং এড়াতে আমরা অত্যন্ত হালকা ওজনের **Advisory Locks** ব্যবহার করব। এটি ওএসের মেমরিতে রানটাইমে একটি অ্যাপ্লিকেশন-ডিফাইন্ড আইডি লক করে দেয়, ফলে কেবল একটি থ্রেড লকের ভেতর ঢুকতে পারে এবং বাকি থ্রেডগুলো বাইরে সারিবদ্ধ হয়ে অপেক্ষা করে:
+```sql
+BEGIN;
+
+-- ক. প্রোডাক্ট আইডি ৫ এর ওপর একটি ট্রানজেকশনাল এডভাইজরি লক তৈরি করা
+SELECT pg_advisory_xact_lock(5); 
+-- 💡 এখন অন্য কোনো কনকারেন্ট ট্রানজেকশন এই প্রোডাক্ট আইডির ওপর রাইট করতে পারবে না, সে লাইনে দাঁড়িয়ে থাকবে।
+
+-- খ. এখন নিরাপদে স্টক রিড ও ভ্যালিডেট করা
+SELECT stock FROM products WHERE id = 5;
+
+-- গ. স্টক আপডেট ও অর্ডার সম্পন্ন করা
+UPDATE products SET stock = stock - 1 WHERE id = 5;
+
+COMMIT; -- ট্রানজেকশন শেষ হওয়ার সাথে সাথে লক অটো-রিলিজ হয়ে যাবে!
+```
+
+#### ২. Full-Text Search (FTS): GIN Indexing ও Weighted Ranking (পণ্য খোঁজার মেকানিজম)
+* **সমস্যা:** গ্রাহকরা যখন সাইটে প্রোডাক্ট সার্চ করেন, তখন আমরা যদি `LIKE '%iphone%'` কুয়েরি চালাই, তবে ডাটাবেস সম্পূর্ণ টেবিলে Sequential Scan করবে এবং কোনো ইনডেক্স ব্যবহার করবে না। এটি হাজার কোটি পণ্যের ক্ষেত্রে সার্চ কুয়েরি চিরতরে স্লো করে দেবে।
+* **সমাধান:** আমরা **PostgreSQL Full-Text Search (FTS)** এবং **GIN (Generalized Inverted Index)** ব্যবহার করে কোটি কোটি প্রোডাক্টের মধ্যে মিলি-সেকেন্ডে সার্চ করব। একই সাথে প্রোডাক্টের টাইটেলে ম্যাচ করলে বেশি পয়েন্ট (Weight A) এবং ডেসক্রিপশনে ম্যাচ করলে কম পয়েন্ট (Weight B) দিয়ে রিলেভেন্সি র‍্যাঙ্কিং করব:
+```sql
+-- ক. প্রোডাক্ট টেবিলে সার্চের জন্য একটি ডেডিকেটেড tsvector কলাম যুক্ত করা
+ALTER TABLE products ADD COLUMN search_vector tsvector;
+
+-- খ. টাইটেল ও ডেসক্রিপশনে ওয়েটেড র‍্যাঙ্কিং জেনারেট করার ফাংশন ও ট্রিগার তৈরি
+CREATE OR REPLACE FUNCTION trg_products_search_vector_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.search_vector := 
+        setweight(to_tsvector('english', COALESCE(NEW.name, '')), 'A') || 
+        setweight(to_tsvector('english', COALESCE(NEW.description, '')), 'B');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tsvectorupdate BEFORE INSERT OR UPDATE
+ON products FOR EACH ROW EXECUTE FUNCTION trg_products_search_vector_update();
+
+-- গ. ফাস্ট সার্চের জন্য GIN (Generalized Inverted Index) তৈরি করা
+CREATE INDEX idx_products_search ON products USING gin(search_vector);
+
+-- ঘ. weighted search কোয়েরি (টাইটেল ম্যাচিংকে বেশি অগ্রাধিকার দিয়ে সার্চ রেজাল্ট সাজানো):
+SELECT name, ts_rank(search_vector, query) as rank
+FROM products, to_tsquery('english', 'iphone & gold') query
+WHERE search_vector @@ query
+ORDER BY rank DESC;
+```
+
+#### ৩. Zero-Downtime Migrations: কোটি রো টেবিলে লক ছাড়া মাইগ্রেশন
+* **সমস্যা:** কোটি রো-এর একটি প্রোডাকশন টেবিলে হুট করে `ALTER TABLE products ADD COLUMN age_rating INT DEFAULT 18 NOT NULL;` চালালে ডাটাবেস সম্পূর্ণ টেবিলটিকে কয়েক সেকেন্ড বা মিনিটের জন্য লক (Access Exclusive Lock) করে ফেলবে। এর ফলে সেই সময়ে সাইটের সমস্ত ট্রানজেকশন অফ হয়ে সম্পূর্ণ ওয়েবসাইট ক্র্যাশ করবে!
+* **সমাধান (Expand and Contract Pattern):** আমরা ৩টি সেফ ধাপে এবং লক না লাগিয়ে মাইগ্রেশন চালাব:
+  * **ধাপ ১ (Expand):** কলামটি প্রথমে `Nullable` এবং কোনো `Default` ভ্যালু ছাড়াই যুক্ত করতে হবে (এটি Postgres-এ মাত্র ০.১ মিলি-সেকেন্ডে লক ছাড়া সম্পন্ন হয়):
+    ```sql
+    ALTER TABLE products ADD COLUMN age_rating INT;
+    ```
+  * **ধাপ ২ (Zero-Lock Indexing & Constraint Validation):** আমরা কোনো লক না লাগিয়ে ব্যাকগ্রাউন্ডে ইনডেক্স তৈরি করব এবং কনস্ট্রেইন্ট ভ্যালিডেশন আলাদা করব:
+    ```sql
+    -- ক. কনকারেন্টলি ইনডেক্স তৈরি করা (এটি কোনো রাইট লক ফিজিক্যালি তৈরি করে না)
+    CREATE INDEX CONCURRENTLY idx_products_age_rating ON products(age_rating);
+    
+    -- খ. ফরেন কি বা চেক কনস্ট্রেইন্ট যোগ করা কিন্তু ওল্ড ডেটা ভ্যালিডেট না করা (Not Valid)
+    ALTER TABLE products ADD CONSTRAINT chk_age_rating CHECK (age_rating >= 0) NOT VALID;
+    -- 💡 এটি সাথে সাথে এক্সিকিউট হয়ে যাবে। ওল্ড ডাটা ব্লক হবে না।
+    
+    -- গ. ব্যাকগ্রাউন্ডে ওল্ড ডাটা আস্তে আস্তে ভ্যালিডেট করা (কোনো লক ছাড়া)
+    ALTER TABLE products VALIDATE CONSTRAINT chk_age_rating;
+    ```
+  * **ধাপ ৩ (Contract):** ব্যাকগ্রাউন্ড ব্যাচ স্ক্রিপ্ট দিয়ে ওল্ড ডেটা আপডেট করে নেওয়ার পর অ্যাপ্লিকেশন কোডকে নতুন কলামের রিড-রাইটে সিঙ্ক করে নেওয়া।
+
+---
+
 ## 💡 Systems Architect Database Insights
 
 ১. **Avoid SELECT * in Production:** প্রোডাকশন কোয়েরিতে কখনোই `SELECT *` ব্যবহার করবেন না। এটি আপনার প্রয়োজনীয় কলামের বাইরেও বিশাল ডাটা ডিস্ক ও নেটওয়ার্ক ওভারহেডের মাধ্যমে ট্রাভার্স করায়, যা সকেটের আইও পারফরম্যান্স ধ্বংস করে। সর্বদা কলামের নাম সুনির্দিষ্টভাবে উল্লেখ করুন (`SELECT id, name`).
@@ -1944,6 +2021,7 @@ SELECT * FROM orders;
 ৩. **Connection Pooling is Mandatory:** অ্যাপ্লিকেশন থেকে প্রতিবার কোয়েরি করার সময় নতুন নতুন ডাটাবেস কানেকশন হ্যান্ডশেক এড়াতে সর্বদা **Connection Pool** (যেমন: PgBouncer বা HikariCP) ব্যবহার করুন। এটি ডাটাবেস সার্ভারের সিপিইউ এবং র‍্যামের ওভারহেড প্রায় ৫ গুণ কমিয়ে দেয়।
 
 ---
+
 
 
 
