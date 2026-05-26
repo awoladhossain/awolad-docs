@@ -1264,13 +1264,198 @@ flowchart LR
 
 ---
 
+## ২৬. CPU Bandwidth Limits: CFS Scheduler & CPU Throttling (সিপিইউ থ্রটলিং)
+
+আমরা যখন কন্টেইনারে সিপিইউ লিমিট সেট করি (যেমন: `--cpus=1.5` বা `--cpu-shares=512`), লিনাক্স কার্নেলের শিডিউলার লেভেলে দুটি ভিন্ন স্ট্র্যাটেজি অ্যাপ্লাই করা হয়। এই মেকানিজমটি না বুঝলে আপনার হাই-ট্রাফিক অ্যাপ্লিকেশন প্রোডাকশনে রহস্যময় পারফরম্যান্স ড্রপ বা লেটেন্সি স্পাইক (p99 latency spikes)-এর শিকার হবে।
+
+```mermaid
+flowchart TD
+    subgraph CFSScheduler [CFS CPU Bandwidth Controller]
+        direction TB
+        subgraph TimeWindow [CFS Period Window - 100ms]
+            TotalQuota["Allowed CPU Quota <br>(e.g. --cpus=1.5 -> 150ms CPU Time)"]
+            SpikeUsage["Container Spikes <br>(Uses 150ms in first 30ms of window)"]
+            RemainingTime["Remaining 70ms of the window"]
+        end
+        
+        SpikeUsage -->|Quota Exhausted| Throttle[Kernel Suspends / Pauses Container]
+        Throttle -->|Throttling Active| LatencySpike[High p99 Latency / Requests Delay]
+        RemainingTime -->|Next Period Starts| Resume[Kernel Resumes Container]
+    end
+
+    style TotalQuota fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style SpikeUsage fill:#7c2d12,stroke:#f97316,color:#fff
+    style Throttle fill:#7f1d1d,stroke:#ef4444,color:#fff
+```
+
+### ১. CPU Shares (`--cpu-shares`) - প্রোপরশনাল ওয়েইট:
+- **মেকানিজম:** এটি সিপিইউ-এর কোনো হার্ড লিমিট সেট করে না। এটি একটি আপেক্ষিক অগ্রাধিকার (Priority Weight) স্কোর। হোস্টের সিপিইউ যদি অলস বা ফ্রী পড়ে থাকে, কন্টেইনারটি চাইলে ১০০% সিপিইউ ব্যবহার করতে পারবে।
+- **CPU Congestion:** যখন হোস্টে সিপিইউ মেমরি নিয়ে যুদ্ধ শুরু হবে, তখন কার্নেল এই শেয়ার রেশিও অনুযায়ী সাইকেল ভাগ করে দেবে (যেমন: ১০২৪ বনাম ৫১২ শেয়ারের দুটি কন্টেইনার ২:১ অনুপাতে প্রসেসিং টাইম পাবে)।
+
+### ২. CPU Quota (`--cpus`) - CFS শিডিউলারের হার্ড লিমিট:
+- **মেকানিজম:** ডকার লিনাক্স কার্নেলের **Completely Fair Scheduler (CFS)** ব্যবহার করে নিখুঁত হার্ড লিমিট বসায়।
+  - কার্নেল প্রতি ১০০ms (১০০,০০০us) উইন্ডোর একটি সময়কাল ট্র্যাক করে, যাকে **`cpu.cfs_period_us`** বলে।
+  - আপনি যখন `--cpus=1.5` সেট করেন, ডকার কার্নেলে **`cpu.cfs_quota_us`** ভ্যালু ১৫০,০০০us (১৫০ms) সেট করে দেয়। অর্থাৎ প্রতি ১০০ms সময় জানালার মধ্যে কন্টেইনারের সমস্ত থ্রেড মিলে সর্বোচ্চ ১৫০ms সিপিইউ সাইকেল ব্যবহার করতে পারবে।
+- **The Silent Killer: CPU Throttling (সিপিইউ থ্রটলিং):**
+  - আপনার মাল্টি-থ্রেডেড গো বা জাভা অ্যাপ্লিকেশন যদি তীব্র রিকোয়েস্ট স্পাইক হ্যান্ডেল করতে গিয়ে উইন্ডোর প্রথম ৩০ms সময়ের মধ্যেই তার বরাদ্দকৃত ১৫০ms কোটা শেষ করে ফেলে, কার্নেলের CFS শিডিউলার তাৎক্ষণিকভাবে অ্যাপ্লিকেশন প্রসেসটিকে **স্থগিত বা সাসপেন্ড (Pause)** করে দেয়!
+  - বাকি ৭০ms সময় অ্যাপ্লিকেশনটি সম্পূর্ণ ফ্রিজ হয়ে বসে থাকবে। একে বলে সিপিইউ থ্রটলিং। এর ফলে সিস্টেম ওভারঅল সিপিইউ ইউজ মাত্র ২০-৩০% দেখাবে, কিন্তু অ্যাপ্লিকেশনের রেসপন্স টাইম (p99 latency) হুট করে কয়েক সেকেন্ডে লাফিয়ে উঠবে!
+
+#### থ্রটলিং চেক করার কমান্ড:
+```bash
+# কন্টেইনারের সিগ্রুপ ফাইলে গিয়ে থ্রটলিং কাউন্টার দেখা
+cat /sys/fs/cgroup/cpu/cpu.stat
+# nr_throttled কাউন্টার যদি অনবরত বাড়তে থাকে, তার মানে আপনার কন্টেইনার থ্রটল হচ্ছে!
+```
+**সমাধান:** হাই-পারফরম্যান্স এপিআই সার্ভারে সিপিইউ থ্রটলিং এড়াতে হার্ড লিমিট কিছুটা আলগা করে দেওয়া এবং কার্নেলের থ্রটল টিউনিং কনফিগার করা জরুরি।
+
+---
+
+## ২৭. BuildKit Build Cache & DAG Architecture (বিল্ডকিট এবং DAG শিডিউলার)
+
+ডকারের ক্লাসিক বিল্ড প্রসেস ছিল অত্যন্ত লিনিয়ার এবং ধীরগতির (প্রতিটা লাইন ধরে ক্রমানুসারে চলা)। আধুনিক ডকার ইঞ্জিনে ব্যাকগ্রাউন্ডে ব্যবহৃত হয় অত্যন্ত শক্তিশালী এবং প্যারালাল এক্সিকিউশন সমৃদ্ধ বিল্ড ইঞ্জিন **BuildKit**।
+
+```mermaid
+flowchart TD
+    subgraph BuildKitDAG [BuildKit Directed Acyclic Graph - DAG]
+        direction LR
+        Stage1["1. Install Base Packages <br>(Run Concurrently)"]
+        Stage2["2. Build UI Frontend <br>(Run Concurrently)"]
+        
+        Merge["3. Compile Server Backend <br>(Depends on Stage 1 & 2)"]
+        
+        Stage1 --> Merge
+        Stage2 --> Merge
+    end
+
+    style Stage1 fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Stage2 fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Merge fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### ১. DAG (Directed Acyclic Graph) শিডিউলার:
+BuildKit আপনার Dockerfile রিড করে তার সমস্ত বিল্ড স্টেজের ডিপেন্ডেন্সি অ্যানালাইসিস করে মেমরিতে একটি **Directed Acyclic Graph (DAG)** বা নির্দেশিত অ-চক্রীয় গ্রাফ তৈরি করে।
+- **প্যারালাল এক্সিকিউশন:** মাল্টি-স্টেজ বিল্ডের ক্ষেত্রে, যদি `Staged Frontend Build` এবং `Staged Go Compiler Build` একে অপরের ওপর নির্ভরশীল না হয়, তবে BuildKit হোস্টের একাধিক সিপিইউ কোরে একই সাথে সমান্তরালভাবে দুটি বিল্ড স্টেজ রান করায়। ফলে বিল্ড টাইম প্রায় অর্ধেক হয়ে যায়!
+
+### ২. Extremely Advanced Cache Mounting (`--mount=type=cache`)
+আমাদের নোড (`npm install`), গো বা রাস্ট প্রজেক্ট বিল্ড করার সময় প্রতিবার সামান্য কোড চেঞ্জের কারণে সম্পূর্ণ ডিপেন্ডেন্সি রি-ডাউনলোড করতে বিশাল সময় নষ্ট হয়। BuildKit-এর চমৎকার একটি হিডেন ফিচার হলো **Cache Mounts**।
+
+```dockerfile
+# Dockerfile Advanced Standard
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+# মেমরি ক্যাশ মাউন্ট সচল করা
+RUN --mount=type=cache,target=/root/.npm npm install
+COPY . .
+RUN npm run build
+```
+
+#### এটি কীভাবে কাজ করে?
+- ডকার হোস্ট মেশিনের একটি সুরক্ষিত মেমরি বা ডিরেক্টরিকে বিল্ড টাইমে সরাসরি `/root/.npm` পাথে ক্যাশ মাউন্ট হিসেবে যুক্ত করে দেয়।
+- আপনি যখন পরবর্তী সময়ে নতুন কোনো প্যাকেজ অ্যাড করে বিল্ড করবেন, ডকার সম্পূর্ণ নতুন করে সব প্যাকেজ ডাউনলোড করবে না। সে ক্যাশ মাউন্টে থাকা হোস্টের মেমরি থেকে আগের প্যাকেজগুলো রিড করবে এবং কেবল নতুন প্যাকেজটি ডাউনলোড করবে। এটি বিল্ড টাইমকে প্রায় ৯০% কমিয়ে দিতে পারে!
+
+---
+
+## ২৮. Jailing Processes: pivot_root vs. chroot (ফাইলসিস্টেম আইসোলেশনের আসল রহস্য)
+
+ডকার কীভাবে কন্টেইনারের ভেতরের প্রসেসকে এমনভাবে খাঁচাবন্দী (Jail) করে যে সে কোনো অবস্থাতেই হোস্ট ওএসের মূল রুট `/` ডিরেক্টরির বাইরে কোনো ফাইল দেখতে পারে না? 
+
+অনেকে ভাবেন কন্টেইনারে ক্লাসিক লিনাক্স কমান্ড **`chroot` (Change Root)** ব্যবহার করা হয়। কিন্তু এ ধারণাটি সম্পূর্ণ ভুল এবং সিকিউরিটি পয়েন্ট থেকে বিপজ্জনক।
+
+```mermaid
+flowchart TD
+    subgraph JailComparison [Process Filesystem Jailing]
+        direction LR
+        subgraph ChrootJail [1. chroot (Insecure)]
+            chroot_in["Process Root changed <br>to /app/rootfs"]
+            Escape["Root user can call <br>chroot() again and escape <br>using relative paths (../)"]
+            chroot_in -->|Escape Possible| Escape
+        end
+
+        subgraph PivotRootJail [2. pivot_root (Secure & Final)]
+            pivot_in["Swaps Mount Namespaces <br>RootFS becomes absolute /"]
+            OldRoot["Old Host Root moved <br>to temp directory"]
+            Unmount["Old Host Root is <br>completely unmounted"]
+            
+            pivot_in --> OldRoot --> Unmount
+        end
+    end
+
+    style Escape fill:#7f1d1d,stroke:#ef4444,color:#fff
+    style Unmount fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### ১. কেন `chroot` ব্যবহার করা হয় না?
+`chroot` কেবল একটি প্রসেসের ফাইল পাথ রেজোলিউশনের শুরুটা বদলে দেয়। যদি কন্টেইনারের ভেতর কোনো প্রসেস `root` প্রিভিলেজ পেয়ে যায়, সে খুব সহজে একটি ডাবল-ক্রুট সিকোয়েন্স এবং রিলেটিভ পাথ ব্যবহার করে ওএসের রুট বাউন্ডারি ভেঙে হোস্টের রুট ডিস্কে এস্কেপ (Escape) করতে পারে (এটি একটি বহু পরিচিত ক্লাসিক প্রিভিলেজ এস্কেপ ভলনারেবিলিটি)।
+
+### ২. The Champion: `pivot_root` system call
+ডকারের লো-লেভেল ওআইসি রানটাইম `runc` কন্টেইনার তৈরির সময় লিনাক্স কার্নেলের অত্যন্ত শক্তিশালী **`pivot_root`** সিস্টেম কল ট্রিগার করে।
+
+- **মেকানিজম:** `pivot_root` প্রসেসের মাউন্ট নেমস্পেসের ভেতরে থাকা রুট মাউন্ট টেবিলটিকেই বদলে দেয়। সে কন্টেইনারের নতুন `rootfs` মাউন্টকে ওএসের একদম প্রাইমারি রুট `/` মাউন্টে রূপান্তর করে। 
+- আর হোস্ট ওএসের পুরনো রুট মাউন্টকে একটি সাময়িক টেম্প ডিরেক্টরিতে সরিয়ে দেয়।
+- এরপর `runc` ব্যাকগ্রাউন্ডে ওই টেম্প ডিরেক্টরিতে থাকা হোস্টের পুরনো রুট মাউন্ট পয়েন্টটি সম্পূর্ণ **`umount` (আনমাউন্ট)** করে মুছে দেয়।
+- **The Defense:** যেহেতু কন্টেইনারের মাউন্ট টেবিলে হোস্টের রুট ফাইল সিস্টেমের কোনো চিহ্ন বা মাউন্ট পয়েন্টই অবশিষ্ট থাকে না, কন্টেইনার প্রসেস রুট ইউজার হলেও কোনো আপেক্ষিক পথ (`../`) ব্যবহার করে হোস্ট ওএসে ব্রেকআউট করার কোনো শারীরিক উপায় থাকে না। এটি ১০০% নিশ্ছিদ্র ফাইলসিস্টেম জেল নিরাপত্তা নিশ্চিত করে।
+
+---
+
+## ২৯. High-Performance IPC & Shared Memory Limits (`/dev/shm` & POSIX SHM)
+
+উচ্চ পারফরম্যান্সের ব্যাকএন্ড আর্কিটেকচারে (যেমন: রিয়েল-টাইম ভিডিও ট্রান্সকোডার, হাই-ফ্রিকোয়েন্সি ট্রেডিং প্ল্যাটফর্ম, বা বড় পাইটর্চ/TensorFlow ডিওআইপি মডেল) মাইক্রোসার্ভিসগুলোর মধ্যে সাধারণ HTTP বা TCP/IP নেটওয়ার্ক সকেট দিয়ে ডাটা পাস করা অত্যন্ত ধীরগতির ও ব্যয়বহুল। 
+
+এসব ক্ষেত্রে প্রসেসগুলোর মধ্যে ডাটা শেয়ার করতে **Shared Memory (শেয়ার্ড মেমরি)** বা **POSIX IPC** ব্যবহার করা হয়।
+
+```mermaid
+flowchart LR
+    subgraph IPCSharedMem [Shared Memory - Zero Latency]
+        ProcessA[Container Process A]
+        ProcessB[Container Process B]
+        
+        RAM_Block["Shared Physical RAM Block <br>(Mapped inside both Address Spaces)"]
+        
+        ProcessA -->|Writes instantly <br>Zero Copy / Zero Latency| RAM_Block
+        ProcessB -->|Reads instantly <br>Zero Copy / Zero Latency| RAM_Block
+    end
+
+    style RAM_Block fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### POSIX Shared Memory কী?
+এটি লিনাক্স মেমরি ম্যানেজমেন্টের এমন একটি ফিচার যা একই ফিজিক্যাল র‍্যাম ব্লককে দুটি সম্পূর্ণ ভিন্ন প্রসেসের ভার্চুয়াল অ্যাড্রেস স্পেসে ম্যাপ করে দেয়। ফলে প্রসেস A মেমরিতে ডেটা রাইট করামাত্রই প্রসেস B কোনো নেটওয়ার্ক বা ফাইল রাইট ল্যাটেন্সি ছাড়াই তা জিরো-কপি (Zero-Copy) মেকানিজমে দেখতে পায়।
+
+### The /dev/shm Limit Trap (একটি কমন প্রোডাকশন ক্র্যাশ)
+লিনাক্সে শেয়ার্ড মেমরি মাউন্ট পয়েন্ট থাকে `/dev/shm` ডিরেক্টরিতে। 
+- **The Trap:** ডকার ডিফল্ট অবস্থায় প্রতিটা কন্টেইনারের জন্য এই শেয়ার্ড মেমরি বা `/dev/shm` সাইজ মাত্র **64MB**-তে লিমিট করে দেয়!
+- আপনি যখন কোনো কন্টেইনারে পাইটর্চ (PyTorch) ট্রেনিং রান করবেন বা হেডলেস ক্রোম (Headless Chrome) স্ক্র্যাপার চালাবেন, এটি লার্জ ডেটা মেমরিতে লোড করতে গিয়ে ৬৪MB কোটা পার হওয়ামাত্রই **`SIGBUS` (Bus Error)** খেয়ে সাথে সাথে ক্র্যাশ করে বন্ধ হয়ে যাবে।
+
+### সিনিয়র আর্কিটেক্ট সলিউশন:
+
+এই মেমরি বিপর্যয় এড়াতে কন্টেইনার রান করার সময় নিচের এডভান্সড শেয়ারিং টিউনিং কনফিগার করতে হয়:
+
+```bash
+# কন্টেইনারের শেয়ার্ড মেমরি সাইজ বাড়িয়ে ২ গিগাবাইট করা
+docker run -d --shm-size=2g my-pytorch-app
+```
+
+#### কন্টেইনার টু কন্টেইনার শেয়ার্ড মেমরি:
+আপনি যদি চান দুটি সম্পূর্ণ ভিন্ন কন্টেইনারের প্রসেস একে অপরের সাথে মেমরি শেয়ার করে জিরো-ল্যাটেন্সিতে কথা বলবে, তবে তাদের শেয়ার্ড মেমরি আইসোলেশন রিডাইরেক্ট করে দিতে পারেন:
+```bash
+# কন্টেইনার A স্পন করে তার মেমরি শেয়ারেবল ঘোষণা করা
+docker run -d --name container-a --ipc=shareable my-high-speed-writer
+
+# কন্টেইনার B রান করে সরাসরি কন্টেইনার A-এর মেমরিতে জয়েন করা
+docker run -d --name container-b --ipc=container:container-a my-high-speed-reader
+```
+
+---
+
 ## 💡 Senior Architect Insights & Best Practices Summary
 
 > "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি। কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
 
 ১. **Use Distroless or Alpine Images:** বেস ইমেজ হিসেবে বড় ওএসের পরিবর্তে (যেমন Ubuntu) স্রেফ রানটাইম সমৃদ্ধ **Distroless** বা **Alpine** ব্যবহার করুন। এতে ইমেজের এটাক সারফেস (Vulnerability) এবং সাইজ প্রায় ৯০% কমে যায়।
-২. **Avoid `--privileged` Flag:** `--privileged` ফ্ল্যাগ দিলে কন্টেইনার হোস্টের সমস্ত ডিভাইস ড্রাইভার ও মেমরি সরাসরি টাচ করার পারমিশন পায়। এটি কন্টেইনার আইসোলেশন দেওয়ালকে ভেঙে চুরমার করে দেয়।
+২. **Avoid `--privileged` Flag:** `--privileged` ফ্ল্যাগ দিলে কন্টেইনার হোস্টের সমস্ত ডিভাইস ড্রাইভার ও মেমরি সরাসরি টাচ করার পারমিশন পায়। এটি কন্টেইনার আইসোলেশন দেဝ်য়ালকে ভেঙে চুরমার করে দেয়।
 ৩. **Read-Only Root Filesystem:** সিকিউরিটি আরও জোরদার করতে কন্টেইনারের রুট ফাইলসিস্টেম রিড-অনলি হিসেবে মাউন্ট করতে পারেন (`--read-only`), শুধুমাত্র প্রয়োজনীয় নির্দিষ্ট লগ বা টেম্প ডিরেক্টরিগুলোকে ভলিউম দিয়ে ওপেন রেখে।
 
 ---
+
 
