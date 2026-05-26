@@ -422,6 +422,250 @@ services:
 
 ---
 
+## ৮. Linux cgroups v1 vs. cgroups v2: The Modern Transition
+
+কন্টেইনারের রিসোর্স লিমিট করার জন্য আমরা `cgroups` ব্যবহার করি। তবে সাম্প্রতিক বছরগুলোতে লিনাক্স কার্নেলে সিগ্রুপের আর্কিটেকচারে একটি বিশাল বৈপ্লবিক পরিবর্তন এসেছে—**cgroups v1** থেকে **cgroups v2**-তে রূপান্তর (লিনাক্স কার্নেল ৪.৫+ এবং ২০২০ সালের পর থেকে আধুনিক ডিস্ট্রিবিউশনগুলোতে এটি ডিফল্ট)।
+
+```mermaid
+flowchart TD
+    subgraph cgroups_v1 [cgroups v1: Multiple Separate Hierarchies]
+        direction TB
+        Proc1_v1[Process A]
+        Proc2_v1[Process B]
+        
+        CPU_Tree["CPU Controller Tree"]
+        Mem_Tree["Memory Controller Tree"]
+        IO_Tree["BlkIO Controller Tree"]
+        
+        Proc1_v1 --> CPU_Tree
+        Proc1_v1 --> Mem_Tree
+        Proc2_v1 --> Mem_Tree
+        Proc2_v1 --> IO_Tree
+    end
+
+    subgraph cgroups_v2 [cgroups v2: Single Unified Hierarchy]
+        direction TB
+        Proc1_v2[Process A]
+        Proc2_v2[Process B]
+        
+        UnifiedTree["Unified Controller Tree <br>(CPU, Memory, I/O, PIDs)"]
+        
+        Proc1_v2 --> UnifiedTree
+        Proc2_v2 --> UnifiedTree
+    end
+
+    style CPU_Tree fill:#7c2d12,stroke:#f97316,color:#fff
+    style Mem_Tree fill:#7c2d12,stroke:#f97316,color:#fff
+    style UnifiedTree fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### cgroups v1-এর সীমাবদ্ধতা:
+v1 আর্কিটেকচারে প্রতিটা রিসোর্সের (CPU, Memory, Disk IO) জন্য আলাদা আলাদা কন্ট্রোলার এবং সম্পূর্ণ পৃথক ডিরেক্টরি ট্রি বা হায়ারার্কি থাকত। 
+- **সমস্যা:** একটি প্রসেস সিপিইউ হায়ারার্কির এক জায়গায় এবং মেমরি হায়ারার্কির সম্পূর্ণ ভিন্ন জায়গায় থাকতে পারত। এর ফলে কন্ট্রোলারগুলোর মধ্যে সিঙ্ক করা অসম্ভব ছিল। উদাহরণস্বরূপ, ডিস্ক রাইট থ্রোটলিং (I/O limits) করার সময় মেমরি পেজ ক্যাশ বাফারের সাথে ট্র্যাকিং মিলত না, যার ফলে কার্নেল লেভেলে ডেডলক ও পারফরম্যান্স ড্রপ হতো।
+
+### cgroups v2-এর আধুনিক সুবিধা:
+v2-তে সমস্ত রিসোর্সকে একটি **Single Unified Hierarchy** বা একক গাছের অধীনে নিয়ে আসা হয়েছে। একটি প্রসেস গাছের কেবল একটি নোডেই থাকতে পারে।
+1. **Unified Resource Control:** এখন সিপিইউ, মেমরি এবং আইও কন্ট্রোলার একসাথে একই প্রসেস বাউন্ডারিতে কাজ করে। ফলে ডকার নিখুঁতভাবে I/O এবং Memory Writeback ট্র্যাকিং করতে পারে।
+2. **Pressure Stall Information (PSI):** এটি v2-এর একটি চমৎকার ফিচার। এটি কার্নেল লেভেলে ট্র্যাক করে প্রসেসটি সিপিইউ, মেমরি বা আইও-এর সংকটের কারণে ঠিক কত মিলি-সেকেন্ড অলস বসে (Starve) ছিল। এর মাধ্যমে সিস্টেম OOM ক্র্যাশে যাওয়ার আগেই সতর্কতা সংকেত দেয়।
+3. **Rootless Containers Support:** cgroups v2 লিনাক্সের সাধারণ নন-রুট ইউজারদের সেফলি রিসোর্স লিমিট করার পারমিশন দেয়, যা **Rootless Docker** ও কন্টেইনার সিকিউরিটি উন্নয়নে বড় অবদান রাখছে।
+
+---
+
+## ৯. Container Hardening: Seccomp, AppArmor, & Linux Capabilities
+
+অনেকেই মনে করেন কন্টেইনারে `root` ইউজার হিসেবে কোড রান করলে হোস্টের রুটের মতোই সমান পাওয়ার পাওয়া যায়। কিন্তু লিনাক্স কার্নেল ও ডকার ইঞ্জিনের ডিফেন্স-ইন-ডেপথ সিকিউরিটির জন্য এটি সত্য নয়। কার্নেল মূলত ৩টি লেয়ারে কন্টেইনারকে লক করে রাখে:
+
+```mermaid
+flowchart TD
+    subgraph HardeningLayers [Docker Kernel Security Hardening]
+        Syscall[Container System Call]
+        
+        Cap["1. Linux Capabilities <br>(libcap - Dropped by default)"]
+        Seccomp["2. Seccomp Profile <br>(Syscall Filtering - 300+ blocked)"]
+        LSM["3. AppArmor / SELinux <br>(Mandatory Access Control)"]
+        
+        HostKernel["Host Linux Kernel - Ring 0"]
+        
+        Syscall --> Cap
+        Cap --> Seccomp
+        Seccomp --> LSM
+        LSM --> HostKernel
+    end
+
+    style Cap fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Seccomp fill:#7c2d12,stroke:#f97316,color:#fff
+    style LSM fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### ১. Linux Capabilities (লিপক্যাপ)
+ঐতিহ্যগতভাবে লিনাক্সে সিকিউরিটি বাইনারি ছিল: হয় আপনি সাধারণ ইউজার (সব ব্লকড) অথবা আপনি রুট ইউজার (সব পারমিটেড)। আধুনিক লিনাক্সে রুটের এই বিশাল ক্ষমতাকে প্রায় ৪০টি ছোট ছোট সূক্ষ্ম ক্ষমতায় ভাগ করা হয়েছে, যাকে **Capabilities** বলা হয়।
+
+- **Default Dropping:** ডকার কন্টেইনারের ভেতরের প্রসেসটি রুট হলেও, হোস্ট সুরক্ষার জন্য ডকার ডিফল্ট অবস্থায় বেশিরভাগ শক্তিশালী ক্যাপাবিলিটি কেড়ে নেয়। সে কেবল `CAP_CHOWN`, `CAP_SETUID` এবং `CAP_NET_BIND_SERVICE` (১০২৪-এর নিচের পোর্ট ওপেন করার ক্ষমতা) এর মতো গুটিয়েক বেসিক পাওয়ার রেখে বাকি সব ফেলে দেয়।
+- **Custom Config:** আপনি যদি কন্টেইনারকে সিস্টেমের ঘড়ি পরিবর্তন করার ক্ষমতা দিতে চান (`CAP_SYS_TIME`) বা নেটওয়ার্ক কার্ড মডিফাই করতে চান (`CAP_NET_ADMIN`), তবে রান করার সময় স্পেসিফিক ক্যাপাবিলিটি অ্যাড বা ড্রপ করতে পারেন:
+  ```bash
+  # ক্যাপাবিলিটি ড্রপ ও অ্যাড করার নিয়ম
+  docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE nginx
+  ```
+
+---
+
+### ২. Seccomp (Secure Computing Mode)
+সেকম্প হলো লিনাক্স কার্নেলের একটি সিস্টেম কল ফিল্টারিং মেকানিজম। লিনাক্স কার্নেলে ৩০০-এর বেশি সিস্টেম কল (Syscalls) রয়েছে। ডকার একটি ডিফল্ট JSON সেকম্প প্রোফাইল ব্যবহার করে যার মাধ্যমে কন্টেইনারের ভেতরের প্রসেসের জন্য প্রায় ৪৪টি বিপজ্জনক সিস্টেম কল সম্পূর্ণ ব্লক করে দেওয়া হয়।
+- **Blocked Syscalls:** উদাহরণস্বরূপ, কন্টেইনারের ভেতর থেকে ওএস রিবুট করা (`reboot`), নতুন ফাইলসিস্টেম মাউন্ট করা (`mount`), বা কার্নেল মডিউল লোড করা (`init_module`) সিস্টেম কলগুলো সেকম্প প্রোফাইল সরাসরি আটকে দেয়। এর ফলে হ্যাকার কন্টেইনার হ্যাক করলেও ওএস ডাউন করতে পারে না।
+
+---
+
+### ৩. AppArmor / SELinux
+এটি হলো **Mandatory Access Control (MAC)** পলিসি। এটি ওএস লেভেলে একটি প্রসেসের ফাইল পাথ অ্যাক্সেস করার ক্ষমতা সীমিত করে। 
+- ডকার রান করার সময় হোস্ট ওএসে অটোমেটিক একটি `docker-default` অ্যাপ-আর্মর প্রোফাইল লোড করে। এর ফলে কন্টেইনারের কোনো প্রসেস হোস্টের স্পর্শকাতর ফাইল (যেমন `/sys`, `/proc` বা `/etc/shadow`) রিড বা রাইট করতে চেষ্টা করলে কার্নেল সাথে সাথে তা রিজেক্ট করে দেয়।
+
+---
+
+## ১০. Zombie Processes & Container Init Systems (Tini / PID 1 Reap)
+
+লিনাক্স অপারেটিং সিস্টেমে প্রতিটা প্রসেস যখন তার কাজ শেষ করে চলে যায়, ওএস কার্নেল সাথে সাথে তার পুরো ডেটা মেমরি থেকে মুছে দেয় না। কার্নেল প্রসেস টেবিলে তার এক্সিট কোড ও এন্ট্রি রেখে দেয় যতক্ষণ না তার অভিভাবক বা প্যারেন্ট প্রসেস এসে `wait()` বা `waitpid()` সিস্টেম কল করে সেই ডেটা রিড করে। এই সংক্ষিপ্ত সময়ের জন্য প্রসেসটি মৃত কিন্তু টেবিলে দৃশ্যমান অবস্থায় থাকে, একে **Zombie (defunct) Process** বলে।
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Parent as Parent App (PID 1 - e.g. Node.js)
+    participant Child as Spawned Worker Process
+    participant Kernel as Linux Kernel / Process Table
+
+    Parent->>Child: 1. Spawn Worker Process
+    Note over Child: Worker completes task
+    Child->>Kernel: 2. exit(0) / Syscall terminate
+    Note over Kernel: Child becomes ZOMBIE (defunct)
+    Note over Parent: Case A: Normal App doesn't call waitpid()
+    Kernel-->>Parent: Zombie remains in Process Table forever
+    Note over Parent: Case B: Using Init System (Tini - PID 1)
+    Parent->>Kernel: 3. waitpid() / Reaps zombie entry
+    Kernel->>Kernel: 4. Clear process table entry completely
+```
+
+### PID 1-এর দায়িত্ব:
+লিনাক্স ওএসের প্রথম প্রসেস বা **PID 1 (Init System - যেমন systemd)** এর প্রধান দায়িত্ব হলো সিস্টেমে কোনো অভিভাবকহীন অনাথ (Orphaned) প্রসেস তৈরি হলে নিজে তার প্যারেন্ট হয়ে যাওয়া এবং তারা মারা গেলে তাদের এক্সিট স্টেট রিড করে প্রসেস টেবিল থেকে মুছে ফেলা (Zombie Reaping)।
+
+### কন্টেইনারের সমস্যা:
+আমরা যখন কন্টেইনারে আমাদের নোড বা জাভা অ্যাপ্লিকেশন রান করাই, তখন আমাদের অ্যাপ্লিকেশন প্রসেসটিই কন্টেইনারের **PID 1** হয়ে বসে।
+- **সমস্যা:** আমাদের অ্যাপ্লিকেশনগুলো কিন্তু সিস্টেম ইনিট সফটওয়্যার নয়। এরা প্যারেন্ট প্রসেস হিসেবে সাব-প্রসেসগুলোর জম্বি স্টেট ক্লিয়ার করার জন্য ডিজাইন করা হয়নি।
+- এর ফলে কন্টেইনারের ভেতর যদি মাল্টিপল চাইল্ড প্রসেস বা শেল স্ক্রিপ্ট রান করানো হয়, তারা কাজ শেষে মারা গেলেও জম্বি প্রসেস হিসেবে প্রসেস টেবিলে জমে থাকে। ধীরে ধীরে প্রসেস টেবিল ফুল হয়ে যায় এবং ওএস নতুন কোনো প্রসেস স্পন করতে পারে না (Process Table Exhaustion)।
+
+### সমাধান: `--init` ফ্ল্যাগ বা Tini
+ডকার এই সমস্যা সমাধানের জন্য **Tini** নামের একটি অতি ক্ষুদ্র ইনিট সিস্টেম বিল্ট-ইন দেয়।
+- **ব্যবহার:** কন্টেইনার রান করার সময় `--init` ফ্ল্যাগ দিলে ডকার `tini`-কে PID 1 হিসেবে রান করায় এবং আমাদের অ্যাপ্লিকেশনটিকে তার চাইল্ড হিসেবে স্পন করে। 
+  ```bash
+  docker run -d --init my-node-app
+  ```
+  `tini` তখন নিখুঁতভাবে সিগন্যাল ফরওয়ার্ডিং (SIGTERM) হ্যান্ডেল করে এবং সমস্ত জম্বি প্রসেস তৈরি হওয়ামাত্র ওএস কার্নেল থেকে রিড করে সাফ করে দেয়।
+
+---
+
+## ১১. Docker Multi-Architecture Builds: Buildx & QEMU Internals
+
+আজকের ক্লাউড ইনফ্রাস্ট্রাকচারে আর্কিটেকচারের বৈচিত্র্য অনেক। আমরা হয়তো লোকাল উইন্ডোজ/ম্যাক কম্পিউটারে রান করি **ARM64** বা **AMD64 (x86_64)** আর্কিটেকচারে, আর ক্লাউড সার্ভারগুলো (যেমন AWS Graviton বা Intel Xeon) রান করে ভিন্ন আর্কিটেকচারে।
+
+ভিন্ন CPU আর্কিটেকচারের জন্য একই অ্যাপ্লিকেশনের ইমেজ জেনারেশন ডকার কীভাবে হ্যান্ডেল করে?
+
+```mermaid
+flowchart TD
+    subgraph BuildxEngine [Docker Buildx & Multi-Arch Architecture]
+        Buildx["docker buildx build"]
+        
+        subgraph Platforms [Target Platforms]
+            P_AMD["linux/amd64"]
+            P_ARM["linux/arm64"]
+        end
+        
+        QEMU["QEMU Emulation <br>(Translates CPU instructions in real-time)"]
+        
+        Manifest["Docker Registry Manifest List <br>(Unified Reference - 'my-app:v1')"]
+        
+        Buildx --> Platforms
+        Platforms -->|Compiling on host| QEMU
+        Platforms -->|Publish| Manifest
+    end
+
+    style Buildx fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style QEMU fill:#7c2d12,stroke:#f97316,color:#fff
+    style Manifest fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### ১. Docker Buildx & BuildKit:
+ডকারের আধুনিক বিল্ড ইঞ্জিন **BuildKit** এবং এর এক্সটেনশন CLI **Buildx** মাল্টি-আর্কিটেকচার ইমেজ তৈরির মূল কারিগর। এটি একই সাথে প্যারালালি একাধিক প্ল্যাটফর্মের জন্য বিল্ড চালাতে পারে।
+
+### ২. QEMU Emulation Internals:
+আমরা যখন আমাদের AMD64 ল্যাপটপে বসে ARM64 ইমেজ বিল্ড করার কমান্ড দিই:
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t my-app:v1 --push .
+```
+হোস্ট ওএসের কার্নেলের **binfmt_misc** ফিচার ব্যবহার করে ডকার ব্যাকগ্রাউন্ডে একটি **QEMU Emulation Layer** চালু করে। 
+- **QEMU** মূলত রিয়েল-টাইমে প্রসেসরের ARM ইন্সট্রাকশনগুলোকে AMD64 ইন্সট্রাকশনে কনভার্ট করে রান করায়। এটি কিছুটা ধীরগতির হলেও চমৎকারভাবে ভিন্ন আর্কিটেকচারের ইমেজ কম্পাইল করতে পারে।
+
+### ৩. Manifest Lists (মাল্টি-আর্কিটেকচার মেনিফেস্ট):
+বিল্ড শেষে ডকার রেজিস্ট্রি বা হাব-এ একটি চমৎকার ইনডেক্স ফাইল আপলোড করে, একে **Manifest List** বলে। 
+- আপনি যখন ডকার হাব থেকে `nginx` ইমেজটি পুল (`docker pull nginx`) করেন, ডকার হাব দেখে আপনার লোকাল সিপিইউ কোন আর্কিটেকচারের। সে অনুযায়ী মেনিফেস্ট লিস্ট থেকে রিডাইরেক্ট করে শুধুমাত্র আপনার সিপিইউ-এর জন্য উপযোগী স্পেসিফিক ইমেজ লেয়ারটি ডাউনলোড করে দেয়।
+
+---
+
+## ১২. Docker Logging Engines & Ring Buffer Internals
+
+কন্টেইনারের ভেতরের প্রসেস যখন স্ট্যান্ডার্ড আউটপুট (`stdout`) বা এরর (`stderr`)-এ ডেটা লেখে, ডকার ইঞ্জিন কীভাবে তা সংগ্রহ করে আমাদের `docker logs` কমান্ডে রিয়েল-টাইমে শো করায়?
+
+```mermaid
+flowchart TD
+    subgraph LoggingArchitecture [Docker Daemon Log Delivery Pipelines]
+        App[Container App Write] -->|stdout / stderr| FIFO[UNIX Pipes / FIFO Buffers]
+        FIFO --> Daemon[Docker Daemon - dockerd]
+        
+        subgraph Drivers [Docker Logging Drivers]
+            JSON["1. json-file <br>(Default - Disk Space Exhaustion Risk)"]
+            Local["2. local <br>(Optimized Local Engine)"]
+            Syslog["3. syslog / journald <br>(OS Native Collector)"]
+            Fluent["4. fluentd / splunk <br>(Enterprise Centralized Logs)"]
+        end
+        
+        Daemon --> Drivers
+    end
+
+    style FIFO fill:#7c2d12,stroke:#f97316,color:#fff
+    style Drivers fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### লগ ডেলিভারি মেকানিজম:
+1. **FIFO Buffers:** ডকার কন্টেইনার প্রসেসটিকে সরাসরি হোস্ট ওএসের টার্মিনাল সকেটের সাথে কানেক্ট না করে তার stdout/stderr পাইপগুলোকে কার্নেল লেভেলের **FIFO/Named Pipes** বাফারের সাথে কানেক্ট করে দেয়।
+2. **dockerd Interception:** ডকার ডেমোন ব্যাকগ্রাউন্ডে এই পাইপগুলো থেকে অনবরত ডেটা রিড করে এবং কনফিগার করা **Logging Driver**-এর কাছে হস্তান্তর করে।
+
+---
+
+### The json-file Driver & Disk Space Exhaustion (একটি পরিচিত বিপর্যয়)
+ডিফল্ট অবস্থায় ডকার **`json-file`** ড্রাইভার ব্যবহার করে। এটি প্রতিটা কন্টেইনারের সমস্ত লগ হোস্টের `/var/lib/docker/containers/<id>/<id>-json.log` পাথে সাধারণ JSON ফাইল হিসেবে সেভ করে।
+- **বিপর্যয়:** এই ফাইলটির কোনো ডিফল্ট সাইজ লিমিট নেই! কন্টেইনারে প্রচুর পরিমাণে লগ জেনারেট হলে কয়েক মাসের মধ্যে এই লগ ফাইলটি কয়েকশ গিগাবাইট জায়গা দখল করে হোস্ট ওএসের সম্পূর্ণ ডিস্ক স্পেস ফুল করে ফেলে এবং সার্ভারকে সম্পূর্ণ ডাউন করে দেয়।
+
+---
+
+### Senior Solution: Dual Logging & Non-Blocking Buffering
+প্রোডাকশন গ্রেড সিস্টেমে এই লগ বিপর্যয় এড়াতে সিনিয়র ইঞ্জিনিয়াররা ডকার ডেমন কনফিগারেশনে (`/etc/docker/daemon.json`) নিচের বেস্ট প্র্যাকটিস মেকানিজম কনফিগার করেন:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "50m",
+    "max-file": "3",
+    "mode": "non-blocking",
+    "max-buffer-size": "4m"
+  }
+}
+```
+
+#### কনফিগারেশনের ইন্টারনাল মেকানিক্স:
+- **`max-size` & `max-file` (Log Rotation):** লগের সাইজ ৫০MB পার হলে ডকার অটোমেটিক পুরনো লগ ডিলিট করে নতুন ফাইলে রাইট করবে এবং সর্বোচ্চ ৩টি ফাইল স্টোর রাখবে। এর ফলে ডিস্ক ফুল হওয়ার রিস্ক ০% হয়ে যায়।
+- **`mode: non-blocking` (রিং বাফার পারফরম্যান্স):** ডিফল্ট অবস্থায় ডকার ব্লকিং মোডে কাজ করে। অর্থাৎ যদি ডিস্ক I/O স্লো হয়, ডকার লগ ফাইল রাইট করতে না পারা পর্যন্ত অ্যাপ্লিকেশনের মেইন থ্রেডকে ব্লক করে রাখে। এর ফলে অ্যাপ্লিকেশনের স্পিড নাটকীয়ভাবে কমে যায়।
+- `non-blocking` অন করলে ডকার কার্নেলে ৪MB-এর একটি **Ring Buffer** তৈরি করে। অ্যাপ্লিকেশন লগের ডেটা বাফারে ফেলে সাথে সাথে কাজ এগিয়ে নিয়ে যায়, ডকার ব্যাকগ্রাউন্ডে বাফার থেকে ডেটা রিড করে ফাইল রাইট করে। বাফার ফুল হয়ে গেলে ডকার রিং মেথডে পুরনো লগ ওভাররাইট করে অ্যাপ্লিকেশনের পারফরম্যান্স গ্যারান্টিড হাই রাখে।
+
+---
+
 ## 💡 Senior Architect Insights & Best Practices Summary
 
 > "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি। কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
