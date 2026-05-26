@@ -1364,15 +1364,15 @@ RUN npm run build
 
 ```mermaid
 flowchart TD
-    subgraph JailComparison [Process Filesystem Jailing]
+    subgraph JailComparison ["Process Filesystem Jailing"]
         direction LR
-        subgraph ChrootJail [1. chroot (Insecure)]
+        subgraph ChrootJail ["1. chroot (Insecure)"]
             chroot_in["Process Root changed <br>to /app/rootfs"]
             Escape["Root user can call <br>chroot() again and escape <br>using relative paths (../)"]
             chroot_in -->|Escape Possible| Escape
         end
 
-        subgraph PivotRootJail [2. pivot_root (Secure & Final)]
+        subgraph PivotRootJail ["2. pivot_root (Secure & Final)"]
             pivot_in["Swaps Mount Namespaces <br>RootFS becomes absolute /"]
             OldRoot["Old Host Root moved <br>to temp directory"]
             Unmount["Old Host Root is <br>completely unmounted"]
