@@ -2,7 +2,7 @@ import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BookOpen, FileText, List, Sparkles, Terminal, Cpu, Bookmark, HelpCircle } from 'lucide-react';
+import { ArrowLeft, FileText, List, Sparkles, Terminal, Cpu, Bookmark, HelpCircle } from 'lucide-react';
 import React, { type ComponentPropsWithoutRef } from 'react';
 import Mermaid from '@/components/Mermaid';
 import remarkGfm from 'remark-gfm';
@@ -30,7 +30,7 @@ function extractHeadings(content: string) {
 function getMermaidChart(children: React.ReactNode): string | null {
   if (!children) return null;
   if (React.isValidElement(children)) {
-    const props = children.props as any;
+    const props = children.props as { className?: string; children?: React.ReactNode };
     if (props?.className === 'language-mermaid') {
       return props.children?.toString() || '';
     }
@@ -181,7 +181,8 @@ const components = {
 
     let lang = 'code';
     if (React.isValidElement(props.children)) {
-      const className = (props.children.props as any)?.className || '';
+      const childrenProps = props.children.props as { className?: string };
+      const className = childrenProps?.className || '';
       const match = className.match(/language-(\w+)/);
       if (match) {
         lang = match[1];

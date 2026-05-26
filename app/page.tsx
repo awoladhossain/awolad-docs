@@ -1,7 +1,7 @@
 import AnimatedGrid from '@/components/AnimatedGrid';
 import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
 import Link from 'next/link';
-import { BookOpen, ChevronLeft, ChevronRight, Database, Terminal, ShieldAlert, Cpu, Sparkles } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Database, Terminal, Cpu, Sparkles } from 'lucide-react';
 
 interface HomePageProps {
   searchParams: Promise<{
