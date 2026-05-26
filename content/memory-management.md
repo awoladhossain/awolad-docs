@@ -136,10 +136,10 @@ graph TD
         LowAddress[Low Address Space: 0x00000000]
     end
 
-    HighAddress --- StackArea
-    StackArea --- Unused
-    Unused --- HeapArea
-    HeapArea --- LowAddress
+    HighAddress --- StackFrame2
+    StackFrame1 --- Unused
+    Unused --- HeapAlloc2
+    HeapAlloc1 --- LowAddress
 
     style StackFrame2 fill:#065f46,stroke:#10b981,color:#fff
     style StackFrame1 fill:#065f46,stroke:#10b981,color:#fff
