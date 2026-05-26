@@ -253,7 +253,7 @@ flowchart TD
     Auth -- Yes --> Cache{10. Check Cache?}
     Auth -- No --> AuthErr[Return 401 Unauthorized]
     Cache -- Yes --> Resp[11. Return Cached Response]
-    Cache -- No --> DB[(12. Database / Business Logic)]
+    Cache -- No --> DB["(12. Database / Business Logic)"]
     DB --> SetCache[13. Save to Redis Cache]
     SetCache --> Resp
     Resp --> Render[14. Browser Parses HTML, CSS, JS]
@@ -490,14 +490,14 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    subgraph TokenBucket [Token Bucket (Allows Bursts)]
-        Refill[1. Token Refill Rate: r tokens/sec] --> Bucket[2. Bucket (Max Capacity: B tokens)]
+    subgraph TokenBucket ["Token Bucket (Allows Bursts)"]
+        Refill[1. Token Refill Rate: r tokens/sec] --> Bucket["2. Bucket (Max Capacity: B tokens)"]
         Req_TB[Incoming Request] --> Check_TB{Token Available?}
         Check_TB -- Yes --> Consume_TB[Consume Token & Forward Request]
         Check_TB -- No --> Reject_TB[HTTP 429 Too Many Requests]
     end
 
-    subgraph LeakyBucket [Leaky Bucket (Smooths Out Traffic)]
+    subgraph LeakyBucket ["Leaky Bucket (Smooths Out Traffic)"]
         Req_LB[Incoming Request] --> Queue_LB{Queue Full? capacity: Q}
         Queue_LB -- No --> Add_LB[Add Request to Queue]
         Queue_LB -- Yes --> Reject_LB[HTTP 429 Too Many Requests]
@@ -941,16 +941,15 @@ graph TD
         Begin[Begin Transaction] --> Debit[1. Debit User A: $100]
         Debit --> Credit[2. Credit User B: $100]
         Credit --> Commit{Commit Success?}
-        Commit -- Yes --> DB_Saved[(State Saved: Both accounts balance updated)]
-        Commit -- No --> Rollback[(Rollback: No money lost, state reverted)]
+        Commit -- Yes --> DB_Saved["(State Saved: Both accounts balance updated)"]
+        Commit -- No --> Rollback["(Rollback: No money lost, state reverted)"]
     end
 
     subgraph BASE [BASE: Eventual Consistency]
         Like[User Likes Post] --> Node1[1. Write to DB Node 1]
         Node1 --> Resp[2. Instant success response to User]
-        Node1 -- Async Replication Lag --> Node2[3. Write replica 2 (takes 500ms)]
-        Node1 -- Async Replication Lag --> Node3[4. Write replica 3 (takes 2s)]
-        Note over Node2, Node3: During replication lag, users on node 3 see old like counts.
+        Node1 -- Async Replication Lag --> Node2["3. Write replica 2 (takes 500ms)"]
+        Node1 -- Async Replication Lag --> Node3["4. Write replica 3 (takes 2s)"]
     end
 ```
 
@@ -1090,7 +1089,7 @@ $$20 \times 50 = 1000 \text{ DB Connections}$$
 
 ```mermaid
 graph TD
-    subgraph N1 [N+1 Problem (N+1 Queries)]
+    subgraph N1 ["N+1 Problem (N+1 Queries)"]
         Q1[Query 1: SELECT * FROM users]
         Q1 --> Loop[Loop each User]
         Loop --> QC1[Query user 1: SELECT * FROM orders WHERE user_id=1]
@@ -1098,7 +1097,7 @@ graph TD
         Loop --> QCN[Query user N: SELECT * FROM orders WHERE user_id=N]
     end
 
-    subgraph Optimized [Optimized JOIN (1 Query)]
+    subgraph Optimized ["Optimized JOIN (1 Query)"]
         Q_Opt[SELECT * FROM users JOIN orders ON users.id = orders.user_id]
     end
     
@@ -1178,13 +1177,11 @@ graph TD
         O_Start[Read Table Start] --> O_Skip[1. DB reads & scans through first 1000 rows]
         O_Skip --> O_Collect[2. Discards the 1000 scanned rows]
         O_Collect --> O_Return[3. Returns only the next 10 rows]
-        Note over O_Skip: Large offset causes O(N) scanning. High DB CPU load!
     end
 
     subgraph Cursor_Pag [Cursor Pagination: WHERE id < 990 LIMIT 10]
         C_Start[Read Table via B-Tree Index] --> C_Direct[1. DB jumps directly to row id=990 using index]
-        C_Direct --> C_Return[2. Returns next 10 rows in O(log N) time]
-        Note over C_Direct: Zero scanning of previous rows. Blazing fast!
+        C_Direct --> C_Return["2. Returns next 10 rows in O(log N) time"]
     end
     
     style O_Skip fill:#fbb,stroke:#333
@@ -1259,14 +1256,12 @@ graph TD
     subgraph L4 [Layer 4 Load Balancer: TCP/IP Routing]
         L4_LB[L4 LB] -- TCP Packets (IP: 192.x) --> Srv1[Backend Server 1]
         L4_LB -- TCP Packets (IP: 192.y) --> Srv2[Backend Server 2]
-        Note over L4_LB: Decides on IP & Port. Blazing fast, no content inspection!
     end
 
     subgraph L7 [Layer 7 Load Balancer: Application Aware]
         L7_LB[L7 LB] -- Path: /api/users --> User_Srv[User Service]
         L7_LB -- Path: /api/orders --> Order_Srv[Order Service]
         L7_LB -- Header: Mobile Client --> Mob_Srv[Mobile Web Server]
-        Note over L7_LB: inspects HTTP payload, path, cookies. Smart routing!
     end
 ```
 
@@ -1475,7 +1470,6 @@ graph TD
         Ex --> Q1[Queue A]
         Ex --> Q2[Queue B]
         Q1 --> C1[Consumer 1]
-        Note over Q1: Once Consumer 1 Acks, the message is permanently deleted from Queue A
     end
 
     subgraph Kafka_Broker [Kafka: Append-only Commit Log]
@@ -1485,7 +1479,6 @@ graph TD
         end
         C_GrpA[Consumer Group A: offset=1] --> M2
         C_GrpB[Consumer Group B: offset=3] --> M4
-        Note over Topic_Log: Messages remain in partition until TTL retention expires. Consumers just move their offset pointers!
     end
 ```
 
@@ -1799,7 +1792,6 @@ graph LR
     style A fill:#bfb,stroke:#333
     style B fill:#bfb,stroke:#333
     style C fill:#fbb,stroke:#333
-    Note over A, C: Partial Failure: Node C is isolated but alive. How to maintain data state?
 ```
 
 ### The 8 Fallacies of Distributed Computing (ইঞ্জিনিয়ারদের কাল্পনিক ভুলসমূহ)
@@ -2012,9 +2004,9 @@ $$	ext{Shard Server} = 	ext{Hash(Shard Key)} \pmod N$$
 ```mermaid
 graph TD
     Client[App Instances] --> Proxy[Database Proxy / Router]
-    Proxy -->|Hash ID: 1-100k| Shard1[(Shard Server 1)]
-    Proxy -->|Hash ID: 100k-200k| Shard2[(Shard Server 2)]
-    Proxy -->|Hash ID: 200k+| Shard3[(Shard Server 3)]
+    Proxy -->|Hash ID: 1-100k| Shard1["(Shard Server 1)"]
+    Proxy -->|Hash ID: 100k-200k| Shard2["(Shard Server 2)"]
+    Proxy -->|Hash ID: 200k+| Shard3["(Shard Server 3)"]
     
     style Shard1 fill:#fdb,stroke:#333
     style Shard2 fill:#fdb,stroke:#333
@@ -2246,17 +2238,15 @@ Checkout Error > 2% for 5m?}
 
 ```mermaid
 graph TD
-    subgraph BlueGreen [Blue-Green Deployment (Zero-Downtime)]
-        Router[Load Balancer] -->|HTTP 100% Traffic| Blue[(Blue Environment: Active Live v1.0)]
-        Router -.->|Traffic Switchover| Green[(Green Environment: Staging v2.0)]
-        Note over Router: Switch router IP to Green after checking green stability. Instant rollback!
+    subgraph BlueGreen ["Blue-Green Deployment (Zero-Downtime)"]
+        Router[Load Balancer] -->|HTTP 100% Traffic| Blue["(Blue Environment: Active Live v1.0)"]
+        Router -.->|Traffic Switchover| Green["(Green Environment: Staging v2.0)"]
     end
 
-    subgraph Canary [Canary Deployment (Risk Mitigation)]
+    subgraph Canary ["Canary Deployment (Risk Mitigation)"]
         LB[Load Balancer Router]
-        LB -->|95% Traffic| Prod_V1[(Prod Node v1.0)]
-        LB -->|5% Traffic| Prod_V2[(Canary Node v2.0)]
-        Note over LB: Route a small slice of users to v2.0 to test error rates in prod.
+        LB -->|95% Traffic| Prod_V1["(Prod Node v1.0)"]
+        LB -->|5% Traffic| Prod_V2["(Canary Node v2.0)"]
     end
 ```
 
@@ -2609,7 +2599,7 @@ graph TD
 graph TD
     subgraph Monolith [Monolith: Unified Architecture]
         Client_M[Client] --> MonolithApp[Monolith Codebase: Users, Orders, Payments]
-        MonolithApp --> SharedDB[(Shared Database)]
+        MonolithApp --> SharedDB["(Shared Database)"]
     end
 
     subgraph Microservices [Microservices: Distributed Architecture]
@@ -2618,9 +2608,9 @@ graph TD
         Gateway --> OrderService[Order Service]
         Gateway --> PaymentService[Payment Service]
         
-        UserService --> UserDB[(User DB)]
-        OrderService --> OrderDB[(Order DB)]
-        PaymentService --> PaymentDB[(Payment DB)]
+        UserService --> UserDB["(User DB)"]
+        OrderService --> OrderDB["(Order DB)"]
+        PaymentService --> PaymentDB["(Payment DB)"]
     end
     
     style Monolith fill:#eff,stroke:#333
@@ -2722,9 +2712,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Client[Web Application] -->|Writes: INSERT/UPDATE| Primary[(Primary DB Server)]
-    Client -->|Reads: SELECT| Replica1[(Read Replica 1)]
-    Client -->|Reads: SELECT| Replica2[(Read Replica 2)]
+    Client[Web Application] -->|Writes: INSERT/UPDATE| Primary["(Primary DB Server)"]
+    Client -->|Reads: SELECT| Replica1["(Read Replica 1)"]
+    Client -->|Reads: SELECT| Replica2["(Read Replica 2)"]
     
     Primary -->|Async Replication Lag: e.g. 50ms| Replica1
     Primary -->|Async Replication Lag: e.g. 100ms| Replica2
@@ -3174,10 +3164,10 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Client[Web API Node] -->|1. Push heavy job: generate_pdf| Queue[(Redis Job Queue: BullMQ)]
+    Client[Web API Node] -->|1. Push heavy job: generate_pdf| Queue["(Redis Job Queue: BullMQ)"]
     Queue -->|2. Poll job & locked| Worker1[Background Worker Node 1]
     Queue -->|3. Parallel processing| Worker2[Background Worker Node 2]
-    Worker1 -->|4. Failure retry state| DLQ[(Dead Letter Queue - DLQ)]
+    Worker1 -->|4. Failure retry state| DLQ["(Dead Letter Queue - DLQ)"]
     
     style Queue fill:#fdb,stroke:#333
     style Worker1 fill:#bfb,stroke:#333
@@ -3288,10 +3278,10 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    Client[Web API Node] -->|1. Search Request| ES[(Elasticsearch Cluster)]
-    Client -->|2. Write / Update Data| DB[(Primary PostgreSQL DB)]
+    Client[Web API Node] -->|1. Search Request| ES["(Elasticsearch Cluster)"]
+    Client -->|2. Write / Update Data| DB["(Primary PostgreSQL DB)"]
     DB -->|3. Transaction Logs - WAL| CDC[CDC Relay: Debezium]
-    CDC -->|4. Stream Updates| Kafka[(Apache Kafka)]
+    CDC -->|4. Stream Updates| Kafka["(Apache Kafka)"]
     Kafka -->|5. Indexing Worker| ES
     
     style ES fill:#fdb,stroke:#333
@@ -3328,11 +3318,11 @@ flowchart LR
 graph TD
     subgraph Commands [Write Model - Normalized DB]
         Cmd[API Client: Create Order] --> WriteModel[Command Handler]
-        WriteModel --> WriteDB[(PostgreSQL - Strict 3NF ACID)]
+        WriteModel --> WriteDB["(PostgreSQL - Strict 3NF ACID)"]
     end
 
     subgraph Queries [Read Model - Denormalized DB]
-        QueryModel[Query Handler] --> ReadDB[(Elasticsearch / Redis - Denormalized JSON)]
+        QueryModel[Query Handler] --> ReadDB["(Elasticsearch / Redis - Denormalized JSON)"]
         QueryModel <-- API Client: Search Dashboard --> Client[API Client]
     end
     
@@ -3374,18 +3364,18 @@ CQRS-এর মাধ্যমে আমরা রাইট অপারেশ�
 ```mermaid
 graph TD
     subgraph Model1 [1. Shared DB, Shared Table - Database level]
-        T1[Tenant A] -->|tenant_id = 1| DB1[(Shared Table: Row Isolation)]
+        T1[Tenant A] -->|tenant_id = 1| DB1["(Shared Table: Row Isolation)"]
         T2[Tenant B] -->|tenant_id = 2| DB1
     end
 
     subgraph Model2 [2. Shared DB, Separate Schema - Schema Isolation]
-        T1_S[Tenant A] --> DB2[(Postgres Schema: tenant_a)]
-        T2_S[Tenant B] --> DB2[(Postgres Schema: tenant_b)]
+        T1_S[Tenant A] --> DB2["(Postgres Schema: tenant_a)"]
+        T2_S[Tenant B] --> DB2["(Postgres Schema: tenant_b)"]
     end
 
     subgraph Model3 [3. Separate DB per Tenant - Best Isolation]
-        T1_D[Tenant A] --> DB_A[(Database A)]
-        T2_D[Tenant B] --> DB_B[(Database B)]
+        T1_D[Tenant A] --> DB_A["(Database A)"]
+        T2_D[Tenant B] --> DB_B["(Database B)"]
     end
     
     style DB1 fill:#bbf,stroke:#333
@@ -3435,7 +3425,7 @@ flowchart LR
     end
 
     subgraph Prod [Production Environment - High Secure]
-        AppNode[App Container Node] -->|1. Request Credentials| Vault[(HashiCorp Vault / Cloud Secret Manager)]
+        AppNode[App Container Node] -->|1. Request Credentials| Vault["(HashiCorp Vault / Cloud Secret Manager)"]
         Vault -->|2. Ingest Decrypted Keys in RAM memory| AppNode
     end
     
