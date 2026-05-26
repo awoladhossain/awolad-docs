@@ -14,7 +14,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [zoom, setZoom] = useState<number>(1.2); // Start at 120% default zoom for high-legibility crispness
+  const [zoom, setZoom] = useState<number>(1.2); // Comfortably scale up vector diagrams for high legibility
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
@@ -37,21 +37,38 @@ export default function Mermaid({ chart }: MermaidProps) {
           startOnLoad: false,
           theme: "dark",
           securityLevel: "loose",
-          // Let Mermaid calculate bounding boxes natively so text NEVER gets clipped
+          // Inject custom styling to ensure text is always slightly smaller than boxes
+          themeCSS: `
+            g.node rect, g.node circle, g.node polygon, g.node path {
+              stroke-width: 1.5px !important;
+            }
+            /* Style both standard SVG text and HTML foreignObject labels */
+            .node text, .label text, .actor text, .messageText, .noteText, .loopText,
+            .node .label div, .node .label span, .node .label {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif !important;
+              font-size: 13px !important;
+              font-weight: 500 !important;
+              letter-spacing: -0.01em !important;
+              line-height: 1.35 !important;
+            }
+            .node .label {
+              padding: 10px 14px !important;
+            }
+          `,
           flowchart: {
             useMaxWidth: false,
             htmlLabels: true,
             curve: "basis",
-            nodeSpacing: 65, // More breathing room between nodes
-            rankSpacing: 65, // More breathing room between columns/ranks
-            padding: 22,    // Extra padding around text inside boxes
+            nodeSpacing: 75, // Deep columns separation
+            rankSpacing: 75, // Deep horizontal rows separation
+            padding: 26,     // Extra padding around text inside boxes
           },
           sequence: {
             useMaxWidth: false,
             showSequenceNumbers: true,
             boxMargin: 15,
-            actorMargin: 65,
-            messageMargin: 45,
+            actorMargin: 75,
+            messageMargin: 55,
           },
           gantt: {
             useMaxWidth: false,
@@ -64,7 +81,7 @@ export default function Mermaid({ chart }: MermaidProps) {
             lineColor: "#64748b", // slate-500
             secondaryColor: "#0d9488", // teal-600
             tertiaryColor: "#0f172a", // slate-900
-            fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           },
         });
 
