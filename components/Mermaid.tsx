@@ -14,7 +14,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [zoom, setZoom] = useState<number>(1.2); // Comfortably scale up vector diagrams for high legibility
+  const [zoom, setZoom] = useState<number>(1.0); // Natural 100% size by default to fit all diagrams
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
@@ -118,7 +118,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.4));
   
   const handleResetZoom = () => {
-    setZoom(1.2); // Reset to standard high-legibility zoom
+    setZoom(1.0); // Reset to natural 100% size
     setPan({ x: 0, y: 0 });
   };
 
