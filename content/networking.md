@@ -20,21 +20,21 @@ author: "Senior Systems Architect"
 
 ```mermaid
 flowchart LR
-    subgraph ClientHost [Client Machine]
+    subgraph ClientHost ["Client Machine"]
         ClientSocket["Client Socket Metadata <br> IP: 192.168.1.50 <br> Port: 48920 <br> State: ESTABLISHED <br> Next SEQ: 101"]
     end
     
-    subgraph NetworkWire [The Physical Internet]
+    subgraph NetworkWire ["The Physical Internet"]
         direction LR
-        Wire["Fiber Optics / Copper Wires <br>(No state, only raw electric/light pulses)"]
+        Wire["Fiber Optics / Copper Wires <br> No state, only raw electric/light pulses"]
     end
     
-    subgraph ServerHost [Server Machine]
+    subgraph ServerHost ["Server Machine"]
         ServerSocket["Server Socket Metadata <br> IP: 104.24.8.12 <br> Port: 443 <br> State: ESTABLISHED <br> Next SEQ: 5001"]
     end
     
-    ClientSocket <---> NetworkWire
-    NetworkWire <---> ServerSocket
+    ClientSocket <--> NetworkWire
+    NetworkWire <--> ServerSocket
 ```
 
 ### তাহলে কানেকশন কী?
@@ -99,18 +99,17 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    subgraph LossBased [Traditional Congestion Control - CUBIC]
+    subgraph LossBased ["Traditional Congestion Control - CUBIC"]
         direction TB
-        C1["Send Packets Fast"] --->|Wait until packet drops| C2["Packet Dropped!"]
-        C2 --->|Cut transmission speed by 50%| C3["Latency Spikes & Slowdown"]
+        C1["Send Packets Fast"] --> C2["Packet Dropped!"]
+        C2 --> C3["Latency Spikes & Slowdown"]
     end
     
-    subgraph BandwidthBased [Modern Congestion Control - BBR]
+    subgraph BandwidthBased ["Modern Congestion Control - BBR"]
         direction TB
-        B1["Measure RTT & Bandwidth continuously"] --->|Find maximum capacity bottleneck| B2["Adjust speed to match capacity exactly"]
-        B2 --->|No unnecessary queue queuing| B3["Zero packet drops & Ultra-low Latency"]
+        B1["Measure RTT & Bandwidth continuously"] --> B2["Adjust speed to match capacity exactly"]
+        B2 --> B3["Zero packet drops & Ultra-low Latency"]
     end
-end
 ```
 
 #### ১. Loss-Based Congestion Control (CUBIC/Reno)
@@ -162,18 +161,17 @@ UDP (User Datagram Protocol) হলো একটি **Connectionless, Unreliable
 
 ```mermaid
 flowchart TD
-    subgraph TCPBlocking [HTTP/2 over TCP - Head-of-Line Blocking]
+    subgraph TCPBlocking ["HTTP/2 over TCP - Head-of-Line Blocking"]
         direction LR
-        P1["Packet 1 (JS)"] ---> P2["Packet 2 (CSS - DROPPED)"] ---> P3["Packet 3 (HTML)"]
-        Note over P3: Blocked! Must wait for Packet 2 to be retransmitted
+        P1["Packet 1 (JS)"] --> P2["Packet 2 (CSS - DROPPED)"] --> P3["Packet 3 (HTML)"]
+        P3 --> Blocked["Blocked! Must wait for Packet 2 to be retransmitted"]
     end
     
-    subgraph UDPStreaming [HTTP/3 over UDP/QUIC - Stream Independence]
+    subgraph UDPStreaming ["HTTP/3 over UDP/QUIC - Stream Independence"]
         direction LR
-        U1["Stream A - Packet 1"] ---> U2["Stream B - Packet 2 (DROPPED)"] ---> U3["Stream C - Packet 3"]
-        Note over U3: Not Blocked! Stream A & C render instantly while Stream B retries
+        U1["Stream A - Packet 1"] --> U2["Stream B - Packet 2 (DROPPED)"] --> U3["Stream C - Packet 3"]
+        U3 --> NotBlocked["Not Blocked! Stream A & C render instantly while Stream B retries"]
     end
-end
 ```
 
 ### HTTP/3 ও QUIC প্রোটোকলের সমাধান:
@@ -189,23 +187,23 @@ end
 
 ```mermaid
 flowchart TD
-    subgraph LocalOfficeNetwork [Local LAN Network]
+    subgraph LocalOfficeNetwork ["Local LAN Network"]
         HostA["Client A <br> IP: 192.168.1.10 <br> MAC: AA:BB:CC"]
         HostB["Client B <br> IP: 192.168.1.20 <br> MAC: DD:EE:FF"]
-        L2Switch["L2 Network Switch <br>(Thinks in MAC Addresses)"]
+        L2Switch["L2 Network Switch <br> Thinks in MAC Addresses"]
         
-        HostA <---> L2Switch
-        HostB <---> L2Switch
+        HostA <--> L2Switch
+        HostB <--> L2Switch
     end
     
-    subgraph GatewayLayer [Edge Router & NAT]
-        L3Router["L3 Edge Router <br>(Thinks in IP Addresses)"]
+    subgraph GatewayLayer ["Edge Router & NAT"]
+        L3Router["L3 Edge Router <br> Thinks in IP Addresses"]
         NATTable["NAT Translation Table <br> Inside NAT: 192.168.1.10:8080 <br> Outside NAT: 104.28.1.5:48200"]
     end
     
-    L2Switch <---> L3Router
-    L3Router <---> NATTable
-    NATTable <---> PublicInternet["The Public Internet <br>(Public IP: 104.28.1.5)"]
+    L2Switch <--> L3Router
+    L3Router <--> NATTable
+    NATTable <--> PublicInternet["The Public Internet <br> Public IP: 104.28.1.5"]
 ```
 
 ### সুইচ (L2 Switch) বনাম রাউটার (L3 Router)
@@ -235,15 +233,15 @@ flowchart TD
 ```mermaid
 flowchart TD
     Browser["1. Browser Request: dev.awolad.com"]
-    RecursiveResolver["2. ISP Recursive Resolver <br>(Caching Server)"]
-    RootServer["3. Root Name Server <br>(Returns .com TLD IP)"]
-    TLDServer["4. TLD Name Server <br>(Returns awolad.com Auth NS IP)"]
-    AuthServer["5. Authoritative Name Server <br>(Returns dev.awolad.com IP: 18.2.4.9)"]
+    RecursiveResolver["2. ISP Recursive Resolver <br> Caching Server"]
+    RootServer["3. Root Name Server <br> Returns .com TLD IP"]
+    TLDServer["4. TLD Name Server <br> Returns awolad.com Auth NS IP"]
+    AuthServer["5. Authoritative Name Server <br> Returns dev.awolad.com IP: 18.2.4.9"]
     
-    Browser ---> RecursiveResolver
-    RecursiveResolver <---> RootServer
-    RecursiveResolver <---> TLDServer
-    RecursiveResolver <---> AuthServer
+    Browser --> RecursiveResolver
+    RecursiveResolver <--> RootServer
+    RecursiveResolver <--> TLDServer
+    RecursiveResolver <--> AuthServer
 ```
 
 ### DNS রেজোলিউশনের ৪টি ধাপ:
@@ -275,15 +273,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start["Enter: https://dev.awolad.com"] ---> DNS["1. DNS Resolution <br>(Convert name to IP)"]
-    DNS ---> TCP["2. TCP Handshake <br>(SYN, SYN-ACK, ACK)"]
-    TCP ---> TLS["3. TLS Cryptographic Handshake <br>(Negotiate Encryption & Certificates)"]
-    TLS ---> HTTPRequest["4. HTTP Request Packet Sent <br>(GET /api/users HTTP/1.1)"]
-    HTTPRequest ---> ReverseProxy["5. Nginx Decrypts TLS <br>(TLS Termination & Gateway Routing)"]
-    ReverseProxy ---> AppServer["6. Node.js/NestJS App Processes Request <br>(Queries DB, returns JSON)"]
-    AppServer ---> ReverseProxy
-    ReverseProxy ---> HTTPResponse["7. HTTP Response Packet <br>(Encrypted with SSL & Sent to client)"]
-    HTTPResponse ---> BrowserRender["8. Browser parses & renders data"]
+    Start["Enter: https://dev.awolad.com"] --> DNS["1. DNS Resolution <br> Convert name to IP"]
+    DNS --> TCP["2. TCP Handshake <br> SYN, SYN-ACK, ACK"]
+    TCP --> TLS["3. TLS Cryptographic Handshake <br> Negotiate Encryption & Certificates"]
+    TLS --> HTTPRequest["4. HTTP Request Packet Sent <br> GET /api/users HTTP/1.1"]
+    HTTPRequest --> ReverseProxy["5. Nginx Decrypts TLS <br> TLS Termination & Gateway Routing"]
+    ReverseProxy --> AppServer["6. Node.js/NestJS App Processes Request <br> Queries DB, returns JSON"]
+    AppServer --> ReverseProxy
+    ReverseProxy --> HTTPResponse["7. HTTP Response Packet <br> Encrypted with SSL & Sent to client"]
+    HTTPResponse --> BrowserRender["8. Browser parses & renders data"]
 ```
 
 ### বিস্তারিত ফ্লোচার্ট বিশ্লেষণ:
@@ -308,22 +306,22 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph ClientSpace [Client Side]
+    subgraph ClientSpace ["Client Side"]
         UserClient["User Browser"]
     end
     
-    subgraph ProxyGateway [Nginx Reverse Proxy & Load Balancer]
-        NginxGateway["Nginx Gateway <br>(Port 443 - SSL Terminated)"]
+    subgraph ProxyGateway ["Nginx Reverse Proxy & Load Balancer"]
+        NginxGateway["Nginx Gateway <br> Port 443 - SSL Terminated"]
     end
     
-    subgraph PrivateSubnet [Internal Secured Network]
-        Server1["API Replica 1 <br> Private IP: 10.0.1.5:3000 <br>(Plain HTTP)"]
-        Server2["API Replica 2 <br> Private IP: 10.0.1.6:3000 <br>(Plain HTTP)"]
+    subgraph PrivateSubnet ["Internal Secured Network"]
+        Server1["API Replica 1 <br> Private IP: 10.0.1.5:3000 <br> Plain HTTP"]
+        Server2["API Replica 2 <br> Private IP: 10.0.1.6:3000 <br> Plain HTTP"]
     end
     
-    UserClient --->|Encrypted HTTPS Request| NginxGateway
-    NginxGateway --->|Load Balancing: Round Robin <br> Decrypted HTTP Request| Server1
-    NginxGateway --->|Load Balancing: Round Robin <br> Decrypted HTTP Request| Server2
+    UserClient -->|"Encrypted HTTPS Request"| NginxGateway
+    NginxGateway -->|"Load Balancing: Round Robin, Decrypted HTTP Request"| Server1
+    NginxGateway -->|"Load Balancing: Round Robin, Decrypted HTTP Request"| Server2
 ```
 
 ### খ. SSL/TLS Termination (CPU অপ্টিমাইজেশন)
@@ -416,18 +414,17 @@ ip a
 
 ```mermaid
 flowchart TD
-    subgraph TraditionalStack [Traditional Linux Network Stack]
-        NIC1["Physical NIC"] ---> Driver1["NIC Driver"]
-        Driver1 ---> KernelStack["Heavy Linux Kernel Network Stack <br>(Allocates sk_buff, processes IP/TCP)"]
-        KernelStack --->|Context Switch| UserApp["User Space Application <br>(Nginx / Go / Node)"]
+    subgraph TraditionalStack ["Traditional Linux Network Stack"]
+        NIC1["Physical NIC"] --> Driver1["NIC Driver"]
+        Driver1 --> KernelStack["Heavy Linux Kernel Network Stack <br> Allocates sk_buff, processes IP/TCP"]
+        KernelStack -->|"Context Switch"| UserApp["User Space Application <br> Nginx / Go / Node"]
     end
     
-    subgraph eBPFStack [Modern eBPF & XDP Kernel Bypass]
-        NIC2["Physical NIC"] ---> XDPProg["XDP eBPF Program <br>(Runs directly inside NIC Driver!)"]
-        XDPProg --->|Action: XDP_DROP <br> Drops DDoS packets in nanoseconds| DropPacket["Discard Packet <br>(Zero Memory Allocated)"]
-        XDPProg --->|Action: XDP_PASS| UserApp2["User Space App"]
+    subgraph eBPFStack ["Modern eBPF & XDP Kernel Bypass"]
+        NIC2["Physical NIC"] --> XDPProg["XDP eBPF Program <br> Runs directly inside NIC Driver!"]
+        XDPProg -->|"Action: XDP_DROP, Drops DDoS packets in nanoseconds"| DropPacket["Discard Packet <br> Zero Memory Allocated"]
+        XDPProg -->|"Action: XDP_PASS"| UserApp2["User Space App"]
     end
-end
 ```
 
 ### সমাধান: XDP (eXpress Data Path) ও eBPF
@@ -445,27 +442,26 @@ end
 
 ```mermaid
 flowchart TD
-    subgraph AnycastEcosystem [Anycast BGP Global Routing]
-        UserBD["User in Bangladesh <br>(Requests 1.1.1.1)"]
-        UserUS["User in New York <br>(Requests 1.1.1.1)"]
+    subgraph AnycastEcosystem ["Anycast BGP Global Routing"]
+        UserBD["User in Bangladesh <br> Requests 1.1.1.1"]
+        UserUS["User in New York <br> Requests 1.1.1.1"]
         
-        subgraph ISPBD [ISP in Bangladesh]
+        subgraph ISPBD ["ISP in Bangladesh"]
             BGPBD["BGP Router BD"]
         end
-        subgraph ISPUS [ISP in New York]
+        subgraph ISPUS ["ISP in New York"]
             BGPUS["BGP Router US"]
         end
         
-        DC_Dhaka["Cloudflare Dhaka DC <br>(Broadcasts 1.1.1.1 via BGP)"]
-        DC_NY["Cloudflare New York DC <br>(Broadcasts 1.1.1.1 via BGP)"]
+        DC_Dhaka["Cloudflare Dhaka DC <br> Broadcasts 1.1.1.1 via BGP"]
+        DC_NY["Cloudflare New York DC <br> Broadcasts 1.1.1.1 via BGP"]
         
-        UserBD ---> ISPBD
-        ISPBD --->|Shortest Path| DC_Dhaka
+        UserBD --> ISPBD
+        ISPBD -->|"Shortest Path"| DC_Dhaka
         
-        UserUS ---> ISPUS
-        ISPUS --->|Shortest Path| DC_NY
+        UserUS --> ISPUS
+        ISPUS -->|"Shortest Path"| DC_NY
     end
-end
 ```
 
 ### Anycast কীভাবে কাজ করে?
@@ -513,11 +509,11 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph RequestAsFrames [HTTP/2 Binary Frame Multiplexing]
+    subgraph RequestAsFrames ["HTTP/2 Binary Frame Multiplexing"]
         direction LR
-        Frame1["Stream 1: HEADERS Frame <br>(GET /index.html)"] ---> TCPStream["Single TCP Stream"]
-        Frame2["Stream 3: DATA Frame <br>(Image bytes)"] ---> TCPStream
-        Frame3["Stream 1: DATA Frame <br>(HTML bytes)"] ---> TCPStream
+        Frame1["Stream 1: HEADERS Frame <br> GET /index.html"] --> TCPStream["Single TCP Stream"]
+        Frame2["Stream 3: DATA Frame <br> Image bytes"] --> TCPStream
+        Frame3["Stream 1: DATA Frame <br> HTML bytes"] --> TCPStream
     end
 ```
 
@@ -539,18 +535,17 @@ HTTP/1.1 এ আপনি যখনই এপিআই রিকোয়েস�
 
 ```mermaid
 flowchart TD
-    subgraph WebSocketFlow [WebSocket Architecture - Full Duplex]
+    subgraph WebSocketFlow ["WebSocket Architecture - Full Duplex"]
         direction TB
-        W1["1. HTTP Handshake Request <br>(Upgrade: websocket)"] ---> W2["2. HTTP 101 Switching Protocols"]
-        W2 ---> W3["3. Raw Bi-directional TCP Stream <br>(Framed, Masked WebSockets)"]
+        W1["1. HTTP Handshake Request <br> Upgrade: websocket"] --> W2["2. HTTP 101 Switching Protocols"]
+        W2 --> W3["3. Raw Bi-directional TCP Stream <br> Framed, Masked WebSockets"]
     end
     
-    subgraph SSEFlow [SSE Architecture - Half Duplex]
+    subgraph SSEFlow ["SSE Architecture - Half Duplex"]
         direction TB
-        S1["1. Standard HTTP Request <br>(Accept: text/event-stream)"] ---> S2["2. HTTP 200 Keep-Alive Stream"]
-        S2 ---> S3["3. Read-Only Server Event Push <br>(Plain text UTF-8 events)"]
+        S1["1. Standard HTTP Request <br> Accept: text/event-stream"] --> S2["2. HTTP 200 Keep-Alive Stream"]
+        S2 --> S3["3. Read-Only Server Event Push <br> Plain text UTF-8 events"]
     end
-end
 ```
 
 ### ১. WebSocket:
