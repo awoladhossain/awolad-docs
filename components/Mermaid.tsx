@@ -14,7 +14,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [zoom, setZoom] = useState<number>(1.0); // Natural 100% size by default to fit all diagrams
+  const [zoom, setZoom] = useState<number>(1.0); // Perfect 100% default zoom (auto-fits the container width)
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
@@ -52,26 +52,26 @@ export default function Mermaid({ chart }: MermaidProps) {
               line-height: 1.35 !important;
             }
             .node .label {
-              padding: 10px 14px !important;
+              padding: 8px 12px !important;
             }
           `,
           flowchart: {
-            useMaxWidth: false,
+            useMaxWidth: true, // Let the SVG natively scale to fit container width on load
             htmlLabels: true,
             curve: "basis",
-            nodeSpacing: 75, // Deep columns separation
-            rankSpacing: 75, // Deep horizontal rows separation
-            padding: 26,     // Extra padding around text inside boxes
+            nodeSpacing: 55, // Elegant spacing
+            rankSpacing: 55, 
+            padding: 18,    
           },
           sequence: {
-            useMaxWidth: false,
+            useMaxWidth: true, // Let the SVG natively scale to fit container width on load
             showSequenceNumbers: true,
-            boxMargin: 15,
-            actorMargin: 75,
-            messageMargin: 55,
+            boxMargin: 12,
+            actorMargin: 55,
+            messageMargin: 40,
           },
           gantt: {
-            useMaxWidth: false,
+            useMaxWidth: true,
           },
           themeVariables: {
             background: "transparent",
@@ -91,7 +91,7 @@ export default function Mermaid({ chart }: MermaidProps) {
         const { svg: renderedSvg } = await mermaid.render(idRef.current, chart);
 
         if (active) {
-          // Remove any inline max-width styles that Mermaid might still inject
+          // Remove any inline fixed-width limits that Mermaid might still inject
           const cleanSvg = renderedSvg
             .replace(/max-width:\s*\d+px;/gi, "")
             .replace(/style="[^"]*max-width:\s*100%;[^"]*"/gi, "");
@@ -118,7 +118,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.4));
   
   const handleResetZoom = () => {
-    setZoom(1.0); // Reset to natural 100% size
+    setZoom(1.0); // Reset to natural auto-fitting size
     setPan({ x: 0, y: 0 });
   };
 
@@ -282,7 +282,7 @@ export default function Mermaid({ chart }: MermaidProps) {
               transformOrigin: "center center",
               transition: isDragging ? "none" : "transform 0.15s ease-out",
             }}
-            className="w-auto text-slate-100 flex justify-center [&>svg]:max-w-none [&>svg]:w-auto [&>svg]:h-auto shrink-0 select-none pointer-events-none"
+            className="w-full text-slate-100 flex justify-center [&>svg]:w-full [&>svg]:h-auto shrink-0 select-none pointer-events-none"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         )}
