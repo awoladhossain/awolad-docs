@@ -2,7 +2,7 @@ import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BookOpen, FileText, List, Sparkles, Star } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileText, List, Sparkles, Terminal, Cpu, Bookmark, HelpCircle } from 'lucide-react';
 import React, { type ComponentPropsWithoutRef } from 'react';
 import Mermaid from '@/components/Mermaid';
 
@@ -18,14 +18,11 @@ export async function generateStaticParams() {
 
 function extractHeadings(content: string) {
   const regex = /^##\s+(.*)$/gm;
-
   const headings = [];
   let match;
-
   while ((match = regex.exec(content)) !== null) {
     headings.push(match[1]);
   }
-
   return headings;
 }
 
@@ -52,7 +49,6 @@ function getMermaidChart(children: React.ReactNode): string | null {
 const components = {
   h2: (props: ComponentPropsWithoutRef<'h2'>) => {
     const text = props.children?.toString() || '';
-
     const id = text
       .toLowerCase()
       .replace(/[^\w\s]/g, '')
@@ -62,8 +58,9 @@ const components = {
       <h2
         id={id}
         className="
+          group
           scroll-mt-24
-          mt-16
+          mt-14
           mb-6
           text-2xl
           md:text-3xl
@@ -73,9 +70,19 @@ const components = {
           border-b
           border-white/[0.06]
           pb-2
+          flex
+          items-center
+          gap-2
         "
-        {...props}
-      />
+      >
+        <span>{props.children}</span>
+        <a 
+          href={`#${id}`} 
+          className="opacity-0 group-hover:opacity-100 text-emerald-400 hover:text-emerald-300 transition-opacity text-[15px] font-mono select-none"
+        >
+          #
+        </a>
+      </h2>
     );
   },
 
@@ -102,7 +109,7 @@ const components = {
         text-[15px]
         md:text-[16px]
         leading-relaxed
-        text-zinc-300
+        text-zinc-350
         font-normal
       "
       {...props}
@@ -144,7 +151,7 @@ const components = {
   ),
 
   strong: (props: ComponentPropsWithoutRef<'strong'>) => (
-    <strong className="font-bold text-white bg-white/[0.04] px-1 rounded-sm" {...props} />
+    <strong className="font-bold text-white bg-white/[0.06] px-1 rounded-sm" {...props} />
   ),
 
   code: (props: ComponentPropsWithoutRef<'code'>) => (
@@ -170,45 +177,59 @@ const components = {
     if (chart !== null) {
       return <Mermaid chart={chart} />;
     }
+
+    let lang = 'code';
+    if (React.isValidElement(props.children)) {
+      const className = (props.children.props as any)?.className || '';
+      const match = className.match(/language-(\w+)/);
+      if (match) {
+        lang = match[1];
+      }
+    }
+
     return (
-      <pre
-        className="
-          my-6
-          overflow-x-auto
-          rounded-xl
-          border
-          border-white/[0.06]
-          bg-[#0b0b0f]/80
-          p-4
-          font-mono
-          text-[13px]
-          leading-relaxed
-          text-zinc-300
-          scrollbar-thin
-        "
-        {...props}
-      />
+      <div className="my-6 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0c0c10]/80 shadow-lg relative group">
+        {/* Mac OS Style Window Title bar */}
+        <div className="flex items-center justify-between border-b border-white/[0.05] bg-white/[0.02] px-4 py-2.5">
+          <div className="flex items-center gap-1.5 select-none">
+            <div className="h-2 w-2 rounded-full bg-[#ef4444]/80" />
+            <div className="h-2 w-2 rounded-full bg-[#f59e0b]/80" />
+            <div className="h-2 w-2 rounded-full bg-[#10b981]/80" />
+          </div>
+          <div className="font-mono text-[9px] font-bold uppercase tracking-widest text-zinc-500 select-none">
+            {lang}
+          </div>
+        </div>
+        <pre
+          className="
+            overflow-x-auto
+            p-5
+            font-mono
+            text-[13px]
+            leading-relaxed
+            text-zinc-300
+            scrollbar-thin
+            bg-transparent
+            m-0
+          "
+          {...props}
+        />
+      </div>
     );
   },
 
   blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => (
-    <blockquote
-      className="
-        my-6
-        border-l-4
-        border-emerald-500/40
-        bg-emerald-500/[0.03]
-        rounded-r-xl
-        py-4
-        pl-5
-        pr-4
-        text-[15px]
-        italic
-        text-zinc-300
-        leading-relaxed
-      "
-      {...props}
-    />
+    <div className="my-6 relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-r from-emerald-500/[0.03] to-teal-500/[0.01] p-5 backdrop-blur-sm">
+      <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-gradient-to-b from-emerald-400 to-teal-400" />
+      <div className="flex gap-4">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
+          <Sparkles className="h-3.5 w-3.5" />
+        </div>
+        <div className="text-[14px] md:text-[15px] leading-relaxed text-zinc-300 font-medium italic [&>p]:m-0">
+          {props.children}
+        </div>
+      </div>
+    </div>
   ),
 
   table: (props: ComponentPropsWithoutRef<'table'>) => (
@@ -265,23 +286,31 @@ const components = {
 
 export default async function DocPage({ params }: Props) {
   const { slug } = await params;
-
   const doc = await getDocBySlug(slug);
 
   if (!doc) {
     notFound();
   }
 
+  const allSlugs = getAllDocSlugs();
   const allDocs = await Promise.all(
-    getAllDocSlugs().map(async (s) => {
+    allSlugs.map(async (s) => {
       const d = await getDocBySlug(s);
-
       return {
         slug: s,
-        title: d?.meta?.title || s,
+        title: d?.meta?.title || s.replace(/-/g, ' ').toUpperCase(),
+        category: d?.meta?.category || 'General',
       };
     }),
   );
+
+  // Group all document nodes by their category metadata
+  const categoriesMap = allDocs.reduce((acc, item) => {
+    const cat = item.category;
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {} as Record<string, typeof allDocs>);
 
   const toc = extractHeadings(doc.content);
 
@@ -300,109 +329,92 @@ export default async function DocPage({ params }: Props) {
             flex-col
             border-r
             border-white/[0.06]
-            bg-[#0c0c10]/50
+            bg-[#0c0c10]/40
             backdrop-blur-xl
             lg:flex
           "
         >
-          {/* Sidebar Header */}
-          <div className="border-b border-white/[0.06] px-5 py-5 flex items-center justify-between">
+          {/* Back Home Header */}
+          <div className="border-b border-white/[0.06] px-5 py-5">
             <Link
               href="/"
               className="
                 inline-flex
+                w-full
                 items-center
+                justify-center
                 gap-1.5
                 rounded-xl
                 border
                 border-white/[0.05]
                 bg-white/[0.02]
                 px-3
-                py-2
+                py-2.5
                 text-xs
                 font-semibold
                 text-zinc-400
-                outline-none
                 transition-all
                 hover:bg-white/[0.06]
                 hover:text-white
               "
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Home
+              <ArrowLeft className="h-3.5 w-3.5 text-zinc-500" />
+              Back to Dashboard
             </Link>
           </div>
 
-          {/* Sidebar Nav links */}
-          <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
-            <div
-              className="
-                mb-4
-                flex
-                items-center
-                gap-2.5
-                rounded-xl
-                border
-                border-emerald-500/20
-                bg-emerald-500/5
-                px-3
-                py-2.5
-                text-[10px]
-                font-bold
-                uppercase
-                tracking-wider
-                text-emerald-400
-              "
-            >
-              <BookOpen className="h-4 w-4" />
-              <span>Table of Contents</span>
-            </div>
-
-            <nav className="space-y-1.5">
-              {allDocs.map((item) => {
-                const active = item.slug === slug;
-
-                return (
-                  <Link
-                    key={item.slug}
-                    href={`/docs/${item.slug}`}
-                    className={`
-                      group
-                      flex
-                      items-center
-                      gap-2.5
-                      rounded-xl
-                      border
-                      px-3
-                      py-2.5
-                      text-xs
-                      font-semibold
-                      outline-none
-                      transition-all
-                      ${
-                        active
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-md shadow-emerald-950/20'
-                          : 'border-transparent text-zinc-400 hover:border-white/[0.05] hover:bg-white/[0.03] hover:text-zinc-200'
-                      }
-                    `}
-                  >
-                    <FileText
-                      className={`
-                        h-4
-                        w-4
-                        shrink-0
-                        ${
-                          active
-                            ? 'text-emerald-400'
-                            : 'text-zinc-600 group-hover:text-zinc-400'
-                        }
-                      `}
-                    />
-                    <span className="min-w-0 truncate">{item.title}</span>
-                  </Link>
-                );
-              })}
-            </nav>
+          {/* Categorized Sidebar Nav */}
+          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7 scrollbar-thin">
+            {Object.entries(categoriesMap).map(([catName, catDocs]) => (
+              <div key={catName} className="space-y-2">
+                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                  {catName}
+                </div>
+                <nav className="space-y-1">
+                  {catDocs.map((item) => {
+                    const active = item.slug === slug;
+                    return (
+                      <Link
+                        key={item.slug}
+                        href={`/docs/${item.slug}`}
+                        className={`
+                          group
+                          flex
+                          items-center
+                          gap-2.5
+                          rounded-xl
+                          border
+                          px-3
+                          py-2
+                          text-xs
+                          font-semibold
+                          transition-all
+                          ${
+                            active
+                              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300 shadow-md shadow-emerald-950/20'
+                              : 'border-transparent text-zinc-400 hover:border-white/[0.04] hover:bg-white/[0.02] hover:text-zinc-200'
+                          }
+                        `}
+                      >
+                        <FileText
+                          className={`
+                            h-4
+                            w-4
+                            shrink-0
+                            ${
+                              active
+                                ? 'text-emerald-400'
+                                : 'text-zinc-600 group-hover:text-zinc-400'
+                            }
+                          `}
+                        />
+                        <span className="min-w-0 truncate">{item.title}</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+            ))}
           </div>
         </aside>
 
@@ -416,13 +428,13 @@ export default async function DocPage({ params }: Props) {
             bg-[#09090b]
           "
         >
-          {/* Blurred Background Lights */}
+          {/* Floating background lighting */}
           <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-            <div className="absolute top-[-5%] left-[-5%] w-[45%] h-[40%] rounded-full bg-emerald-500/5 blur-[120px]" />
-            <div className="absolute bottom-[20%] right-[-5%] w-[40%] h-[45%] rounded-full bg-teal-500/5 blur-[100px]" />
+            <div className="absolute top-[-5%] left-[5%] w-[45%] h-[35%] rounded-full bg-emerald-500/5 blur-[120px]" />
+            <div className="absolute bottom-[15%] right-[-5%] w-[40%] h-[40%] rounded-full bg-teal-500/4 blur-[100px]" />
           </div>
 
-          {/* Sticky Topbar */}
+          {/* Top Floating Bar */}
           <div
             className="
               sticky
@@ -436,13 +448,14 @@ export default async function DocPage({ params }: Props) {
             "
           >
             <div className="mx-auto flex h-14 max-w-7xl items-center px-6 md:px-8 justify-between">
-              <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest">
-                Viewing: <span className="text-emerald-400 font-semibold">{doc.meta.title}</span>
+              <div className="flex items-center gap-2 text-xs font-mono text-zinc-500 uppercase tracking-widest">
+                <Terminal className="h-4 w-4 text-emerald-500" />
+                Module: <span className="text-zinc-300 ml-1 font-semibold">{doc.meta.title}</span>
               </div>
               
-              <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                <Star className="h-3 w-3 fill-emerald-400" />
-                Senior Resource
+              <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-bold text-emerald-400 uppercase tracking-wider shadow-inner">
+                <Cpu className="h-3 w-3 text-emerald-400" />
+                Verified Reference
               </div>
             </div>
           </div>
@@ -451,29 +464,15 @@ export default async function DocPage({ params }: Props) {
             {/* MDX Article Body */}
             <div className="min-w-0 flex-1 px-6 py-12 md:py-16 lg:px-12">
               <div className="mx-auto max-w-3xl">
-                {/* Custom Page Header */}
+                {/* Stripe-Style Page Header with Breadcrumbs */}
                 <header className="mb-14 border-b border-white/[0.06] pb-8">
-                  <div
-                    className="
-                      mb-4
-                      inline-flex
-                      items-center
-                      gap-1.5
-                      rounded-full
-                      border
-                      border-emerald-500/20
-                      bg-emerald-500/5
-                      px-3
-                      py-1
-                      text-[10px]
-                      font-bold
-                      uppercase
-                      tracking-widest
-                      text-emerald-400
-                    "
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    Documentation Module
+                  {/* Breadcrumb Trail */}
+                  <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-5 select-none">
+                    <Link href="/" className="hover:text-emerald-400 transition-colors">Home</Link>
+                    <span>/</span>
+                    <span>Docs</span>
+                    <span>/</span>
+                    <span className="text-emerald-400 font-bold">{doc.meta.title}</span>
                   </div>
 
                   <h1
@@ -489,18 +488,26 @@ export default async function DocPage({ params }: Props) {
                     {doc.meta.title}
                   </h1>
 
-                  <p
-                    className="
-                      mt-4
-                      max-w-2xl
-                      text-[15px]
-                      md:text-[16px]
-                      leading-relaxed
-                      text-zinc-400
-                    "
-                  >
-                    {doc.meta.description}
-                  </p>
+                  {/* Metadata Dashboard Bar */}
+                  <div className="flex flex-wrap items-center gap-y-3 gap-x-5 mt-6 text-xs text-zinc-500 font-mono border-t border-white/[0.04] pt-5 select-none">
+                    <div className="flex items-center gap-1.5">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <span>Synced in Prod</span>
+                    </div>
+                    <span>•</span>
+                    <div className="flex items-center gap-1.5">
+                      <Bookmark className="h-3.5 w-3.5 text-zinc-600" />
+                      <span>Category:</span>
+                      <span className="text-emerald-400 font-bold uppercase">{doc.meta.category}</span>
+                    </div>
+                    <span>•</span>
+                    <div>
+                      <span>Reading Time: 10 min read</span>
+                    </div>
+                  </div>
                 </header>
 
                 {/* Rendered MDX Content */}
@@ -535,7 +542,7 @@ export default async function DocPage({ params }: Props) {
                   On this page
                 </div>
 
-                <ul className="space-y-3 scrollbar-none max-h-[70vh] overflow-y-auto">
+                <ul className="space-y-3 max-h-[50vh] overflow-y-auto scrollbar-none pr-1">
                   {toc.map((heading, index) => (
                     <li key={index}>
                       <a
@@ -561,6 +568,22 @@ export default async function DocPage({ params }: Props) {
                     </li>
                   ))}
                 </ul>
+
+                {/* Feedback Box */}
+                <div className="mt-6 pt-5 border-t border-white/[0.05] space-y-2">
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                    <HelpCircle className="h-3 w-3 text-zinc-500" />
+                    Helpful?
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="flex-1 bg-white/[0.02] border border-white/[0.05] text-[10px] font-semibold text-zinc-400 py-1 rounded hover:bg-emerald-500/10 hover:border-emerald-500/20 hover:text-emerald-300 transition-colors">
+                      Yes
+                    </button>
+                    <button className="flex-1 bg-white/[0.02] border border-white/[0.05] text-[10px] font-semibold text-zinc-400 py-1 rounded hover:bg-[#ef4444]/10 hover:border-[#ef4444]/20 hover:text-[#ef4444]/30 transition-colors">
+                      No
+                    </button>
+                  </div>
+                </div>
               </div>
             </aside>
           </div>
