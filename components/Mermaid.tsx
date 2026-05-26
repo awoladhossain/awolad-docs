@@ -37,6 +37,21 @@ export default function Mermaid({ chart }: MermaidProps) {
           startOnLoad: false,
           theme: "dark",
           securityLevel: "loose",
+          // Prevent shrinking of diagrams, allowing them to render at full crisp size
+          flowchart: {
+            useMaxWidth: false,
+            htmlLabels: true,
+            curve: "basis",
+          },
+          sequence: {
+            useMaxWidth: false,
+            showSequenceNumbers: true,
+            boxMargin: 10,
+            actorMargin: 50,
+          },
+          gantt: {
+            useMaxWidth: false,
+          },
           themeVariables: {
             background: "transparent",
             primaryColor: "#059669", // emerald-600
@@ -45,6 +60,9 @@ export default function Mermaid({ chart }: MermaidProps) {
             lineColor: "#64748b", // slate-500
             secondaryColor: "#0d9488", // teal-600
             tertiaryColor: "#0f172a", // slate-900
+            // High-readability font variables
+            fontSize: "15px",
+            fontFamily: "Inter, system-ui, -apple-system, sans-serif",
           },
         });
 
@@ -54,7 +72,11 @@ export default function Mermaid({ chart }: MermaidProps) {
         const { svg: renderedSvg } = await mermaid.render(idRef.current, chart);
 
         if (active) {
-          setSvg(renderedSvg);
+          // Remove any inline max-width styles that Mermaid might still inject
+          const cleanSvg = renderedSvg
+            .replace(/max-width:\s*\d+px;/gi, "")
+            .replace(/style="[^"]*max-width:\s*100%;[^"]*"/gi, "");
+          setSvg(cleanSvg);
           setLoading(false);
         }
       } catch (err) {
@@ -215,7 +237,7 @@ export default function Mermaid({ chart }: MermaidProps) {
 
       {/* Render Output Area (Interactive Canvas) */}
       <div 
-        className="relative flex justify-center items-center p-8 overflow-hidden max-h-[75vh] min-h-[260px] scrollbar-none select-none"
+        className="relative flex justify-center items-center p-8 overflow-hidden max-h-[75vh] min-h-[300px] scrollbar-none select-none"
         style={{
           cursor: isDragging ? "grabbing" : "grab",
           background: "radial-gradient(circle, rgba(16,185,129,0.01) 0%, transparent 80%)"
@@ -241,7 +263,7 @@ export default function Mermaid({ chart }: MermaidProps) {
               transformOrigin: "center center",
               transition: isDragging ? "none" : "transform 0.15s ease-out",
             }}
-            className="w-auto text-slate-100 flex justify-center [&>svg]:max-w-none [&>svg]:h-auto shrink-0 select-none pointer-events-none"
+            className="w-auto text-slate-100 flex justify-center [&>svg]:max-w-none [&>svg]:w-auto [&>svg]:h-auto shrink-0 select-none pointer-events-none"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         )}
