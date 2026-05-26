@@ -1164,9 +1164,8 @@ flowchart TD
     
     subgraph gRPC_Multiplexing ["gRPC / HTTP/2 Multiplexing - Zero Blocking"]
         direction TB
-        SingleTCP["Single TCP Socket Connection"] --> Stream1["Stream ID 1: Frame A | Frame C"]
-        SingleTCP --> Stream2["Stream ID 2: Frame B | Frame D"]
-        Note over SingleTCP: Binary Frames interleaved and processed concurrently!
+        SingleTCP["Single TCP Socket Connection"] --> Stream1["Stream ID 1: Frame A & Frame C"]
+        SingleTCP --> Stream2["Stream ID 2: Frame B & Frame D"]
     end
 ```
 
