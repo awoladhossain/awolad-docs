@@ -2327,8 +2327,8 @@ flowchart TD
         
         HostSQL --->|Mount as Read-Only Volume| PostgresContainer
         PostgresContainer ---> CheckDir
-        CheckDir --->|Yes (First Boot)| RunScripts
-        CheckDir --->|No (Subsequent Boot)| BootDB
+        CheckDir --->|"Yes (First Boot)"| RunScripts
+        CheckDir --->|"No (Subsequent Boot)"| BootDB
         RunScripts ---> BootDB
     end
 ```
