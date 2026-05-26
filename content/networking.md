@@ -736,6 +736,155 @@ flowchart TD
 
 ---
 
+## ২১. লেয়ার ৪ (L4) বনাম লেয়ার ৭ (L7) লোড ব্যালেন্সিং-এর ভেতরের আর্কিটেকচার
+
+আমরা সবাই লোড ব্যালেন্সার চিনি, কিন্তু হাই-পারফরম্যান্স সিস্টেমে কখন ট্রান্সপোর্ট লেয়ার ৪ (L4) আর কখন অ্যাপ্লিকেশন লেয়ার ৭ (L7) লোড ব্যালেন্সার বসাতে হবে? এটি একটি অন্যতম সেরা সিস্টেম ডিজাইন সিদ্বান্ত।
+
+### ক. লেয়ার ৪ (L4) লোড ব্যালেন্সিং (প্যাকেট স্তরে রাউটিং)
+L4 লোড ব্যালেন্সার অত্যন্ত ফাস্ট এবং এটি কাজ করে ট্রান্সপোর্ট লেয়ারের আইপি (IP) ও পোর্ট (Port) নিয়ে। 
+* **কীভাবে কাজ করে?** এটি প্যাকেটের ভেতরের আসল ডাটা রিড করতে পারে না (এমনকি এটি TLS ডিক্রিপ্টও করে না)। এটি ক্লায়েন্টের কাছ থেকে প্যাকেট পায় এবং শুধু আইপি/পোর্ট হেডার দেখে সেকেন্ডে কোটি কোটি প্যাকেট সরাসরি পেছনের সার্ভারে রি-রাউট করে দেয় (NAT বা IP Tunneling এর মাধ্যমে)।
+* **ব্যবহার:** AWS NLB (Network Load Balancer), HAProxy (L4 mode)।
+* **সুবিধা:** যেহেতু এটি ডাটা ডিক্রিপশন বা পার্সিং করে না, এর মেমরি ও সিপিইউ খরচ প্রায় শূন্য এবং এটি কয়েক কোটি রিকোয়েস্ট কোনো ল্যাটেন্সি ছাড়াই হ্যান্ডেল করতে পারে।
+
+### খ. লেয়ার ৭ (L7) লোড ব্যালেন্সিং (অ্যাপ্লিকেশন স্তরে রাউটিং)
+L7 লোড ব্যালেন্সার কাজ করে অ্যাপ্লিকেশন লেয়ারের ডাটা নিয়ে।
+* **কীভাবে কাজ করে?** এটি প্রথমে ক্লায়েন্টের সাথে TLS হ্যান্ডশেক সম্পন্ন করে ডাটা ডিক্রিপ্ট করে (TLS Termination)। এরপর সে রিকোয়েস্টের কুকি, ইউআরএল পাথ (যেমন `/api/v1/users`), এবং এইচটিটিপি হেডার পার্স করে বুদ্ধিদীপ্ত সিদ্ধান্ত নেয় যে ট্রাফিকটি পেছনের কোন মাইক্রোসার্ভিসে যাবে।
+* **ব্যবহার:** Nginx (L7 proxy), AWS ALB (Application Load Balancer), Envoy Proxy।
+* **সুবিধা:** আপনি পাথ-বেসড রাউটিং, কুকি-বেসড স্টিকি সেশন (Sticky Sessions), রেট লিমিটিং এবং সিকিউরিটি ফিল্টারিং করতে পারবেন।
+
+```mermaid
+flowchart TD
+    subgraph L4_Balancing ["Layer 4 (L4) NLB - Pure Packet Routing"]
+        direction TB
+        Client1["Client Traffic"] --> NLB["L4 NLB <br> Thinks in IP/Port only"]
+        NLB -->|"TCP Packet Forwarding <br> (No TLS decryption, Ultra Fast)"| ServerA1["API Instance 1"]
+        NLB -->|"TCP Packet Forwarding"| ServerA2["API Instance 2"]
+    end
+    
+    subgraph L7_Balancing ["Layer 7 (L7) ALB - Smart App Routing"]
+        direction TB
+        Client2["Client Traffic"] --> ALB["L7 ALB <br> Decrypts TLS & Parses HTTP Headers"]
+        ALB -->|"/api/users -> Route to User Service"| ServerB1["User Microservice"]
+        ALB -->|"/api/orders -> Route to Order Service"| ServerB2["Order Microservice"]
+    end
+```
+
+---
+
+## ২২. TCP BDP (Bandwidth-Delay Product) ও Bufferbloat: আসল নেটওয়ার্ক জ্যামের কারণ
+
+ইন্টারনেটে ব্যান্ডউইথ (স্পিড) ভালো থাকা সত্ত্বেও কেন মাঝে মাঝে পিন্গ ল্যাটেন্সি বা গেম খেলার সময় ল্যাগ হঠাৎ বেড়ে যায়? এর পেছনের দুটি কুখ্যাত কারণ হলো **TCP BDP** এবং **Bufferbloat**।
+
+### ক. BDP (Bandwidth-Delay Product): ওএসের পাইপলাইন ক্ষমতা
+BDP হলো একটি নেটওয়ার্ক পাইপলাইনের এক মুহূর্তে ধরে রাখা সর্বোচ্চ ডাটার পরিমাণ (ডাটা অন-দ্য-ফ্লাই)।
+$$\text{BDP (Bits)} = \text{Bandwidth (bits/sec)} \times \text{RTT (sec)}$$
+* **উদাহরণ:** আপনার ইন্টারনেট স্পিড ১০০ Mbps এবং আমেরিকার সার্ভারে আপনার ল্যাটেন্সি (RTT) ১০০ মিলি-সেকেন্ড। তাহলে পাইপের ক্ষমতা:
+$$\text{BDP} = 100,000,000 \times 0.1 = 10,000,000 \text{ bits} \approx 1.25 \text{ Megabytes}$$
+* **সিস্টেম টিউনিং:** যদি লিনাক্স কার্নেলের TCP উইন্ডো সাইজ (TCP Window Size) এই ১.২৫ MB-এর চেয়ে কম হয় (ধরি ২৫৬ KB), তবে আপনার ১০০ Mbps স্পিড থাকলেও সোর্স কম্পিউটার একবারে ২৫৬ KB-এর বেশি ডাটা পাঠাতে পারবে না, যতক্ষণ না ওপাশ থেকে ACK আসে। অর্থাৎ, আপনি সম্পূর্ণ স্পিড ব্যবহারই করতে পারবেন না! এর জন্য কার্নেলের `net.ipv4.tcp_wmem` সাইজ বাড়িয়ে দিতে হবে।
+
+---
+
+### খ. Bufferbloat (বাফারব্লোট): ফেইক বাফার নেটওয়ার্কের অভিশাপ
+যখন আপনার লোকাল রাউটার বা মাঝের কোনো গেটওয়ের বাফার মেমরি অত্যধিক বড় করে ডিজাইন করা হয়, তখন নেটওয়ার্ক জ্যাম লাগলে রাউটার প্যাকেট ড্রাপ না করে সেগুলোকে নিজের বাফারে দীর্ঘক্ষণ ধরে রাখে (Queue)।
+
+```mermaid
+flowchart TD
+    subgraph NormalFlow ["Normal Network Flow"]
+        direction LR
+        S1["Sender"] -->|"Fast Packets"| R1["Router (Small Buffer)"]
+        R1 -->|"Smooth Delivery"| Rec1["Receiver"]
+    end
+    
+    subgraph BufferbloatFlow ["Bufferbloat Network Congestion"]
+        direction LR
+        S2["Sender"] -->|"Flood Packets"| R2["Router (Oversized Buffer Queue) <br> Packets sit in RAM queue for seconds!"]
+        R2 -->|"Huge RTT Latency / Lag"| Rec2["Receiver"]
+    end
+```
+
+* **কেন এটি ক্ষতিকর?** TCP বুঝতে পারে প্যাকেট ড্রপ হলে স্পিড কমাতে হবে। কিন্তু বাফার মেমরিতে প্যাকেটগুলো আটকে থাকায় কোনো প্যাকেট ড্রপ হয় না, কিন্তু আপনার প্যাকেটটি সার্ভারে পৌঁছাতে ১-২ সেকেন্ড লেট করে। এর ফলে ল্যাটেন্সি ১০০০ মিলি-সেকেন্ডে উঠে যায় যা রিয়েল-টাইম লাইভ কল, গেমিং বা স্ট্রিম ধ্বংস করে দেয়।
+* **সমাধান:** আধুনিক রাউটারগুলোতে **FQ-CoDel (Fair Queueing Controlled Delay)** অ্যালগরিদম ব্যবহার করা হয় যা বাফারে প্যাকেট দীর্ঘক্ষণ আটকে থাকলেই ওএসকে ফোর্সফুলি প্যাকেট ড্রপ করার সিগন্যাল পাঠিয়ে বাফারব্লোট প্রতিরোধ করে।
+
+---
+
+## ২৩. Unicast বনাম Broadcast বনাম Multicast বনাম Anycast
+
+নেটওয়ার্কিং স্তরে ডেটা ডেলিভারির ৪টি প্রধান কাস্টিং টাইপ আমাদের জানা প্রয়োজন:
+
+| কাস্টিং টাইপ | সম্পর্ক | মেকানিজম | বাস্তব উদাহরণ |
+| :--- | :--- | :--- | :--- |
+| **Unicast** | One-to-One | সরাসরি একটি নির্দিষ্ট সোর্স থেকে একটি নির্দিষ্ট টার্গেটে ডাটা পাঠানো। | আপনি ব্রাউজারে কোনো একটি এপিআই কল করছেন। |
+| **Broadcast** | One-to-All | লোকাল সাবনেটের অন্তর্ভুক্ত সমস্ত ডিভাইসে একসাথে প্যাকেট পাঠানো। | ARP ব্রডকাস্ট (MAC জানা) বা DHCP Discovery। |
+| **Multicast** | One-to-Many | নির্দিষ্ট একটি রেজিস্টার্ড গ্রুপ বা ক্লাস্টারের সব ডিভাইসে প্যাকেট পাঠানো। | আইপিটিভি (IPTV) লাইভ স্ট্রিমিং ও কার্নেল ক্লাস্টার সিঙ্ক। |
+| **Anycast** | One-to-Nearest | একই আইপি অনেক জায়গায় রানিং থাকে, রাউটার ভৌগলিকভাবে সবচেয়ে কাছের ডিভাইসে পাঠায়। | DNS রিজলভার (`1.1.1.1`), CDN ট্রাফিক রাউটিং। |
+
+```mermaid
+flowchart TD
+    subgraph CastingTypes ["IP Packet Delivery Types"]
+        direction TB
+        Uni["Unicast <br> (Sender -> Specific Node)"]
+        Broad["Broadcast <br> (Sender -> All Nodes in LAN)"]
+        Multi["Multicast <br> (Sender -> Subscribed Group Class-D IP)"]
+        Any["Anycast <br> (Sender -> Geographical Closest via BGP)"]
+    end
+```
+
+---
+
+## ২৪. IPsec বনাম TLS (SSL) ভিপিএন টানেলিং মেকানিক্স
+
+ভিপিএন (VPN) আমরা প্রতিদিন ব্যবহার করি কিন্তু এটি সিস্টেম লেভেলে প্যাকেট কীভাবে ইনক্যাপসুলেট (Encapsulate) করে?
+
+```mermaid
+flowchart TD
+    subgraph IPsecTunnel ["IPsec VPN Tunnel Mode (Layer 3 Encryption)"]
+        direction LR
+        OriginalPacket["Orig IP Header + Payload"] -->|"Encapsulated"| NewIP["New Outer IP Header + ESP Encrypted Payload"]
+    end
+    
+    subgraph TLSTunnel ["TLS VPN / OpenVPN (Layer 4/7 Encryption)"]
+        direction LR
+        DataPayload["App Data"] -->|"Encrypted via TLS"| L4_TCP_Outer["Standard IP + TCP/UDP Header"]
+    end
+```
+
+### ক. IPsec VPN (Layer 3 - Network Layer VPN)
+IPsec সাধারণত গেটওয়ে-টু-গেটওয়ে বা সাইট-টু-সাইট সুরক্ষায় ব্যবহৃত হয়।
+* **কীভাবে কাজ করে?** এটি ওএসের নেটওয়ার্ক স্তরে কাজ করে। টানেল মোডে (Tunnel Mode) এটি আপনার আসল আইপি প্যাকেটের ভেতরের সোর্স এবং ডেস্টিনেশন আইপি-সহ পুরো প্যাকেটটিকে এনক্রিপ্ট করে এবং তার ওপরে একটি সম্পূর্ণ **নতুন ফেইক আইপি হেডার (Outer IP Header)** ও ESP সিকিউরিটি হেডার বসিয়ে দেয়। ইন্টারনেট প্রোভাইডার প্যাকেটের আসল উৎস বা গন্তব্য কিছুই দেখতে পারে না।
+
+### খ. TLS/SSL VPN (Layer 4/7 - Application/Transport VPN)
+OpenVPN বা আধুনিক ক্লায়েন্ট ভিপিএন-এ এটি বেশি ব্যবহৃত হয়।
+* **কীভাবে কাজ করে?** এটি অ্যাপ্লিকেশন স্তরের টিএলএস আর্কিটেকচার ব্যবহার করে। এটি স্ট্যান্ডার্ড ওএসের সকেট ইন্টারফেসে ডাটা রিসিভ করে এবং সাধারণ HTTP/HTTPS প্যাকেটের মতো এনক্রিপ্ট করে নেটওয়ার্ক স্ট্যাকের ওপরে ড্রাইভার দিয়ে পুশ করে। এটি অনেক বেশি ফ্লেক্সিবল কারণ নির্দিষ্ট কোনো ওএস কার্নেল লেভেল মডিফাইড গেটওয়ে ছাড়াই ব্রাউজার বা সাধারণ অ্যাপ দিয়ে এটি সরাসরি সচল করা যায়।
+
+---
+
+## ২৫. NIC Ring Buffers ও Interrupt Moderation: হার্ডওয়্যার স্তরের প্যাকেট মেকানিক্স
+
+যখন প্রতি সেকেন্ডে আপনার ১0-Gigabit নেটওয়ার্ক ইন্টারফেস কার্ডে (NIC) লাখ লাখ ডাটা প্যাকেট আছড়ে পড়ে, তখন হার্ডওয়্যার ও ওএস কার্নেল কীভাবে একে অপরকে ক্র্যাশ না করিয়ে শান্ত থাকে?
+
+```mermaid
+flowchart TD
+    subgraph NIC_Processing ["Hardware Packet Processing with NAPI"]
+        direction TB
+        NIC["1. Physical NIC Port <br> Receives high-speed raw electrical/fiber pulses"] --> RingBuffer["2. Rx Ring Buffer <br> NIC DMA copies packets directly to host RAM"]
+        RingBuffer --> IRQ["3. Hardware Interrupt (IRQ) <br> NIC tells CPU: 'I have packets!'"]
+        IRQ --> NAPI_Mode["4. Linux NAPI (New API) Polling <br> CPU stops interrupts & actively polls Rx ring in a loop"]
+        NAPI_Mode --> sk_buff["5. Allocate sk_buff & push to TCP Stack"]
+    end
+end
+```
+
+### ক. NIC Rx Ring Buffer (DMA মেকানিক্স)
+প্যাকেট যখন ফিজিক্যাল পোর্টে আসে, নেটওয়ার্ক কার্ড সরাসরি সিপিইউকে বিরক্ত না করে তার নিজের অন-বোর্ড মেমরি বা ওএসের কার্নেল মেমরিতে থাকা একটি বৃত্তাকার বাফার যাকে **Rx Ring Buffer** বলে, সেখানে প্যাকেটগুলো সরাসরি রাইট করে (Direct Memory Access - DMA)।
+
+### খ. Interrupt Storm বনাম Linux NAPI (New API)
+ট্রেডিশনাল সিস্টেমে প্রতিবার বাফারে প্যাকেট আসামাত্র NIC সিপিইউর কাছে একটি **Hardware Interrupt (IRQ)** সিগন্যাল পাঠাত। সিপিইউ তার বর্তমান কাজ ফেলে রেখে সকেট রিসিভ করার কাজ করত।
+* **সমস্যা:** যদি সেকেন্ডে ১০ লাখ প্যাকেট আসে, সিপিইউ সেকেন্ডে ১০ লাখ বার ইন্টারাপ্ট প্রসেস করতে গিয়ে সম্পূর্ণ ফ্রিজ হয়ে যাবে। একে **Interrupt Storm** বলে।
+* **NAPI (Linux Polling System) সমাধান:** আধুনিক লিনাক্স কার্নেল **NAPI** প্রযুক্তি ব্যবহার করে। প্রথম প্যাকেট আসার পর NIC একটি হার্ডওয়্যার ইন্টারাপ্ট দেয়, কার্নেল সেটি ক্যাচ করে কার্নেল থ্রেডের মাধ্যমে NIC-কে বলে—*“আমি পোলিং (Polling) মোড সচল করছি, তুমি আর কোনো ইন্টারাপ্ট পাঠাবে না।”*
+* সিপিইউ তখন ইন্টারাপ্ট ড্রাইভেন মোড বন্ধ করে নিজে থেকেই একটি লুপের সাহায্যে **Rx Ring Buffer** থেকে অবিরত প্যাকেট রিড করতে থাকে (Polling)। যখন মেমরি ক্লিয়ার হয়ে যায়, কার্নেল পোলিং বন্ধ করে আবার ইন্টারাপ্ট মোডে ফিরে যায়। এটি ওএস কার্নেলকে চরম ট্রাফিকের মুখেও হাই-পারফরম্যান্স ও ক্র্যাশ-ফ্রি রাখে।
+
+---
+
 ## 💡 Systems Architect Networking Insights
 
 1. **Keep-Alive Optimization:** এপিআই কল করার সময় প্রতিবার নতুন TCP কানেকশন তৈরি না করে সর্বদা **HTTP Keep-Alive** সচল রাখুন। এটি হ্যান্ডশেকের ওভারহেড কমিয়ে দিয়ে এপিআই রেসপন্স স্পিড প্রায় ৩ গুণ বাড়িয়ে দেবে।
