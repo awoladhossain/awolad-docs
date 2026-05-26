@@ -1491,8 +1491,6 @@ flowchart TD
         RawPacket["Incoming UDP Payload"] --> UnencryptedCID["Destination Connection ID <br> (Plaintext - For routing only)"]
         RawPacket --> CryptographicMask["Header Encryption Key <br> (Derived from TLS Initial Keys)"]
         CryptographicMask --> EncryptedFlags["Packet Flags & Packet Numbers <br> (Fully Masked / Encrypted!)"]
-        
-        Note over EncryptedFlags: "Middleboxes/Firewalls cannot read sequence numbers or sniff packet history!"
     end
 ```
 
