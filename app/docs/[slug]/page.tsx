@@ -2,7 +2,7 @@ import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BookOpen, FileText } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileText, List, Sparkles, Star } from 'lucide-react';
 import React, { type ComponentPropsWithoutRef } from 'react';
 import Mermaid from '@/components/Mermaid';
 
@@ -62,13 +62,17 @@ const components = {
       <h2
         id={id}
         className="
-          scroll-mt-28
-          mt-24
+          scroll-mt-24
+          mt-16
           mb-6
-          text-3xl
-          font-bold
+          text-2xl
+          md:text-3xl
+          font-extrabold
           tracking-tight
           text-white
+          border-b
+          border-white/[0.06]
+          pb-2
         "
         {...props}
       />
@@ -78,11 +82,14 @@ const components = {
   h3: (props: ComponentPropsWithoutRef<'h3'>) => (
     <h3
       className="
-        mt-14
+        scroll-mt-24
+        mt-10
         mb-4
-        text-xl
-        font-semibold
-        text-white
+        text-lg
+        md:text-xl
+        font-bold
+        text-zinc-100
+        tracking-tight
       "
       {...props}
     />
@@ -91,10 +98,12 @@ const components = {
   p: (props: ComponentPropsWithoutRef<'p'>) => (
     <p
       className="
-        my-6
-        text-[17px]
-        leading-8
-        text-zinc-400
+        my-5
+        text-[15px]
+        md:text-[16px]
+        leading-relaxed
+        text-zinc-300
+        font-normal
       "
       {...props}
     />
@@ -103,35 +112,54 @@ const components = {
   ul: (props: ComponentPropsWithoutRef<'ul'>) => (
     <ul
       className="
-        my-6
+        my-5
         ml-6
         list-disc
-        space-y-3
-        text-zinc-400
+        space-y-2.5
+        text-zinc-300
+        text-[15px]
+        md:text-[16px]
+      "
+      {...props}
+    />
+  ),
+
+  ol: (props: ComponentPropsWithoutRef<'ol'>) => (
+    <ol
+      className="
+        my-5
+        ml-6
+        list-decimal
+        space-y-2.5
+        text-zinc-300
+        text-[15px]
+        md:text-[16px]
       "
       {...props}
     />
   ),
 
   li: (props: ComponentPropsWithoutRef<'li'>) => (
-    <li className="leading-8" {...props} />
+    <li className="leading-relaxed" {...props} />
   ),
 
   strong: (props: ComponentPropsWithoutRef<'strong'>) => (
-    <strong className="font-semibold text-zinc-100" {...props} />
+    <strong className="font-bold text-white bg-white/[0.04] px-1 rounded-sm" {...props} />
   ),
 
   code: (props: ComponentPropsWithoutRef<'code'>) => (
     <code
       className="
-        rounded-md
+        rounded-lg
         border
-        border-white/10
-        bg-white/[0.04]
+        border-white/[0.08]
+        bg-white/[0.03]
         px-1.5
-        py-1
-        text-[14px]
-        text-white
+        py-0.5
+        text-[13px]
+        font-mono
+        text-emerald-300
+        font-semibold
       "
       {...props}
     />
@@ -145,13 +173,18 @@ const components = {
     return (
       <pre
         className="
-          my-8
+          my-6
           overflow-x-auto
-          rounded-2xl
+          rounded-xl
           border
-          border-white/10
-          bg-[#0d1117]
-          p-5
+          border-white/[0.06]
+          bg-[#0b0b0f]/80
+          p-4
+          font-mono
+          text-[13px]
+          leading-relaxed
+          text-zinc-300
+          scrollbar-thin
         "
         {...props}
       />
@@ -161,19 +194,25 @@ const components = {
   blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => (
     <blockquote
       className="
-        my-8
-        border-l-2
-        border-white/20
-        pl-6
+        my-6
+        border-l-4
+        border-emerald-500/40
+        bg-emerald-500/[0.03]
+        rounded-r-xl
+        py-4
+        pl-5
+        pr-4
+        text-[15px]
         italic
-        text-zinc-500
+        text-zinc-300
+        leading-relaxed
       "
       {...props}
     />
   ),
 
   table: (props: ComponentPropsWithoutRef<'table'>) => (
-    <div className="my-8 overflow-hidden rounded-lg border border-white/10 bg-black/25">
+    <div className="my-6 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c0c10]/40 backdrop-blur-md">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm" {...props} />
       </div>
@@ -181,15 +220,15 @@ const components = {
   ),
 
   thead: (props: ComponentPropsWithoutRef<'thead'>) => (
-    <thead className="bg-emerald-400/10 text-slate-100" {...props} />
+    <thead className="bg-emerald-500/[0.08] border-b border-white/[0.06] text-white" {...props} />
   ),
 
   tbody: (props: ComponentPropsWithoutRef<'tbody'>) => (
-    <tbody className="divide-y divide-white/10" {...props} />
+    <tbody className="divide-y divide-white/[0.04]" {...props} />
   ),
 
   tr: (props: ComponentPropsWithoutRef<'tr'>) => (
-    <tr className="transition-colors hover:bg-white/[0.03]" {...props} />
+    <tr className="transition-colors hover:bg-white/[0.02]" {...props} />
   ),
 
   th: (props: ComponentPropsWithoutRef<'th'>) => (
@@ -199,10 +238,10 @@ const components = {
         px-4
         py-3
         text-xs
-        font-semibold
+        font-bold
         uppercase
         tracking-wider
-        text-emerald-200
+        text-emerald-400
       "
       {...props}
     />
@@ -211,19 +250,17 @@ const components = {
   td: (props: ComponentPropsWithoutRef<'td'>) => (
     <td
       className="
-        border-t
-        border-white/10
         px-4
         py-3
         align-top
-        leading-7
-        text-slate-400
+        leading-relaxed
+        text-zinc-300
       "
       {...props}
     />
   ),
 
-  hr: () => <div className="my-16 h-px bg-white/10" />,
+  hr: () => <div className="my-10 h-px bg-white/[0.06]" />,
 };
 
 export default async function DocPage({ params }: Props) {
@@ -249,7 +286,7 @@ export default async function DocPage({ params }: Props) {
   const toc = extractHeadings(doc.content);
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
+    <div className="min-h-screen bg-[#09090b] text-white antialiased">
       <div className="flex">
         {/* Sidebar */}
         <aside
@@ -262,60 +299,63 @@ export default async function DocPage({ params }: Props) {
             shrink-0
             flex-col
             border-r
-            border-white/10
-            bg-black/30
-            shadow-[1px_0_0_rgba(255,255,255,0.03)]
+            border-white/[0.06]
+            bg-[#0c0c10]/50
+            backdrop-blur-xl
             lg:flex
           "
         >
-          <div className="border-b border-white/10 px-5 py-5">
+          {/* Sidebar Header */}
+          <div className="border-b border-white/[0.06] px-5 py-5 flex items-center justify-between">
             <Link
               href="/"
               className="
                 inline-flex
                 items-center
-                gap-2
-                rounded-lg
-                px-2
-                py-1.5
-                text-sm
-                font-medium
-                text-slate-400
+                gap-1.5
+                rounded-xl
+                border
+                border-white/[0.05]
+                bg-white/[0.02]
+                px-3
+                py-2
+                text-xs
+                font-semibold
+                text-zinc-400
                 outline-none
-                transition-colors
-                hover:bg-white/[0.04]
+                transition-all
+                hover:bg-white/[0.06]
                 hover:text-white
-                focus-visible:ring-2
-                focus-visible:ring-emerald-400/50
               "
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Home
             </Link>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-6">
+          {/* Sidebar Nav links */}
+          <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
             <div
               className="
                 mb-4
                 flex
                 items-center
-                gap-2
-                rounded-lg
+                gap-2.5
+                rounded-xl
                 border
-                border-white/10
-                bg-white/[0.035]
+                border-emerald-500/20
+                bg-emerald-500/5
                 px-3
-                py-3
-                text-xs
-                font-semibold
+                py-2.5
+                text-[10px]
+                font-bold
                 uppercase
                 tracking-wider
-                text-slate-200
+                text-emerald-400
               "
             >
-              <BookOpen className="h-4 w-4 text-emerald-400" />
-              <span>Documentation</span>
+              <BookOpen className="h-4 w-4" />
+              <span>Table of Contents</span>
             </div>
 
             <nav className="space-y-1.5">
@@ -331,20 +371,18 @@ export default async function DocPage({ params }: Props) {
                       flex
                       items-center
                       gap-2.5
-                      rounded-lg
+                      rounded-xl
                       border
                       px-3
                       py-2.5
-                      text-sm
-                      font-medium
+                      text-xs
+                      font-semibold
                       outline-none
                       transition-all
-                      focus-visible:ring-2
-                      focus-visible:ring-emerald-400/50
                       ${
                         active
-                          ? 'border-emerald-400/25 bg-emerald-400/10 text-white shadow-sm shadow-emerald-950/30'
-                          : 'border-transparent text-slate-500 hover:border-white/10 hover:bg-white/[0.04] hover:text-slate-200'
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-md shadow-emerald-950/20'
+                          : 'border-transparent text-zinc-400 hover:border-white/[0.05] hover:bg-white/[0.03] hover:text-zinc-200'
                       }
                     `}
                   >
@@ -355,8 +393,8 @@ export default async function DocPage({ params }: Props) {
                         shrink-0
                         ${
                           active
-                            ? 'text-emerald-300'
-                            : 'text-slate-600 group-hover:text-slate-300'
+                            ? 'text-emerald-400'
+                            : 'text-zinc-600 group-hover:text-zinc-400'
                         }
                       `}
                     />
@@ -368,66 +406,84 @@ export default async function DocPage({ params }: Props) {
           </div>
         </aside>
 
-        {/* Main */}
+        {/* Main Content Pane */}
         <main
           className="
             relative
             min-w-0
             flex-1
             overflow-hidden
-            bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_34%),radial-gradient(circle_at_78%_18%,rgba(20,184,166,0.08),transparent_28%),#09090b]
+            bg-[#09090b]
           "
         >
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-25" />
-          {/* Topbar */}
+          {/* Blurred Background Lights */}
+          <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+            <div className="absolute top-[-5%] left-[-5%] w-[45%] h-[40%] rounded-full bg-emerald-500/5 blur-[120px]" />
+            <div className="absolute bottom-[20%] right-[-5%] w-[40%] h-[45%] rounded-full bg-teal-500/5 blur-[100px]" />
+          </div>
+
+          {/* Sticky Topbar */}
           <div
             className="
               sticky
               top-0
               z-40
               border-b
-              border-white/10
-              bg-[#09090b]/75
-              backdrop-blur-xl
+              border-white/[0.06]
+              bg-[#09090b]/80
+              backdrop-blur-md
+              relative
             "
           >
-            <div className="mx-auto flex h-14 max-w-7xl items-center px-6">
-              <div className="text-sm text-zinc-500">
-                {doc.meta.title}
+            <div className="mx-auto flex h-14 max-w-7xl items-center px-6 md:px-8 justify-between">
+              <div className="text-xs font-mono text-zinc-500 uppercase tracking-widest">
+                Viewing: <span className="text-emerald-400 font-semibold">{doc.meta.title}</span>
+              </div>
+              
+              <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                <Star className="h-3 w-3 fill-emerald-400" />
+                Senior Resource
               </div>
             </div>
           </div>
 
           <div className="relative z-10 mx-auto flex max-w-7xl">
-            {/* Content */}
-            <div className="min-w-0 flex-1 px-6 py-16 lg:px-16">
+            {/* MDX Article Body */}
+            <div className="min-w-0 flex-1 px-6 py-12 md:py-16 lg:px-12">
               <div className="mx-auto max-w-3xl">
-                {/* Header */}
-                <header className="mb-20">
+                {/* Custom Page Header */}
+                <header className="mb-14 border-b border-white/[0.06] pb-8">
                   <div
                     className="
-                      mb-5
+                      mb-4
                       inline-flex
                       items-center
+                      gap-1.5
                       rounded-full
                       border
-                      border-white/10
-                      bg-white/[0.03]
+                      border-emerald-500/20
+                      bg-emerald-500/5
                       px-3
                       py-1
-                      text-xs
-                      text-zinc-400
+                      text-[10px]
+                      font-bold
+                      uppercase
+                      tracking-widest
+                      text-emerald-400
                     "
                   >
-                    Documentation
+                    <Sparkles className="h-3 w-3" />
+                    Documentation Module
                   </div>
 
                   <h1
                     className="
-                      text-5xl
-                      font-bold
+                      text-3xl
+                      md:text-5xl
+                      font-black
                       tracking-tight
                       text-white
+                      leading-tight
                     "
                   >
                     {doc.meta.title}
@@ -435,19 +491,20 @@ export default async function DocPage({ params }: Props) {
 
                   <p
                     className="
-                      mt-6
+                      mt-4
                       max-w-2xl
-                      text-lg
-                      leading-8
-                      text-zinc-500
+                      text-[15px]
+                      md:text-[16px]
+                      leading-relaxed
+                      text-zinc-400
                     "
                   >
                     {doc.meta.description}
                   </p>
                 </header>
 
-                {/* MDX */}
-                <article>
+                {/* Rendered MDX Content */}
+                <article className="prose prose-invert max-w-none">
                   <MDXRemote
                     source={doc.content}
                     components={components}
@@ -461,7 +518,7 @@ export default async function DocPage({ params }: Props) {
               </div>
             </div>
 
-            {/* TOC */}
+            {/* Sidebar Table of Contents (TOC) */}
             <aside
               className="
                 hidden
@@ -472,12 +529,13 @@ export default async function DocPage({ params }: Props) {
                 py-16
               "
             >
-              <div className="sticky top-24">
-                <div className="mb-4 text-xs font-medium uppercase tracking-widest text-zinc-600">
+              <div className="sticky top-24 border border-white/[0.05] bg-[#0c0c10]/40 backdrop-blur-md rounded-2xl p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 font-mono">
+                  <List className="h-3.5 w-3.5 text-emerald-400" />
                   On this page
                 </div>
 
-                <ul className="space-y-3">
+                <ul className="space-y-3 scrollbar-none max-h-[70vh] overflow-y-auto">
                   {toc.map((heading, index) => (
                     <li key={index}>
                       <a
@@ -486,14 +544,19 @@ export default async function DocPage({ params }: Props) {
                           .replace(/[^\w\s]/g, '')
                           .replace(/\s+/g, '-')}`}
                         className="
-                          text-sm
+                          text-xs
+                          font-medium
                           leading-relaxed
-                          text-zinc-500
-                          transition-colors
-                          hover:text-white
+                          text-zinc-400
+                          transition-all
+                          hover:text-emerald-400
+                          hover:pl-0.5
+                          block
+                          truncate
                         "
+                        title={heading}
                       >
-                        {heading}
+                        • {heading}
                       </a>
                     </li>
                   ))}
