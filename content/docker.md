@@ -2309,6 +2309,81 @@ const stripeKey = getSecret('STRIPE_SECRET_KEY', 'STRIPE_KEY_FILE');
 
 ---
 
+### ৯. Automated Database Initialization (অটোমেটেড ডাটাবেস ইনিশিয়ালাইজেশন)
+
+একটি মাইক্রোসার্ভিস প্রজেক্ট ডকার কম্পোজে রান করার সময় ডাটাবেসটি একদম নতুন অবস্থায় থাকে। রিয়েল-ওয়ার্ল্ডে প্রথমবার কন্টেইনার বুট করার সময় ডাটাবেসে বিভিন্ন এক্সটেনশন (যেমন: `uuid-ossp` বা `pgcrypto`), কাস্টম স্কিমা বা ইনিশিয়াল সীড ডাটা লোড করার প্রয়োজন পড়ে। ম্যানুয়ালি এগুলো রান করানো ইনফ্রাস্ট্রাকচার-অ্যাজ-কোড (IaC) পলিসির পরিপন্থী।
+
+```mermaid
+flowchart TD
+    subgraph AutoDBInit [PostgreSQL Entrypoint Auto Initialization]
+        HostSQL["Local init.sql File <br>(Creates schemas, enables UUID extensions)"]
+        PostgresContainer["PostgreSQL Container Start"]
+        
+        subgraph PostgresEngine [PostgreSQL Startup Engine]
+            CheckDir{"Is Database Dir Empty?"}
+            RunScripts["Execute all .sql & .sh scripts <br>inside /docker-entrypoint-initdb.d/"]
+            BootDB["Boot PostgreSQL Server <br>(Fully Configured Database)"]
+        end
+        
+        HostSQL --->|Mount as Read-Only Volume| PostgresContainer
+        PostgresContainer ---> CheckDir
+        CheckDir --->|Yes (First Boot)| RunScripts
+        CheckDir --->|No (Subsequent Boot)| BootDB
+        RunScripts ---> BootDB
+    end
+```
+
+#### সমাধান: `/docker-entrypoint-initdb.d/` মেকানিজম
+অফিসিয়াল PostgreSQL ডকার ইমেজে একটি চমৎকার বিল্ট-ইন ফিচার রয়েছে। কন্টেইনারটি যখন প্রথমবার বুট হয় এবং দেখে যে তার ডেটা ডিরেক্টরিটি ফাঁকা, তখন সে কন্টেইনারের ভেতরের **`/docker-entrypoint-initdb.d/`** ডিরেক্টরিতে থাকা সমস্ত `.sql`, `.sql.gz` এবং `.sh` স্ক্রিপ্টগুলোকে অটোমেটিকালি ক্রমানুসারে এক্সিকিউট করে।
+
+#### ক. লোকাল ইনিশিয়ালাইজেশন স্ক্রিপ্ট (`init.sql`):
+```sql
+-- UUID জেনারেশনের এক্সটেনশন সচল করা (ভেরি ভেরি ইম্পর্টেন্ট)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- প্রোডাকশন ও ডেভেলপমেন্ট স্কিমা তৈরি
+CREATE SCHEMA IF NOT EXISTS saas_prod_schema;
+CREATE SCHEMA IF NOT EXISTS saas_dev_schema;
+
+-- উদাহরণস্বরূপ একটি প্রজেক্ট রোলস টেবিল ও সীড ডাটা
+CREATE TABLE IF NOT EXISTS saas_prod_schema.user_roles (
+    id SERIAL PRIMARY KEY,
+    role_name VARCHAR(50) UNIQUE NOT NULL
+);
+
+INSERT INTO saas_prod_schema.user_roles (role_name) 
+VALUES ('SUPER_ADMIN'), ('ADMIN'), ('USER') 
+ON CONFLICT (role_name) DO NOTHING;
+```
+
+#### খ. ডকার কম্পোজে ভলিউম মাউন্ট (`docker-compose.yml`):
+আমরা আমাদের ডাটাবেস সার্ভিসের `volumes` সেকশনে রিড-অনলি (`:ro`) ফ্ল্যাগ ব্যবহার করে এই স্ক্রিপ্টটি মাউন্ট করে দেব:
+
+```yaml
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=secure_db_pass
+      - POSTGRES_DB=saas_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # হোস্টের init.sql ফাইলটি ডকার এন্ট্রি পয়েন্টে মাউন্ট করা
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d saas_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saas-network
+```
+এর ফলে, যখনই আপনি প্রথমবার `docker compose up -d` দিবেন, আপনার ডাটাবেস সম্পূর্ণ কনফিগার ও সীড ডাটা সহ অটোমেটিকালি সচল হয়ে যাবে। এটি ডেভেলপারদের লোকাল সেটআপের সময় অনাবশ্যক কনফিগারেশন জটিলতা সম্পূর্ণরূপে দূর করে।
+
+---
+
 ## ৩৫. Ultimate Docker CLI Cheat Sheet (ডকার কমান্ডের সম্পূর্ণ চিট-শীট)
 
 ডকার ইকোসিস্টেমের দৈনন্দিন কাজ এবং অ্যাডভান্সড ট্রাবলশুটিংয়ের জন্য প্রয়োজনীয় সব কমান্ড ক্যাটাগরি অনুযায়ী সংকলন করে এই চিট-শীটটি প্রস্তুত করা হয়েছে। এটি যেকোনো সময় কুইক রেফারেন্স হিসেবে ব্যবহারের উপযোগী।
