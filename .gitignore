@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Project Source & Config (Hidden from GitHub)
+/app/
+/components/
+/content/
+/lib/
+/public/
+next.config.ts
+package.json
+package-lock.json
+eslint.config.mjs
+tsconfig.json
+CLAUDE.md
+AGENTS.md
