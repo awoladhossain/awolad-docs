@@ -3,7 +3,8 @@ import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, BookOpen, FileText } from 'lucide-react';
-import type { ComponentPropsWithoutRef } from 'react';
+import React, { type ComponentPropsWithoutRef } from 'react';
+import Mermaid from '@/components/Mermaid';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -26,6 +27,26 @@ function extractHeadings(content: string) {
   }
 
   return headings;
+}
+
+function getMermaidChart(children: React.ReactNode): string | null {
+  if (!children) return null;
+  if (React.isValidElement(children)) {
+    const props = children.props as any;
+    if (props?.className === 'language-mermaid') {
+      return props.children?.toString() || '';
+    }
+    if (props?.children) {
+      return getMermaidChart(props.children);
+    }
+  }
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const chart = getMermaidChart(child);
+      if (chart !== null) return chart;
+    }
+  }
+  return null;
 }
 
 const components = {
@@ -116,20 +137,26 @@ const components = {
     />
   ),
 
-  pre: (props: ComponentPropsWithoutRef<'pre'>) => (
-    <pre
-      className="
-        my-8
-        overflow-x-auto
-        rounded-2xl
-        border
-        border-white/10
-        bg-[#0d1117]
-        p-5
-      "
-      {...props}
-    />
-  ),
+  pre: (props: ComponentPropsWithoutRef<'pre'>) => {
+    const chart = getMermaidChart(props.children);
+    if (chart !== null) {
+      return <Mermaid chart={chart} />;
+    }
+    return (
+      <pre
+        className="
+          my-8
+          overflow-x-auto
+          rounded-2xl
+          border
+          border-white/10
+          bg-[#0d1117]
+          p-5
+        "
+        {...props}
+      />
+    );
+  },
 
   blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => (
     <blockquote
