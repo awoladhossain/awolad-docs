@@ -1448,14 +1448,162 @@ docker run -d --name container-b --ipc=container:container-a my-high-speed-reade
 
 ---
 
+## ৩০. cgroups PID Controller & Fork Bomb Protection (ফর্ক বোম প্রটেকশন)
+
+কন্টেইনারের ভেতরের প্রসেস লিমিটেশন না করলে হ্যাকাররা ওএসের মেমরি বা সিপিইউ শেষ না করেই আপনার সম্পূর্ণ সার্ভার লক বা ক্র্যাশ করে দিতে পারে—যার অন্যতম হাতিয়ার হলো **Fork Bomb (ফর্ক বোম)**। লিনাক্স কার্নেলের **cgroups PID Controller** আমাদের এই বিপর্যয় থেকে ১০০% সুরক্ষা দেয়।
+
+```mermaid
+flowchart TD
+    subgraph ForkBombAttack [Fork Bomb Attack Prevention]
+        direction TB
+        Attacker[Remote Code Execution RCE] -->|Triggers Fork Bomb| Loop[":(){ :|:& };: <br>Infinite Process Creation"]
+        
+        subgraph CGroup_PIDs [CGroups PID Controller Enforced]
+            PID_Limit["PID Limit: --pids-limit=100 <br>(pids.max in cgroups v2)"]
+        end
+        
+        Loop -->|Spawns Threads| CGroup_PIDs
+        CGroup_PIDs -->|Hits 100 limit| Blocks["Kernel blocks further fork() <br>Host remains 100% stable"]
+        CGroup_PIDs -.->|No limit set| Exhaustion["Host process table exhausted <br>Server locks up / restarts"]
+    end
+
+    style PID_Limit fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Blocks fill:#065f46,stroke:#10b981,color:#fff
+    style Exhaustion fill:#7f1d1d,stroke:#ef4444,color:#fff
+```
+
+### ১. ফর্ক বোম কী?
+ফর্ক বোম হলো এমন একটি স্ক্রিপ্ট বা প্রসেস যা লুপ আকারে অনবরত নিজের চাইল্ড প্রসেস তৈরি করতে থাকে (যেমন লিনাক্স শেলের কুখ্যাত কোড: `:(){ :|:& };:`)। 
+- হোস্টে যদি কোনো লিমিটেশন না থাকে, তবে এই প্রসেসগুলো কয়েক সেকেন্ডের মধ্যে ওএসের সম্পূর্ণ প্রসেস টেবিল ফুল করে ফেলে। এর ফলে রিয়েল হোস্ট সার্ভারটি হ্যাং হয়ে যায় এবং সিস্টেম রিস্টার্ট করা ছাড়া আর কোনো উপায় থাকে না।
+
+### ২. cgroups `pids.max` সমাধান
+ডকার কন্টেইনারে আমরা সিগ্রুপের সাহায্যে খুব সহজে সর্বোচ্চ প্রসেস ও থ্রেড সংখ্যা লিমিট করে দিতে পারি:
+```bash
+# কন্টেইনারে সর্বোচ্চ ১০০টির বেশি প্রসেস বা থ্রেড তৈরি করা যাবে না
+docker run -d --pids-limit=100 my-app
+```
+#### ইন্টারনাল মেকানিজম:
+- ডকার কার্নেলের cgroups v2 ডিরেক্টরিতে কন্টেইনারের জন্য **`pids.max`** ফাইলে `100` ভ্যালুটি রাইট করে দেয়।
+- এখন যদি অ্যাপ্লিকেশনে আরসিই (Remote Code Execution) ঘটিয়ে হ্যাকার ফর্ক বোম ট্রিগার করে, তবে কার্নেল ১০০টি প্রসেস তৈরি হওয়ার পর পরবর্তী সমস্ত `fork()` সিস্টেম কল ব্লক করে দেবে। কন্টেইনারের ভেতরের প্রসেসগুলো ক্র্যাশ করবে, কিন্তু হোস্ট ওএস বা অন্য কন্টেইনারগুলো সম্পূর্ণ অক্ষত ও ১০০% সচল থাকবে।
+
+---
+
+## ৩১. Read-Only Page Cache Sharing & RAM De-duplication (পেজ ক্যাশ শেয়ারিং)
+
+একটি হোস্ট ওএসে একই সাথে ১,০০০টি ডকার কন্টেইনার রান করলেও হোস্টের র‍্যাম কীভাবে খালি থাকে? কেন প্রতিটা কন্টেইনারের ওএস ও লাইব্রেরি ফাইলের জন্য আলাদা করে মেমরি খরচ হয় না?
+
+এর রহস্য হলো লিনাক্স কার্নেলের **Page Cache Sharing** এবং **Memory De-duplication**।
+
+```mermaid
+flowchart TD
+    subgraph RAM_DeDuplication [Page Cache RAM De-duplication]
+        direction TB
+        subgraph PhysicalRAM [Host Physical RAM]
+            SharedCache["Shared Read-Only Page Cache <br>(Alpine Base Image - 5MB loaded once)"]
+        end
+        
+        Cont1[Container Process 1] -->|Reads /bin/sh| SharedCache
+        Cont2[Container Process 2] -->|Reads /bin/sh| SharedCache
+        Cont3[Container Process 3] -->|Reads /bin/sh| SharedCache
+        
+        subgraph PrivateRAM [Private RAM Allocated]
+            Cont1_Write["Container 1 Modifies File <br>(Copy-on-Write RAM Page)"]
+        end
+        
+        Cont1 -->|Writes /etc/conf| Cont1_Write
+    end
+
+    style SharedCache fill:#065f46,stroke:#10b981,color:#fff
+    style Cont1_Write fill:#7c2d12,stroke:#f97316,color:#fff
+```
+
+### কীভাবে পেজ ক্যাশ মেমরি অপ্টিমাইজ করে?
+ডকার কন্টেইনারের সমস্ত বেস ইমেজ লেয়ার রিড-অনলি (Read-Only) ফাইল হিসেবে হোস্টের `/var/lib/docker/overlay2/` ডিরেক্টরিতে সংরক্ষিত থাকে।
+
+1. **Loaded Once:** যখন প্রথম কন্টেইনারটি রান হয়, কার্নেল তার রিড-অনলি ফাইলগুলোকে (যেমন: `/bin/sh` বা শেয়ার্ড লাইব্রেরি `.so` ফাইল) হোস্টের ফিজিক্যাল র‍্যামের **Page Cache**-এ লোড করে।
+2. **De-duplicated Access:** এরপর যখন আরও ৯৯৯টি কন্টেইনার একই ইমেজ থেকে একই ফাইলগুলো রিড করতে চায়, লিনাক্স কার্নেল তাদের জন্য মেমরিতে নতুন কোনো স্পেস বরাদ্দ করে না। তারা সবাই সরাসরি হোস্ট ওএসের মেমরিতে থাকা ওই একই **Shared Page Cache** থেকে ফাইলগুলো এক্সেস করে।
+3. **Copy-on-Write:** যদি কোনো কন্টেইনার তার নিজস্ব কোনো ফাইলে রাইট করার চেষ্টা করে, কার্নেল মেমরিতে কেবল ওই নির্দিষ্ট পেজটির একটি ক্লোন কপি তৈরি করে কন্টেইনারের প্রাইভেট মেমরিতে লেখে। 
+- এই বৈপ্লবিক মেমরি শেয়ারিং মেকানিজমের কারণেই ডকার কন্টেইনার ভার্চুয়াল মেশিনের তুলনায় মেমরি ও রিসোর্সের দিক থেকে শতগুণ বেশি দক্ষ ও সাশ্রয়ী।
+
+---
+
+## ৩২. Enterprise Virtual Networking: MACVLAN vs. IPVLAN
+
+হাই-পারফরম্যান্স বেয়ার-মেটাল ডেটা সেন্টার বা টেলিকমিউনিকেশন অ্যাপ্লিকেশনে ডকারের ডিফল্ট ব্রিজ নেটওয়ার্ক (`docker0`) একটি বড় পারফরম্যান্স বটলেনেক তৈরি করতে পারে। আইপিটেবিলস (iptables), নেট (NAT) এবং ওএস কনটেক্সট সুইচিং এড়াতে এন্টারপ্রাইজ লেভেলে ফিজিক্যাল সুইচের সাথে সরাসরি কন্টেইনার সংযোগ করতে **MACVLAN** এবং **IPVLAN** ড্রাইভার ব্যবহৃত হয়।
+
+```mermaid
+flowchart TD
+    subgraph NetVirtualization [MACVLAN vs. IPVLAN Networking]
+        direction LR
+        subgraph MACVLAN_Mode ["1. MACVLAN (Unique MACs)"]
+            ContA["Container A <br>IP: 192.168.1.50 <br>MAC: AA:BB:CC:01"]
+            ContB["Container B <br>IP: 192.168.1.51 <br>MAC: AA:BB:CC:02"]
+        end
+
+        subgraph IPVLAN_Mode ["2. IPVLAN (Shared MAC)"]
+            ContC["Container C <br>IP: 192.168.1.60 <br>MAC: Host MAC"]
+            ContD["Container D <br>IP: 192.168.1.61 <br>MAC: Host MAC"]
+        end
+        
+        PhysSwitch["Physical Switch / Router <br>(Direct Connection)"]
+        
+        MACVLAN_Mode --->|Individual MAC packets| PhysSwitch
+        IPVLAN_Mode --->|Single MAC packets| PhysSwitch
+    end
+
+    style PhysSwitch fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### ১. MACVLAN ড্রাইভার:
+- **মেকানিজম:** MACVLAN ড্রাইভার হোস্টের ফিজিক্যাল নেটওয়ার্ক ইন্টারফেসকে (যেমন: `eth0`) সাব-ইন্টারফেসে বিভক্ত করে প্রতিটা কন্টেইনারকে একটি সম্পূর্ণ ইউনিক ভার্চুয়াল **MAC Address** এবং নিজস্ব সাবনেট থেকে রিয়েল আইপি বরাদ্দ করে।
+- **পারফরম্যান্স:** এটি ডকার ব্রিজ এবং ওএস ন্যাটিং (NAT) কে সম্পূর্ণ বাইপাস করে সরাসরি ফিজিক্যাল সুইচে ট্রাফিক পাঠায়, যা কন্টেইনারকে ফিজিক্যাল তারের সমান (Wire-speed) স্পিড এনে দেয়।
+- **সীমাবদ্ধতা:** আপনার ফিজিক্যাল নেটওয়ার্ক কার্ডে হাজার হাজার MAC এড্রেস হ্যান্ডেল করার মেমরি লিমিটেশন (MAC table overflow) হতে পারে। এছাড়া ক্লাউড এনভায়রনমেন্ট (যেমন AWS বা Azure)-এর সিকিউরিটি পলিসি অচেনা ম্যাক অ্যাড্রেসের প্যাকেটগুলো ড্রপ করে দেয়।
+
+### ২. IPVLAN ড্রাইভার (L2 এবং L3 মোড):
+- **মেকানিজম:** IPVLAN ড্রাইভার অনেকটা MACVLAN-এর মতোই কাজ করে, তবে এখানে সমস্ত কন্টেইনার হোস্টের ফিজিক্যাল নেটওয়ার্ক কার্ডের **একই MAC Address শেয়ার করে**। তারা কেবল আলাদা আলাদা আইপি এড্রেস ব্যবহার করে।
+- **সুবিধা:** যেহেতু ফিজিক্যাল সুইচের কাছে মাত্র একটিই ম্যাক অ্যাড্রেস দৃশ্যমান থাকে, এটি ম্যাক টেবিল ওভারফ্লো এড়ায় এবং ক্লাউড প্রোভাইডারদের সিস্টেমে কোনো প্যাকেট ড্রপ ছাড়াই চমৎকারভাবে কাজ করে।
+
+---
+
+## ৩৩. UTS Namespace: Hostname & Domain Isolation (ইউটিএস নেমস্পেস)
+
+ডকারের অন্যতম লাইটওয়েট কিন্তু অত্যন্ত গুরুত্বপূর্ণ নেমস্পেস হলো **UTS (UNIX Timesharing System) Namespace**। 
+
+```mermaid
+flowchart LR
+    subgraph UTSNamespace [UTS Namespace Hostname Isolation]
+        HostOS["Host Operating System <br>Hostname: production-node-1"]
+        
+        subgraph ContainerUTS ["UTS Namespace (CLONE_NEWUTS)"]
+            ContProc["Container Process <br>Hostname: api-service-container"]
+        end
+        
+        ContProc -->|Runs 'hostname db-server'| ContainerUTS
+        ContainerUTS -.->|Isolation Wall| HostOS
+    end
+
+    style HostOS fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style ContainerUTS fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### UTS নেমস্পেস কী আইসোলেট করে?
+UTS নেমস্পেস ওএসের **Hostname** এবং **Domain Name** আইসোলেট বা পৃথক করে।
+
+- **কার্নেল ফ্ল্যাগ:** ডকার যখন কন্টেইনার ক্রিয়েট করে, সে কার্নেলে `CLONE_NEWUTS` সিস্টেম ফ্ল্যাগটি পাস করে।
+- **নিরাপত্তা:** কন্টেইনারের ভেতরের কোনো প্রসেস যদি রুট প্রিভিলেজ নিয়ে হোস্টনেম পরিবর্তন করার চেষ্টা করে (যেমন: `hostname new-name`), তবে তা কেবল ওই কন্টেইনারের ভেতরের আইসোলেটেড বাউন্ডারিতেই পরিবর্তিত হবে। হোস্ট ওএসের বা অন্য কোনো রানিং কন্টেইনারের হোস্টনেমের ওপর এর বিন্দুমাত্র কোনো প্রভাব পড়বে না।
+
+---
+
 ## 💡 Senior Architect Insights & Best Practices Summary
 
-> "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি। কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
+> "ডকার মানে কেবল পোর্টেবিলিটি নয়, এটি হলো ডিস্ট্রিবিউটেড সিস্টেমের রিসোর্স অপ্টিমাইজেশন ও সিকিউরিটি বাউন্ডারির ভিত্তি. কার্নেলের আচরণ বুঝে কনফিগার করা কন্টেইনার আমাদের ক্লাউড খরচ অর্ধেকের বেশি কমিয়ে দিতে পারে।"
 
 ১. **Use Distroless or Alpine Images:** বেস ইমেজ হিসেবে বড় ওএসের পরিবর্তে (যেমন Ubuntu) স্রেফ রানটাইম সমৃদ্ধ **Distroless** বা **Alpine** ব্যবহার করুন। এতে ইমেজের এটাক সারফেস (Vulnerability) এবং সাইজ প্রায় ৯০% কমে যায়।
-২. **Avoid `--privileged` Flag:** `--privileged` ফ্ল্যাগ দিলে কন্টেইনার হোস্টের সমস্ত ডিভাইস ড্রাইভার ও মেমরি সরাসরি টাচ করার পারমিশন পায়। এটি কন্টেইনার আইসোলেশন দেဝ်য়ালকে ভেঙে চুরমার করে দেয়।
+২. **Avoid `--privileged` Flag:** `--privileged` ফ্ল্যাগ দিলে কন্টেইনার হোস্টের সমস্ত ডিভাইস ড্রাইভার ও মেমরি সরাসরি টাচ করার পারমিশন পায়। এটি কন্টেইনার আইসোলেশন দেওয়ালকে ভেঙে চুরমার করে দেয়।
 ৩. **Read-Only Root Filesystem:** সিকিউরিটি আরও জোরদার করতে কন্টেইনারের রুট ফাইলসিস্টেম রিড-অনলি হিসেবে মাউন্ট করতে পারেন (`--read-only`), শুধুমাত্র প্রয়োজনীয় নির্দিষ্ট লগ বা টেম্প ডিরেক্টরিগুলোকে ভলিউম দিয়ে ওপেন রেখে।
 
 ---
+
+
 
 
