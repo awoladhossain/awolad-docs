@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { ZoomIn, ZoomOut, RotateCcw, Copy, Check } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Copy, Check, Move } from "lucide-react";
 
 interface MermaidProps {
   chart: string;
@@ -15,8 +15,12 @@ export default function Mermaid({ chart }: MermaidProps) {
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [zoom, setZoom] = useState<number>(1.0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  
   const idRef = useRef(`mermaid-${++mermaidIdCounter}`);
+  const dragStart = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     let active = true;
@@ -69,14 +73,63 @@ export default function Mermaid({ chart }: MermaidProps) {
     };
   }, [chart]);
 
-  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.15, 2.0));
-  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.5));
-  const handleResetZoom = () => setZoom(1.0);
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.15, 2.5));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.4));
+  
+  const handleResetZoom = () => {
+    setZoom(1.0);
+    setPan({ x: 0, y: 0 });
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(chart);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Mouse Drag Events
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left-click drags
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!setIsDragging) return; // Hook guard check
+    if (e.buttons !== 1) {
+      if (isDragging) setIsDragging(false);
+      return;
+    }
+    setPan({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y,
+    });
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Mobile Touch Events
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    setIsDragging(true);
+    dragStart.current = {
+      x: e.touches[0].clientX - pan.x,
+      y: e.touches[0].clientY - pan.y,
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    setPan({
+      x: e.touches[0].clientX - dragStart.current.x,
+      y: e.touches[0].clientY - dragStart.current.y,
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
   };
 
   if (error) {
@@ -89,19 +142,27 @@ export default function Mermaid({ chart }: MermaidProps) {
   }
 
   return (
-    <div className="relative my-8 w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md">
+    <div className="relative my-8 w-full overflow-hidden rounded-2xl border border-white/10 bg-[#070709]/65 backdrop-blur-md shadow-inner select-none group">
       {/* Top Header/Toolbar */}
-      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-4 py-2.5 text-xs text-zinc-500">
-        <span className="font-mono tracking-wider uppercase text-emerald-400 font-semibold">Architectural Diagram</span>
+      <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between border-b border-white/10 bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
+        <div className="flex items-center gap-2">
+          <span className="font-mono tracking-wider uppercase text-emerald-400 font-bold select-none">
+            Architectural Canvas
+          </span>
+          <span className="hidden md:inline-flex items-center gap-1 text-[10px] text-zinc-500 font-medium bg-white/[0.04] border border-white/[0.05] px-2 py-0.5 rounded-full select-none">
+            <Move className="h-2.5 w-2.5 text-emerald-400" />
+            Drag to pan / Zoom to inspect
+          </span>
+        </div>
         
         {/* Controls Container */}
         <div className="flex items-center gap-3">
           {/* Zoom Controls */}
-          <div className="flex items-center gap-1 rounded-lg border border-white/5 bg-white/[0.03] p-0.5">
+          <div className="flex items-center gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-0.5">
             <button
               onClick={handleZoomOut}
               title="Zoom Out"
-              className="rounded p-1 hover:bg-white/10 hover:text-white transition-colors"
+              className="rounded-lg p-1.5 hover:bg-white/10 hover:text-white transition-colors"
               disabled={loading}
             >
               <ZoomOut className="h-3.5 w-3.5" />
@@ -112,16 +173,16 @@ export default function Mermaid({ chart }: MermaidProps) {
             <button
               onClick={handleZoomIn}
               title="Zoom In"
-              className="rounded p-1 hover:bg-white/10 hover:text-white transition-colors"
+              className="rounded-lg p-1.5 hover:bg-white/10 hover:text-white transition-colors"
               disabled={loading}
             >
               <ZoomIn className="h-3.5 w-3.5" />
             </button>
-            <div className="mx-1 h-3 w-px bg-white/10" />
+            <div className="mx-1 h-3.5 w-px bg-white/10" />
             <button
               onClick={handleResetZoom}
-              title="Reset Zoom"
-              className="rounded p-1 hover:bg-white/10 hover:text-white transition-colors"
+              title="Reset Zoom & Pan"
+              className="rounded-lg p-1.5 hover:bg-white/10 hover:text-white transition-colors"
               disabled={loading}
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -131,7 +192,7 @@ export default function Mermaid({ chart }: MermaidProps) {
           {/* Copy Button */}
           <button
             onClick={handleCopy}
-            className={`flex items-center gap-1.5 rounded-lg border border-white/5 bg-white/[0.03] px-2.5 py-1 text-[11px] font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold transition-all ${
               copied
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                 : "hover:bg-white/10 hover:text-white"
@@ -152,24 +213,44 @@ export default function Mermaid({ chart }: MermaidProps) {
         </div>
       </div>
 
-      {/* Render Output Area */}
-      <div className="flex justify-center p-6 md:p-8 overflow-auto max-h-[75vh] min-h-[200px] scrollbar-thin">
+      {/* Render Output Area (Interactive Canvas) */}
+      <div 
+        className="relative flex justify-center items-center p-8 overflow-hidden max-h-[75vh] min-h-[260px] scrollbar-none select-none"
+        style={{
+          cursor: isDragging ? "grabbing" : "grab",
+          background: "radial-gradient(circle, rgba(16,185,129,0.01) 0%, transparent 80%)"
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {loading ? (
-          <div className="flex h-32 w-full flex-col items-center justify-center space-y-3">
+          <div className="flex h-32 w-full flex-col items-center justify-center space-y-3 pointer-events-none">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
-            <span className="text-xs text-zinc-500">Rendering visual diagram...</span>
+            <span className="text-xs text-zinc-500">Initializing interactive canvas...</span>
           </div>
         ) : (
           <div
             ref={containerRef}
             style={{ 
-              transform: `scale(${zoom})`, 
-              transformOrigin: 'top center',
-              transition: 'transform 0.15s ease-out'
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, 
+              transformOrigin: "center center",
+              transition: isDragging ? "none" : "transform 0.15s ease-out",
             }}
-            className="w-full max-w-full text-slate-100 flex justify-center [&>svg]:max-w-full [&>svg]:h-auto shrink-0"
+            className="w-auto text-slate-100 flex justify-center [&>svg]:max-w-none [&>svg]:h-auto shrink-0 select-none pointer-events-none"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
+        )}
+        
+        {/* Sleek Touch Instructions for Mobile */}
+        {!loading && (
+          <div className="absolute bottom-3 left-4 text-[9px] font-mono text-zinc-600 uppercase tracking-widest pointer-events-none select-none opacity-60 group-hover:opacity-90 transition-opacity">
+            ⚡ Drag canvas to pan • Zoom with (+/-)
+          </div>
         )}
       </div>
     </div>
