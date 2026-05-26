@@ -871,7 +871,6 @@ flowchart TD
         IRQ --> NAPI_Mode["4. Linux NAPI (New API) Polling <br> CPU stops interrupts & actively polls Rx ring in a loop"]
         NAPI_Mode --> sk_buff["5. Allocate sk_buff & push to TCP Stack"]
     end
-end
 ```
 
 ### ক. NIC Rx Ring Buffer (DMA মেকানিক্স)

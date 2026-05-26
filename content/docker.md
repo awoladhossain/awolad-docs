@@ -945,18 +945,18 @@ sudo ip link set veth_host up
 flowchart TD
     subgraph MountPropagation ["Mount Propagation Behaviors"]
         direction TB
-        subgraph PrivateMode ["Private / rprivate (Default)"]
-            HostP["Host Mounts Drive"] -.-x|Blocked| ContP["Container NOT Seeing"]
+        subgraph PrivateMode ["Private Mode - Default"]
+            HostP["Host Mounts Drive"] -.-x|"Blocked"| ContP["Container NOT Seeing"]
         end
 
-        subgraph SharedMode ["Shared / rshared"]
-            HostS["Host Mounts Drive"] --->|Propagates| ContS["Container Sees Drive"]
-            ContS2["Container Mounts Drive"] --->|Propagates| HostS2["Host Sees Drive"]
+        subgraph SharedMode ["Shared Mode - rshared"]
+            HostS["Host Mounts Drive"] -->|"Propagates"| ContS["Container Sees Drive"]
+            ContS2["Container Mounts Drive"] -->|"Propagates"| HostS2["Host Sees Drive"]
         end
 
-        subgraph SlaveMode ["Slave / rslave"]
-            HostSl["Host Mounts Drive"] --->|Propagates| ContSl["Container Sees Drive"]
-            ContSl2["Container Mounts Drive"] -.-x|Blocked| HostSl2["Host NOT Seeing"]
+        subgraph SlaveMode ["Slave Mode - rslave"]
+            HostSl["Host Mounts Drive"] -->|"Propagates"| ContSl["Container Sees Drive"]
+            ContSl2["Container Mounts Drive"] -.-x|"Blocked"| HostSl2["Host NOT Seeing"]
         end
     end
 
@@ -1366,13 +1366,13 @@ RUN npm run build
 flowchart TD
     subgraph JailComparison ["Process Filesystem Jailing"]
         direction LR
-        subgraph ChrootJail ["1. chroot (Insecure)"]
+        subgraph ChrootJail ["1. chroot - Insecure"]
             chroot_in["Process Root changed <br>to /app/rootfs"]
             Escape["Root user can call <br>chroot() again and escape <br>using relative paths (../)"]
-            chroot_in -->|Escape Possible| Escape
+            chroot_in -->|"Escape Possible"| Escape
         end
 
-        subgraph PivotRootJail ["2. pivot_root (Secure & Final)"]
+        subgraph PivotRootJail ["2. pivot_root - Secure and Final"]
             pivot_in["Swaps Mount Namespaces <br>RootFS becomes absolute /"]
             OldRoot["Old Host Root moved <br>to temp directory"]
             Unmount["Old Host Root is <br>completely unmounted"]
@@ -2315,21 +2315,21 @@ const stripeKey = getSecret('STRIPE_SECRET_KEY', 'STRIPE_KEY_FILE');
 
 ```mermaid
 flowchart TD
-    subgraph AutoDBInit [PostgreSQL Entrypoint Auto Initialization]
-        HostSQL["Local init.sql File <br>(Creates schemas, enables UUID extensions)"]
+    subgraph AutoDBInit ["PostgreSQL Entrypoint Auto Initialization"]
+        HostSQL["Local init.sql File <br> Creates schemas, enables UUID extensions"]
         PostgresContainer["PostgreSQL Container Start"]
         
-        subgraph PostgresEngine [PostgreSQL Startup Engine]
+        subgraph PostgresEngine ["PostgreSQL Startup Engine"]
             CheckDir{"Is Database Dir Empty?"}
-            RunScripts["Execute all .sql & .sh scripts <br>inside /docker-entrypoint-initdb.d/"]
-            BootDB["Boot PostgreSQL Server <br>(Fully Configured Database)"]
+            RunScripts["Execute all .sql & .sh scripts <br> inside /docker-entrypoint-initdb.d/"]
+            BootDB["Boot PostgreSQL Server <br> Fully Configured Database"]
         end
         
-        HostSQL --->|Mount as Read-Only Volume| PostgresContainer
-        PostgresContainer ---> CheckDir
-        CheckDir --->|"Yes (First Boot)"| RunScripts
-        CheckDir --->|"No (Subsequent Boot)"| BootDB
-        RunScripts ---> BootDB
+        HostSQL -->|"Mount as Read-Only Volume"| PostgresContainer
+        PostgresContainer --> CheckDir
+        CheckDir -->|"Yes (First Boot)"| RunScripts
+        CheckDir -->|"No (Subsequent Boot)"| BootDB
+        RunScripts --> BootDB
     end
 ```
 
