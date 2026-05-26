@@ -109,8 +109,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
               <BookOpen className="h-4.5 w-4.5 text-emerald-400" />
             </div>
-            <span className="text-md font-bold tracking-tight text-white font-sans">
-              MD Core Docs
+            <span className="text-md font-bold tracking-tight text-white font-mono uppercase">
+              CORE KERNEL HUB
             </span>
           </div>
           
@@ -132,15 +132,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             System Design & Engineering
           </div>
 
-          <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-white">
-            Structured docs for <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-300 drop-shadow-[0_4px_15px_rgba(16,185,129,0.1)]">
-              practical learning
+          <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight leading-[1.15] text-white">
+            Advanced System <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 drop-shadow-[0_4px_20px_rgba(52,211,153,0.15)]">
+              Engineering Manuals
             </span>
           </h1>
 
-          <p className="text-md sm:text-lg text-zinc-400 max-w-2xl font-normal leading-relaxed">
-            ডাটাবেজ ইন্টারনালস, ডিস্ট্রিবিউটেড সিস্টেম আর্কিটেকচার এবং মেমরি ম্যানেজমেন্টের জটিল কনসেপ্টগুলো এক জায়গায় সাজানো। প্রতিটি টপিক সিনিয়র-লেভেল প্রডাকশন ইনসাইট সহকারে তৈরি।
+          <p className="text-md sm:text-lg text-zinc-400 max-w-2xl font-light leading-relaxed">
+            মেমরি ডিস্ট্রিবিউশন, প্রসেস ভার্চুয়ালাইজেশন এবং আই/ও মাল্টিপ্লেক্সিং এর মতো জটিল আর্কিটেকচারগুলোর প্রফেশনাল রিসোর্স হাব। প্রতিটি ম্যানুয়াল বাস্তবসম্মত সিস্টেম টিউনিং ও সিনিয়র-লেভেল প্রোডাকশন ইনসাইট দ্বারা সমৃদ্ধ।
           </p>
 
           {/* Stats Dashboard Row */}
