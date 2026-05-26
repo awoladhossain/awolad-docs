@@ -1033,6 +1033,181 @@ flowchart TD
 
 ---
 
+## ৩১. BGP Hijacking (বিজিপি হাইজ্যাকিং) ও ইন্টারনেট রাউটিং ধ্বংসের মেকানিক্স
+
+পুরো ইন্টারনেট মূলত স্বাধীন কিছু অটোনোমাস সিস্টেম বা **Autonomous Systems (AS)**-এর সমষ্টি। এই AS-গুলোর মধ্যে রাউটিং পাথ এক্সচেঞ্জ করার জন্য ব্যবহৃত প্রোটোকল হলো **BGP (Border Gateway Protocol)**। কিন্তু BGP-র ভেতরে কোনো বিল্ট-ইন ক্রিপ্টোগ্রাফিক সুরক্ষার অভাব থাকায় কীভাবে বড় দুর্ঘটনা ঘটে?
+
+### ক. BGP Hijacking কীভাবে ঘটে?
+ধরি, গুগল ওএসের একটি আইপি রেঞ্জ `8.8.8.0/24` (AS 15169)। গুগলের BGP রাউটার তার আশপাশের রাউটারদের বিজ্ঞাপন দিয়ে বলছে—*“আমার কাছে ৮.৮.৮.০/২৪ রেঞ্জের ট্রাফিক পাঠাও।”*
+* **আক্রমণ মেকানিজম:** কোনো হ্যাকার বা ক্ষতিকারক আইএসপি (Autonomous System X) যদি ভুল করে বা হ্যাকিংয়ের উদ্দেশ্যে BGP বিজ্ঞাপনে ঘোষণা করে—*“৮.৮.৮.০/২৪ আইপি রেঞ্জটি আসলে আমার মালিকানাধীন!”*
+* গ্লোবাল রাউটারগুলো যখন এই ফেইক বিজ্ঞাপন পায়, তারা দেখে হ্যাকারের রাউটারটি ভৌগলিকভাবে বা AS-পাথ (AS Path) হিসেবে গুগলের চেয়ে কাছে। তারা গুগলে ট্রাফিক পাঠানো বন্ধ করে সমস্ত ডাটা হ্যাকারের রাউটারে ফরোয়ার্ড করা শুরু করে।
+* এর ফলে মুহূর্তের মধ্যে কোটি কোটি মানুষের ট্রাফিক অন্য দেশে চলে যেতে পারে (যেমন ২০০৮ সালে পাকিস্তানের একটি আইএসপি দ্বারা ইউটিউবের ট্রাফিক হাইজ্যাক হয়েছিল)।
+
+```mermaid
+flowchart TD
+    subgraph BGPHijacking ["Border Gateway Protocol (BGP) Hijacking"]
+        direction TB
+        User["User Traffic to Google (8.8.8.8)"] --> Routers["Core Internet Routers"]
+        
+        subgraph RealPath ["Legitimate Route"]
+            Routers -->|"AS-Path: 3 Nodes"| Google["Google Data Center (AS 15169)"]
+        end
+        
+        subgraph HijackedPath ["Malicious Spoofed Route"]
+            Routers -->|"AS-Path: 1 Node (Shorter Path wins!)"| Hacker["Hacker Network (AS 99999) <br> Intercepts all traffic!"]
+        end
+    end
+```
+
+### খ. আরপিকিআই (RPKI) সুরক্ষা
+BGP হাইজ্যাকিং ঠেকাতে আধুনিক বিশ্বে **RPKI (Resource Public Key Infrastructure)** ব্যবহার করা হয়।
+* RPKI-তে আইপি মালিকরা তাদের পাবলিক আইপি রেঞ্জের মালিকানা ক্রিপ্টোগ্রাফিকভাবে সাইন করে **ROA (Route Origin Authorization)** রেকর্ড তৈরি করে।
+* অন্যান্য রাউটার যখন কোনো BGP বিজ্ঞাপন পায়, তারা RPKI ডেটাবেস চেক করে দেখে যে ওই Autonomous System-টি সত্যিই ওই আইপি রেঞ্জ বিজ্ঞাপন দেওয়ার অধিকারী কি না। ক্রিপ্টোগ্রাফিক ম্যাচ না হলে বিজ্ঞাপনটি সরাসরি রিজেক্ট করা হয়।
+
+---
+
+## ৩২. SYN Flood DDoS আক্রমণ ও কার্নেল স্তরের SYN Cookies ডিফেন্স
+
+নেটওয়ার্ক সিকিউরিটি এবং কার্নেল অপ্টিমাইজেশনের সবচেয়ে রোমাঞ্চকর যুদ্ধক্ষেত্র হলো **SYN Flood Attack** এবং ওএসের ভেতরের **SYN Cookies** প্রোটেকশন।
+
+### ক. SYN Flood আক্রমণ মেকানিজম
+আমরা জানি TCP হ্যান্ডশেক শুরু হয় `SYN` প্যাকেট দিয়ে।
+১. হ্যাকার ফেইক স্পুফড আইপি (Spoofed IP) ব্যবহার করে সার্ভারে লাখ লাখ `SYN` প্যাকেট পাঠায়।
+২. সার্ভার ভদ্রভাবে সকেট কানেকশন মেমরি বরাদ্দ করে এবং ক্লায়েন্টকে `SYN-ACK` প্যাকেট পাঠিয়ে তার উত্তরের অপেক্ষায় থাকে (Half-Open Connection)।
+৩. এই হাফ-ওপেন কানেকশনগুলো সার্ভারের **SYN Backlog Queue**-তে জমা থাকে।
+৪. যেহেতু হ্যাকারের সোর্স আইপিগুলো ফেইক, তাই ওপাশ থেকে কোনোদিনও ফাইনাল `ACK` আসে না। কিছুক্ষণ পর সার্ভারের SYN ব্যাকলগ কিউ সম্পূর্ণরূপে মেমরি পূর্ণ হয়ে ক্র্যাশ করে এবং রিয়েল ইউজাররা আর কানেক্ট হতে পারে না।
+
+```mermaid
+sequenceDiagram
+    autonumber
+    Hacker (Spoofed IP)->>Server: TCP SYN (Creates half-open socket)
+    Server->>Hacker (Spoofed IP): TCP SYN-ACK (Waiting for ACK...)
+    Note over Server: SYN Backlog Queue fills up! <br> No memory for real users! Server Crashes!
+```
+
+---
+
+### খ. কার্নেল ডিফেন্স: SYN Cookies (RFC 4987)
+সার্ভারের র‍্যাম শেষ হওয়া ঠেকাতে লিনাক্স কার্নেলের একটি অসাধারণ ডিফেন্স ইঞ্জিন রয়েছে, যা হলো **SYN Cookies**।
+
+```mermaid
+sequenceDiagram
+    autonumber
+    Note over Server: SYN Backlog is FULL! Active SYN Cookies mode!
+    Hacker (Spoofed IP)->>Server: TCP SYN
+    Note over Server: Server DOES NOT allocate memory! <br> Encodes connection parameters inside SYN-ACK ISN!
+    Server->>Hacker (Spoofed IP): TCP SYN-ACK (ISN = Crypto Cookie)
+    Note over Server: No RAM lost. Connection request forgotten for now.
+    Note over RealClient: Real client returns final ACK with Cookie + 1
+    RealClient->>Server: TCP ACK (Cookie + 1)
+    Note over Server: Decrypts & validates Cookie in ACK. <br> Allocates socket RAM only NOW!
+```
+
+১. যখন কার্নেল দেখে তার SYN Backlog Queue পূর্ণ হয়ে গেছে, সে ক্লায়েন্টদের জন্য মেমরি বা সকেট অ্যালোকেশন করা **সম্পূর্ণ বন্ধ করে দেয়**।
+২. ক্লায়েন্ট যখন `SYN` পাঠায়, সার্ভার মেমরিতে কিছু না রেখে কানেকশনের কিছু প্যারামিটার (যেমন MSS, টাইমস্ট্যাম্প) এবং একটি সিক্রেট কী দিয়ে একটি ক্রিপ্টোগ্রাফিক হ্যাশ জেনারেট করে। এই হ্যাশটিকে সে TCP-র **Initial Sequence Number (ISN)** বা সিকোয়েন্স নম্বর হিসেবে `SYN-ACK` প্যাকেটের সাথে ক্লায়েন্টকে ফেরত পাঠায়। একেই বলে **SYN Cookie**।
+৩. হ্যাকার যেহেতু ফেইক আইপি ব্যবহার করেছে, সে এই কুকি রিসিভও করতে পারে না এবং ফাইনাল `ACK` পাঠায় না। ফলে সার্ভারের এক বাইট মেমরিও নষ্ট হয় না!
+৪. রিয়েল ক্লায়েন্ট যখন `SYN-ACK` পায়, সে নিয়মানুযায়ী `ISN + 1` করে ফাইনাল `ACK` প্যাকেট পাঠায়।
+৫. সার্ভার ওই `ACK` প্যাকেটের সিকোয়েন্স নম্বর থেকে ১ বিয়োগ করে কুকিটি পুনরুদ্ধার করে এবং ডিক্রিপ্ট করে ভ্যালিডেট করে। কুকি সঠিক হলে সার্ভার নিশ্চিত হয় এটি রিয়েল ইউজার এবং **ঠিক তখনই সকেটের জন্য র‍্যামে মেমরি অ্যালোকেশন সম্পন্ন করে** সংযোগ চালু করে দেয়।
+
+---
+
+## ৩৩. MTU vs MSS এবং IP Packet Fragmentation-এর অন্তরাল
+
+আমরা প্রতি সেকেন্ডে যে ডেটা প্যাকেট পাঠাই, তার ফিজিক্যাল সাইজ কত বড় হতে পারে তা ওএস কার্নেল কীভাবে নির্ধারণ করে? এর পেছনে রয়েছে **MTU** এবং **MSS**-এর মেকানিক্স।
+
+```mermaid
+flowchart LR
+    subgraph PacketStructure ["Ethernet Frame Anatomy"]
+        direction LR
+        Eth["Ethernet Header <br> (14 Bytes)"] --- IP["IP Header <br> (20 Bytes)"]
+        IP --- TCP["TCP Header <br> (20 Bytes)"]
+        TCP --- Payload["TCP Payload (MSS) <br> (1460 Bytes)"]
+    end
+```
+
+### ক. MTU (Maximum Transmission Unit)
+MTU হলো কোনো ফিজিক্যাল নেটওয়ার্ক লিংক বা ইন্টারফেস দিয়ে একবারে পাস হতে পারা সর্বোচ্চ বড় ফ্রেম বা প্যাকেটের সাইজ (হেডারসহ)।
+* স্ট্যান্ডার্ড ইথারনেট এবং অন-লাইন ইন্টারনেটের ডিফল্ট MTU হলো **১৫০০ বাইট (1500 Bytes)**।
+
+### খ. MSS (Maximum Segment Size)
+MSS হলো কোনো প্যাকেটের ভেতরে থাকা নেটওয়ার্ক বা ট্রান্সপোর্ট হেডার ছাড়া **আসল ডাটার সর্বোচ্চ সাইজ (TCP Payload)**।
+$$\text{MSS} = \text{MTU} - \text{IP Header (20 bytes)} - \text{TCP Header (20 bytes)} = 1460 \text{ Bytes}$$
+* অর্থাৎ, স্ট্যান্ডার্ড নেটওয়ার্কে একটি প্যাকেটে সর্বোচ্চ ১৪৬০ বাইট মূল ডাটা পাঠানো যায়।
+
+---
+
+### গ. IP Packet Fragmentation ও PMTUD (Path MTU Discovery)
+ধরি, আপনার কম্পিউটারের MTU ১৫০০ বাইট, কিন্তু মাঝপথে কোনো একটি ওল্ড রাউটারের সর্বোচ্চ MTU ১৪০০ বাইট।
+* **Fragmentation (ফ্র্যাগমেন্টেশন):** আপনার ১৫০০ বাইটের প্যাকেটটি যখন ওই ১৪০০ বাইটের রাউটারে পৌঁছাবে, রাউটার প্যাকেটটিকে কেটে দুটি ভাগে (Fragments) ভাগ করে এবং ডেস্টিনেশনে পাঠায়। এটি অত্যন্ত ক্ষতিকর কারণ:
+  ১. রাউটারের সিপিইউর ওপর অতিরিক্ত চাপ পড়ে।
+  ২. প্যাকেটের যেকোনো একটি ফ্রাগমেন্ট হারালে পুরো আইপি প্যাকেটটি বাতিল হয়ে যায় এবং নতুন করে আবার পুরো ডাটা পাঠাতে হয়।
+* **DF (Don't Fragment) ফ্ল্যাগ ও PMTUD:** আধুনিক ওএস প্যাকেটের গায়ে **DF** ফ্ল্যাগ লাগিয়ে দেয়। রাউটার যদি দেখে প্যাকেটটি তার MTU থেকে বড় এবং DF ফ্ল্যাগ যুক্ত, সে প্যাকেটটি ড্রপ করে সোর্সকে একটি **ICMP Type 3, Code 4 (Fragmentation Needed but DF set)** প্যাকেট পাঠায়। সোর্স ডিভাইস এই মেসেজ পড়ে বুঝতে পারে মাঝের লিংকটি ছোট। সে স্বয়ংক্রিয়ভাবে তার MSS কমিয়ে দেয় যাতে কোনো প্যাকেট না কেটে সরাসরি গন্তব্যে চলে যায়। একে **Path MTU Discovery** বলে।
+
+---
+
+## ৩৪. gRPC Multiplexing বনাম HTTP/1.1 Pipelining-এর গভীর মেকানিক্স
+
+মাইক্রোসার্ভিসের যুগে কেন gRPC (যা HTTP/2 এর ওপর কাজ করে) এত জনপ্রিয় এবং কীভাবে এটি ক্লাসিক HTTP/1.1-এর চেয়ে ব্যান্ডউইথ অপ্টিমাইজেশন করে?
+
+```mermaid
+flowchart TD
+    subgraph HTTP_Pipelining ["HTTP/1.1 Pipelining - Head-of-Line Blocking (L7)"]
+        direction TB
+        Req1["Request 1 (Slow DB Query)"] --> Res1["Response 1"]
+        Req2["Request 2 (Fast Static CSS)"] -->|"Blocked! Must wait for Response 1"| Res2["Response 2"]
+    end
+    
+    subgraph gRPC_Multiplexing ["gRPC / HTTP/2 Multiplexing - Zero Blocking"]
+        direction TB
+        SingleTCP["Single TCP Socket Connection"] --> Stream1["Stream ID 1: Frame A | Frame C"]
+        SingleTCP --> Stream2["Stream ID 2: Frame B | Frame D"]
+        Note over SingleTCP: Binary Frames interleaved and processed concurrently!
+    end
+```
+
+### ক. HTTP/1.1 Pipelining ও Head-of-Line (HoL) Blocking
+HTTP/1.1-এ পাইপলাইনিং মেকানিজম ক্লায়েন্টকে রেসপন্স না পাওয়া সত্ত্বেও একের পর এক রিকোয়েস্ট পাঠাতে দেয়।
+* **সমস্যা:** কিন্তু HTTP/1.1 স্ট্যান্ডার্ড অনুযায়ী, সার্ভারকে অবশ্যই রিকোয়েস্ট যেভাবে ক্রমানুসারে এসেছে, সেই সিকোয়েন্সেই রেসপন্স ব্যাক করতে হবে। 
+* প্রথম এপিআই কোয়েরিটি যদি ডেটাবেস প্রসেসিংয়ের জন্য ৩ সেকেন্ড সময় নেয়, পেছনের দ্রুতগতির স্ট্যাটিক রেসপন্সগুলো তৈরি থাকা সত্ত্বেও ৩ সেকেন্ড আটকে থাকে। একেই বলে অ্যাপ্লিকেশন স্তরের **Head-of-Line (HoL) Blocking**।
+
+### খ. gRPC / HTTP/2 Multiplexing
+gRPC এবং HTTP/2 টেক্সট ডেটার পরিবর্তে পুরো ট্রাফিককে বাইনারি ফ্রেমে (Binary Frames) বিভক্ত করে এবং প্রতিটি ফ্রেমের সাথে একটি ইউনিক **Stream ID** বসিয়ে দেয়।
+* **কীভাবে কাজ করে?** একটি একক TCP কানেকশনের ভেতর দিয়ে একই সাথে লাখ লাখ ফ্রেম একসাথে কোনো সিকোয়েন্স ছাড়াই পাঠানো হয়। সার্ভার ফ্রেমগুলো পাওয়ার সাথে সাথে Stream ID দেখে প্রসেস করে।
+* কোনো একটি কোয়েরি স্লো হলে পেছনের দ্রুতগতির অন্য এপিআই রেসপন্সগুলোর ফ্রেমগুলো আগে রিড হয়ে সার্ভার থেকে ক্লায়েন্টে চলে যায়। অ্যাপ্লিকেশন লেয়ারে আর কোনো জ্যাম বা ব্লকিং থাকে না!
+
+---
+
+## ৩৫. Linux `epoll` বনাম `select` ও `poll`: লাখ লাখ কানেকশন হ্যান্ডলিংয়ের অন্তরাল
+
+Nginx বা Node.js-এর মতো হাই-পারফরম্যান্স সিঙ্গেল-থ্রেডেড সার্ভারগুলো কীভাবে একটি মেশিনে কোনো সিপিইউ ক্র্যাশ না করিয়ে একসাথে ১০ লাখের বেশি সচল লাইভ কানেকশন সচল রাখে? এর পেছনের আসল রহস্য হলো লিনাক্স কার্নেলের **I/O Multiplexing System Calls**।
+
+| সিস্টেম কল | টাইম কমপ্লেক্সিটি | সার্চিং মেকানিজম | সীমাবদ্ধতা |
+| :--- | :--- | :--- | :--- |
+| **`select()`** | $O(N)$ | প্যাকেটের সকেট রেডি কি না তা জানতে লুপের সাহায্যে প্রতিবার সমস্ত সকেটে লিনিয়ার সার্চ করে। | সর্বোচ্চ ১০২৪টির বেশি সকেট ফাইল ডেসক্রিপ্টর মনিটর করতে পারে না। |
+| **`poll()`** | $O(N)$ | `select` এর মতোই সমস্ত অ্যাক্টিভ সকেট ফাইল ডেসক্রিপ্টরের ওপরে লুপ চালায়। | সকেট ফাইলে কোনো সংখ্যাগত লিমিট নেই, কিন্তু হাই-ট্রাফিকে মারাত্মক স্লো। |
+| **`epoll()`** | $O(1)$ | রেড-ব্ল্যাক ট্রি (Red-Black Tree) ও রেডি লিস্ট ব্যবহার করে। ওএস নিজেই রেডি সকেট পুশ করে দেয়। | কোনো স্কেলেবিলিটি লিমিট নেই, কার্নেল লেভেলে অসাধারণ ফাস্ট। |
+
+```mermaid
+flowchart TD
+    subgraph epoll_Architecture ["Linux epoll (O(1) Scale) - Interrupt Callbacks"]
+        direction TB
+        NIC_Event["NIC receives network packet for Socket FD 45"] --> KernelCallback["Kernel NIC Driver triggers callback"]
+        KernelCallback --> ReadyList["Push FD 45 directly to epoll Ready List"]
+        ReadyList --> App["Nginx/Node.js reads Ready List in O(1) time without looping!"]
+    end
+```
+
+### কেন `select` এবং `poll` হাই-স্কেলে ধীরগতির?
+আপনি যদি ১ লাখ লাইভ কানেকশন ওপেন রাখেন এবং তার মধ্যে মাত্র ১টি সকেটে ডাটা প্যাকেট আসে, `select` বা `poll` কল করলে ওএসকে ওই ১টি সকেট খুঁজে বের করতে ১ লাখ সকেটের ওপরে লিনিয়ার লুপ চালাতে হয়। প্রতিবার প্যাকেট আসার সাথে সাথে এই মেমরি লুপ সিপিইউ সম্পূর্ণ শেষ করে ফেলে।
+
+### `epoll` কীভাবে ম্যাজিকের মতো কাজ করে?
+লিনাক্স কার্নেলের স্পেশাল সিস্টেম কল **`epoll`** সম্পূর্ণ ভিন্ন আর্কিটেকচার ব্যবহার করে:
+১. এটি মনিটর করা সকেটগুলোকে একটি অত্যন্ত দক্ষ ডাটা স্ট্রাকচার **Red-Black Tree**-তে স্টোর করে।
+২. যখনই কোনো নেটওয়ার্ক কার্ড (NIC) কোনো সকেটের জন্য ডাটা রিসিভ করে, ওএসের কার্নেল নিজে থেকেই একটি হার্ডওয়্যার ইভেন্ট ইন্টারাপ্ট দিয়ে ওই সকেট ফাইল ডেসক্রিপ্টরটিকে সরাসরি `epoll`-এর **Ready List**-এ পুশ করে দেয়।
+৩. Nginx বা Node.js যখন `epoll_wait()` কল করে, তাকে কোনো লুপ চালাতে হয় না। কার্নেল তাকে সরাসরি ওই রেডি লিস্টের ডাটা দিয়ে দেয়, যা সে **$O(1)$ জিরো লুপ কমপ্লেক্সিটি** ল্যাটেন্সিতে সরাসরি মেমরিতে রিড করে ফেলে। এর জন্যই আধুনিক ওয়েব স্কেলিং এত দ্রুত ও পারফেক্ট!
+
+---
+
 ## 💡 Systems Architect Networking Insights
 
 1. **Keep-Alive Optimization:** এপিআই কল করার সময় প্রতিবার নতুন TCP কানেকশন তৈরি না করে সর্বদা **HTTP Keep-Alive** সচল রাখুন। এটি হ্যান্ডশেকের ওভারহেড কমিয়ে দিয়ে এপিআই রেসপন্স স্পিড প্রায় ৩ গুণ বাড়িয়ে দেবে।
