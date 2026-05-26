@@ -2142,6 +2142,98 @@ flowchart TD
 
 ---
 
+### ৭. Production-Grade .dockerignore Configurations (সিকিউর ফাইল ইগনোর পলিসি)
+
+প্রোডাকশন-গ্রেড ডকারাইজেশনে **`.dockerignore`** ফাইল কনফিগার করা কেবল ফাইল অপ্টিমাইজেশন নয়, এটি একটি অত্যন্ত গুরুত্বপূর্ণ সিকিউরিটি এবং বিল্ড-স্ট্যাবিলিটি প্র্যাকটিস।
+
+```mermaid
+flowchart TD
+    subgraph DockerIgnoreShield [Build Context Filtering with .dockerignore]
+        HostFiles["Host Filesystem <br>(Code, Secrets, node_modules)"]
+        DockerDaemon["Docker Daemon Build Context"]
+        
+        HostFiles --->|1. Filters via .dockerignore| Filter["Filters Out: <br>- node_modules <br>- .env secrets <br>- Build artifacts .next/dist"]
+        Filter --->|2. Light-weight context sent| DockerDaemon
+    end
+```
+
+#### কেন `.dockerignore` ছাড়া কন্টেইনার ফেইল করে?
+1. **Binary Architecture Mismatch (ELF Class Mismatch):** আপনি যদি আপনার লোকাল উইন্ডোজ বা ম্যাকওএস মেশিনে `npm install` দিয়ে কন্টেইনার বিল্ড করার সময় `.dockerignore` ব্যবহার না করেন, তবে লোকাল মেশিনের **`node_modules`** সরাসরি কন্টেইনারে কপি হয়ে যাবে। যেহেতু কন্টেইনারটি লিনাক্স আলপাইন (Linux Alpine) ওএসে চলে, সেখানকার বাইনারি আর্কিটেকচার লোকাল ম্যাক/উইন্ডোজের সাথে মিলবে না। এর ফলে কন্টেইনারটি রান করার সাথে সাথে প্রসেসটি ক্র্যাশ করবে এবং ওএসে কুখ্যাত `Cannot find module` অথবা `Wrong ELF class` এরর দেখাবে।
+2. **Secrets Leakage:** `.env` বা লোকাল কি-স্টোর ফাইলগুলো ইগনোর না করলে তা ইমেজের লেয়ারে বিল্ড হয়ে যাবে এবং হ্যাকাররা ডকার হাব থেকে আপনার ইমেজটি পুল করে খুব সহজে আপনার ডাটাবেস পাসওয়ার্ড বা এপিআই কি বের করে নিতে পারবে।
+3. **Build Latency:** গিগাবাইট সাইজের `node_modules` ডকার ডেমনে সেন্ড হতে অনেক লম্বা সময় নিবে এবং আপনার পাইপলাইন ড্র্যাগ করবে।
+
+#### ক. Next.js Frontend `.dockerignore` (`/frontend/.dockerignore`):
+```text
+# Dependency folders
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js Build Outputs (Huge Size)
+.next/
+out/
+build/
+
+# IDEs & System files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Secrets & Environment variables (Critical Security)
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+.env*.local
+
+# Version Control
+.git
+.gitignore
+.github
+```
+
+#### খ. NestJS Backend `.dockerignore` (`/backend/.dockerignore`):
+```text
+# Local Dependencies
+node_modules/
+
+# TypeScript build outputs
+dist/
+build/
+
+# Debug and Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.logs/
+*.log
+
+# Environment Files
+.env
+.env.production
+.env.development
+.env.local
+
+# OS and Editors
+.DS_Store
+.idea/
+.vscode/
+
+# Git metadata
+.git
+.gitignore
+```
+
+---
+
 ## ৩৫. Ultimate Docker CLI Cheat Sheet (ডকার কমান্ডের সম্পূর্ণ চিট-শীট)
 
 ডকার ইকোসিস্টেমের দৈনন্দিন কাজ এবং অ্যাডভান্সড ট্রাবলশুটিংয়ের জন্য প্রয়োজনীয় সব কমান্ড ক্যাটাগরি অনুযায়ী সংকলন করে এই চিট-শীটটি প্রস্তুত করা হয়েছে। এটি যেকোনো সময় কুইক রেফারেন্স হিসেবে ব্যবহারের উপযোগী।
