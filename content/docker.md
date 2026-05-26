@@ -2234,6 +2234,81 @@ yarn-error.log*
 
 ---
 
+### ৮. Production-Grade Docker Secrets & Environment Security (ডকার সিক্রেটস ও এনভায়রনমেন্ট নিরাপত্তা)
+
+রিয়েল-ওয়ার্ল্ড প্রোডাকশনে কন্টেইনারে সরাসরি প্লেইন টেক্সট এনভায়রনমেন্ট ভেরিয়েবল (যেমন: `DATABASE_URL=postgresql://...`) ব্যবহার করা একটি চরম সিকিউরিটি রিস্ক।
+
+```mermaid
+flowchart TD
+    subgraph DockerSecretsFlow [Secure Secrets Injection via Docker Secrets]
+        HostSecrets["Host Secrets Files <br>(db_password.txt / stripe_key.txt)"]
+        DockerEngine["Docker Compose / Swarm Engine"]
+        
+        subgraph ContainerRAM [Secure Container RAM Filesystem]
+            MountedSecret1["/run/secrets/db_password <br>(In-memory decrypted file)"]
+            MountedSecret2["/run/secrets/stripe_key <br>(In-memory decrypted file)"]
+        end
+        
+        HostSecrets --->|1. Loaded securely| DockerEngine
+        DockerEngine --->|2. Mounts dynamically in RAM| ContainerRAM
+        ContainerRAM --->|3. App reads file in RAM| AppProcess["NestJS / Next.js Process <br>(No exposure in environment variables)"]
+    end
+```
+
+#### কেন Environment Variables প্রোডাকশনে অনিরাপদ?
+আপনি যদি ডকার কম্পোজে সরাসরি প্লেইন টেক্সট পাসওয়ার্ড ব্যবহার করেন, তবে সার্ভারে অ্যাক্সেস থাকা যেকোনো ব্যক্তি বা ম্যালিশিয়াস প্রসেস খুব সহজে `docker inspect <container_id>` বা `docker compose config` কমান্ড রান করে আপনার সমস্ত সেন্সিটিভ পাসওয়ার্ড ও সিক্রেট এপিআই কি প্লেইন টেক্সটে দেখে নিতে পারবে।
+
+#### সমাধান: Docker Secrets (ইন-মেমরি ফাইল মাউন্ট)
+ডকার সিক্রেটস সেন্সিটিভ ডেটা সরাসরি এনভায়রনমেন্ট ভেরিয়েবলে না লিখে কন্টেইনারের ভেতরের একটি সুরক্ষিত ইন-মেমরি ওনলি লোকেশনে (**`/run/secrets/`**) ফাইল আকারে মাউন্ট করে। এই ফাইলগুলো কখনো কন্টেইনারের ডিস্কে বা ইমেজের লেয়ারে পারসিস্ট হয় না।
+
+#### ক. ডকার কম্পোজে সিক্রেট ইন্টিগ্রেশন (`docker-compose.yml`):
+```yaml
+version: '3.8'
+
+services:
+  nestjs-api:
+    image: my-app:latest
+    secrets:
+      - db_password
+      - stripe_key
+    environment:
+      # সরাসরি ভ্যালু না লিখে ফাইলের পাথ রিড করার ইন্সট্রাকশন দেওয়া
+      - DATABASE_PASSWORD_FILE=/run/secrets/db_password
+      - STRIPE_KEY_FILE=/run/secrets/stripe_key
+    networks:
+      - saas-network
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt # হোস্টের সিক্রেট টেক্সট ফাইল
+  stripe_key:
+    file: ./secrets/stripe_key.txt
+```
+
+#### খ. NestJS ব্যাকএন্ডে সিক্রেট ফাইল রিড করার কোড প্যাটার্ন:
+আমাদের অ্যাপ্লিকেশনে সরাসরি এনভায়রনমেন্ট ভেরিয়েবল চেক না করে লিনাক্স কার্নেলের মেমরি ফাইল থেকে সিক্রেট রিড করতে এই সিকিউর কোড ডিজাইন প্যাটার্নটি ব্যবহার করতে হবে:
+
+```typescript
+import * as fs from 'fs';
+
+export function getSecret(envVarName: string, fileEnvVarName: string): string {
+  // ১. প্রথমে মেমরি মাউন্টেড সিক্রেট ফাইলের পাথ চেক করা
+  const secretFilePath = process.env[fileEnvVarName];
+  if (secretFilePath && fs.existsSync(secretFilePath)) {
+    return fs.readFileSync(secretFilePath, 'utf8').trim();
+  }
+  
+  // ২. ফ্যালব্যাক হিসেবে সাধারণ এনভায়রনমেন্ট ভেরিয়েবল চেক করা (ডেভেলপমেন্টের জন্য)
+  return process.env[envVarName] || '';
+}
+
+// ব্যবহার করার নিয়ম:
+const dbPassword = getSecret('DATABASE_PASSWORD', 'DATABASE_PASSWORD_FILE');
+const stripeKey = getSecret('STRIPE_SECRET_KEY', 'STRIPE_KEY_FILE');
+```
+
+---
+
 ## ৩৫. Ultimate Docker CLI Cheat Sheet (ডকার কমান্ডের সম্পূর্ণ চিট-শীট)
 
 ডকার ইকোসিস্টেমের দৈনন্দিন কাজ এবং অ্যাডভান্সড ট্রাবলশুটিংয়ের জন্য প্রয়োজনীয় সব কমান্ড ক্যাটাগরি অনুযায়ী সংকলন করে এই চিট-শীটটি প্রস্তুত করা হয়েছে। এটি যেকোনো সময় কুইক রেফারেন্স হিসেবে ব্যবহারের উপযোগী।
