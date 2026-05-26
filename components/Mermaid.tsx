@@ -14,7 +14,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [zoom, setZoom] = useState<number>(1.0);
+  const [zoom, setZoom] = useState<number>(1.2); // Start at 120% default zoom for high-legibility crispness
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
@@ -37,17 +37,21 @@ export default function Mermaid({ chart }: MermaidProps) {
           startOnLoad: false,
           theme: "dark",
           securityLevel: "loose",
-          // Prevent shrinking of diagrams, allowing them to render at full crisp size
+          // Let Mermaid calculate bounding boxes natively so text NEVER gets clipped
           flowchart: {
             useMaxWidth: false,
             htmlLabels: true,
             curve: "basis",
+            nodeSpacing: 65, // More breathing room between nodes
+            rankSpacing: 65, // More breathing room between columns/ranks
+            padding: 22,    // Extra padding around text inside boxes
           },
           sequence: {
             useMaxWidth: false,
             showSequenceNumbers: true,
-            boxMargin: 10,
-            actorMargin: 50,
+            boxMargin: 15,
+            actorMargin: 65,
+            messageMargin: 45,
           },
           gantt: {
             useMaxWidth: false,
@@ -60,8 +64,6 @@ export default function Mermaid({ chart }: MermaidProps) {
             lineColor: "#64748b", // slate-500
             secondaryColor: "#0d9488", // teal-600
             tertiaryColor: "#0f172a", // slate-900
-            // High-readability font variables
-            fontSize: "15px",
             fontFamily: "Inter, system-ui, -apple-system, sans-serif",
           },
         });
@@ -99,7 +101,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.4));
   
   const handleResetZoom = () => {
-    setZoom(1.0);
+    setZoom(1.2); // Reset to standard high-legibility zoom
     setPan({ x: 0, y: 0 });
   };
 
@@ -237,7 +239,7 @@ export default function Mermaid({ chart }: MermaidProps) {
 
       {/* Render Output Area (Interactive Canvas) */}
       <div 
-        className="relative flex justify-center items-center p-8 overflow-hidden max-h-[75vh] min-h-[300px] scrollbar-none select-none"
+        className="relative flex justify-center items-center p-8 overflow-hidden max-h-[75vh] min-h-[380px] scrollbar-none select-none"
         style={{
           cursor: isDragging ? "grabbing" : "grab",
           background: "radial-gradient(circle, rgba(16,185,129,0.01) 0%, transparent 80%)"
