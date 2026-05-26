@@ -1,297 +1,252 @@
 ---
 title: "Database Design & SQL Concept"
-description: "নর্মালাইজেশন, BCNF, N+1 Query Problem, রিলেশনশিপ, referential action, WHERE, HAVING এবং GROUP BY নিয়ে একটি সংক্ষিপ্ত প্রফেশনাল গাইড।"
+description: "নর্মালাইজেশন, BCNF, N+1 Query, ওএলটিপি বনাম ওএলএপি ডিজাইন, রিলেশনাল ইন্টিগ্রিটি এবং এসকিউএল কুয়েরি ইঞ্জিনের এক্সিকিউশন অর্ডার নিয়ে একটি মাস্টারক্লাস গাইডবুক।"
 category: "Database"
 ---
 
-# ডাটাবেজ ডিজাইন ও SQL কনসেপ্ট
+# High-Performance Database Design & SQL Concepts
 
-এই নোটে ডাটাবেজ ডিজাইনের কিছু গুরুত্বপূর্ণ ধারণা সংক্ষেপে ব্যাখ্যা করা হয়েছে। লক্ষ্য হলো টেবিল ডিজাইন, ডেটা ডুপ্লিকেশন কমানো, কুয়েরি পারফরম্যান্স বোঝা এবং SQL aggregation পরিষ্কারভাবে ব্যবহার করা।
+সিস্টেম আর্কিটেকচার ডিজাইনে ডাটাবেজ মডেলিং কেবল টেবিল তৈরি করা নয়; এটি ডেটার নির্ভরযোগ্যতা (Referential Integrity), কুয়েরির পারফরম্যান্স এবং ডেটা ডুপ্লিকেশন কমানোর মূল চালিকাশক্তি। এই ম্যানুয়ালে ডাটাবেজ নরমালাইজেশন, BCNF, কুয়েরি অপ্টিমাইজেশন এবং হাই-স্কেল আরডিবিএমএস (RDBMS) বেস্ট প্র্যাকটিসগুলো বিস্তারিতভাবে ব্যাখ্যা করা হলো।
 
-## Normalization
+---
 
-Normalization হলো এমন একটি ডিজাইন প্রক্রিয়া যার মাধ্যমে ডেটাবেজে ডুপ্লিকেশন কমানো, ডেটার consistency বজায় রাখা এবং update anomaly, insert anomaly, delete anomaly কমানো হয়।
+## ১. Database Normalization (1NF, 2NF, 3NF, BCNF)
 
-### 1NF: First Normal Form
+### Core Idea
+Normalization হলো একটি ধাপে ধাপে টেবিল ডিজাইন প্রক্রিয়া যার মূল উদ্দেশ্য হলো ডেটা ডুপ্লিকেশন (Redundancy) কমানো এবং Insert, Update ও Delete Anomaly (অসঙ্গতি) দূর করা। 
 
-একটি টেবিল 1NF-এ থাকতে হলে প্রতিটি কলামে atomic value থাকতে হবে। অর্থাৎ একটি সেলে একাধিক মান রাখা যাবে না।
+```mermaid
+flowchart TD
+    Raw[Raw Unnormalized Data] -->|1NF: Remove repeating groups & Ensure Atomic values| NF1["First Normal Form (1NF)"]
+    NF1 -->|2NF: Remove Partial Dependencies on Composite Keys| NF2["Second Normal Form (2NF)"]
+    NF2 -->|3NF: Remove Transitive Dependencies between Non-Keys| NF3["Third Normal Form (3NF)"]
+    NF3 -->|BCNF: Ensure every determinant X in X -> Y is a Super Key| BCNF["Boyce-Codd Normal Form (BCNF)"]
 
-উদাহরণ হিসেবে `skills` কলামে `SQL, Java, PHP` একসাথে রাখা হলে সেটি 1NF ভঙ্গ করে। এর পরিবর্তে প্রতিটি skill আলাদা row বা আলাদা related table-এ রাখা উচিত।
-
-মূল নিয়ম:
-
-- একটি সেলে একটি মাত্র value থাকবে।
-- repeating group রাখা যাবে না।
-- একই ধরনের multiple values আলাদা row বা child table-এ যাবে।
-
-### 2NF: Second Normal Form
-
-2NF মূলত composite primary key থাকা টেবিলের ক্ষেত্রে গুরুত্বপূর্ণ। একটি টেবিল 2NF-এ থাকতে হলে সেটি আগে 1NF হতে হবে এবং কোনো non-key column composite key-এর আংশিক অংশের ওপর নির্ভর করতে পারবে না।
-
-উদাহরণ:
-
-```text
-Enrollment(StudentID, CourseID, CourseName, StudentName)
+    style Raw fill:#7f1d1d,stroke:#ef4444,color:#fff
+    style NF1 fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style NF2 fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style NF3 fill:#065f46,stroke:#10b981,color:#fff
+    style BCNF fill:#047857,stroke:#10b981,color:#fff
 ```
 
-এখানে primary key যদি `(StudentID, CourseID)` হয়, তাহলে `CourseName` শুধু `CourseID`-এর ওপর নির্ভর করে। এটি partial dependency। তাই `CourseName` আলাদা `Courses` টেবিলে রাখা উচিত।
+### The Normalization Steps & Mathematical Rules
 
-মূল নিয়ম:
+#### First Normal Form (1NF)
+* **Rule:** প্রতিটি সেল বা কলামে অবশ্যই **Atomic Value** (একক বা অবিভাজ্য মান) থাকতে হবে। কোনো কলামে কমা দিয়ে একাধিক মান রাখা যাবে না।
+* **Example:** `Skills` কলামে `"SQL, Java, Go"` একসাথে রাখলে তা 1NF ভঙ্গ করে। এটিকে আলাদা রো বা চাইল্ড টেবিলে বিভক্ত করতে হবে।
 
-- composite key থাকলে non-key column পুরো key-এর ওপর নির্ভর করবে।
-- key-এর শুধু একটি অংশের ওপর dependency থাকলে আলাদা table তৈরি করতে হবে।
+#### Second Normal Form (2NF)
+* **Rule:** টেবিলটিকে অবশ্যই 1NF হতে হবে এবং কোনো **Partial Dependency** থাকা যাবে না। অর্থাৎ, টেবিলে যদি Composite Primary Key (যৌথ চাবি) থাকে, তবে কোনো নন-কী (Non-Key) কলাম সেই চাবির আংশিক বা একটিমাত্র অংশের ওপর নির্ভরশীল হতে পারবে না।
+* **Example:** `Enrollment(StudentID, CourseID, CourseName)`. এখানে Composite Key হলো `(StudentID, CourseID)`। কিন্তু `CourseName` শুধুমাত্র `CourseID` এর ওপর নির্ভর করে। এটি একটি Partial Dependency। সমাধান হলো `Course` টেবিলকে আলাদা করা।
 
-### 3NF: Third Normal Form
+#### Third Normal Form (3NF)
+* **Rule:** টেবিলটিকে 2NF হতে হবে এবং কোনো **Transitive Dependency** থাকা যাবে না। অর্থাৎ, কোনো নন-কী কলাম অন্য কোনো নন-কী কলামের ওপর নির্ভর করতে পারবে না।
+* **Example:** `Employee(EmpID, DeptID, DeptName)`. এখানে `EmpID` (Primary Key) নির্ধারণ করে `DeptID`-কে, এবং `DeptID` নির্ধারণ করে `DeptName`-কে। যেহেতু `DeptID` এবং `DeptName` উভয়ই নন-কী কলাম, এটি Transitive Dependency। সমাধান হলো `Departments` টেবিল আলাদা করা।
 
-একটি টেবিল 3NF-এ থাকতে হলে সেটি আগে 2NF হতে হবে এবং কোনো non-key column অন্য non-key column-এর ওপর নির্ভর করতে পারবে না। এটিকে transitive dependency বলা হয়।
+#### Boyce-Codd Normal Form (BCNF)
+* **Rule:** 3NF-এর চেয়েও কঠোর ফর্ম। কোনো Functional Dependency $X \rightarrow Y$ থাকলে, **$X$-কে অবশ্যই একটি Super Key (বা Candidate Key) হতে হবে**।
+* **Simplified:** টেবিলে যে কলাম বা কলাম-সেট অন্য কলামের মান নির্ধারণ করে (Determinant), সেটিকে অবশ্যই পুরো রো-কে অনন্যভাবে চেনার ক্ষমতা থাকতে হবে।
 
-উদাহরণ:
+---
 
-```text
-Employee(EmployeeID, DepartmentID, DepartmentName)
-```
+### Normalization Summary Reference Table
 
-এখানে `EmployeeID` থেকে `DepartmentID` জানা যায়, আবার `DepartmentID` থেকে `DepartmentName` জানা যায়। তাই `DepartmentName` সরাসরি employee table-এ না রেখে আলাদা `Departments` table-এ রাখা ভালো।
-
-মূল নিয়ম:
-
-- non-key column শুধু primary key-এর ওপর নির্ভর করবে।
-- non-key থেকে non-key dependency থাকলে সেটি আলাদা table-এ নিতে হবে।
-
-### BCNF: Boyce-Codd Normal Form
-
-BCNF হলো 3NF-এর আরও কঠোর রূপ। কোনো functional dependency `X -> Y` থাকলে `X` অবশ্যই super key হতে হবে।
-
-সহজভাবে বলা যায়, একটি টেবিলে যে column বা column-set অন্য column নির্ধারণ করছে, সেটি পুরো row uniquely identify করতে সক্ষম হতে হবে।
-
-মূল নিয়ম:
-
-- প্রতিটি determinant অবশ্যই super key হবে।
-- কোনো non-key determinant থাকলে table decomposition করতে হবে।
-- BCNF সাধারণত dependency conflict এবং hidden redundancy কমাতে সাহায্য করে।
-
-### Normalization Summary
-
-| Normal Form | মূল উদ্দেশ্য |
-| :--- | :--- |
-| 1NF | প্রতিটি সেলে atomic value রাখা |
-| 2NF | partial dependency দূর করা |
-| 3NF | transitive dependency দূর করা |
-| BCNF | প্রতিটি determinant-কে super key নিশ্চিত করা |
-
-## N+1 Query Problem
-
-N+1 Query Problem ঘটে যখন একটি parent list আনতে ১টি query চালানো হয়, তারপর প্রতিটি parent row-এর related data আনতে আলাদা query চালানো হয়।
-
-ধরা যাক `authors` এবং `books` নামে দুটি table আছে। সব author এবং তাদের book title দেখাতে গিয়ে যদি প্রথমে authors আনা হয় এবং পরে loop-এর ভেতর প্রতিটি author-এর books query করা হয়, তাহলে N+1 সমস্যা তৈরি হবে।
-
-সমস্যাযুক্ত প্যাটার্ন:
-
-```sql
-SELECT * FROM authors;
-```
-
-এরপর প্রতিটি author-এর জন্য:
-
-```sql
-SELECT * FROM books WHERE author_id = 1;
-SELECT * FROM books WHERE author_id = 2;
-SELECT * FROM books WHERE author_id = 3;
-```
-
-যদি author সংখ্যা 100 হয়, তাহলে মোট query হবে 101টি। এটি response time বাড়ায় এবং database server-এর ওপর অপ্রয়োজনীয় চাপ তৈরি করে।
-
-### সমাধান
-
-সাধারণ সমাধান হলো eager loading, JOIN, batching অথবা preloading ব্যবহার করা।
-
-SQL JOIN উদাহরণ:
-
-```sql
-SELECT authors.name, books.title
-FROM authors
-JOIN books ON authors.id = books.author_id;
-```
-
-ORM উদাহরণ:
-
-```php
-$authors = Author::with('books')->get();
-```
-
-ভালো practice:
-
-- loop-এর ভেতরে repeated database query এড়ান।
-- relationship data আগে থেকেই eager load করুন।
-- large dataset হলে pagination এবং selective column ব্যবহার করুন।
-- query count monitoring করার জন্য debug toolbar বা profiler ব্যবহার করুন।
-
-## Database Relationships
-
-Database relationship নির্ধারণ করার সময় দুই দিক থেকেই প্রশ্ন করা উচিত। একটি entity অন্য entity-এর কতগুলো record-এর সাথে যুক্ত হতে পারে, সেটিই relationship type নির্ধারণ করে।
-
-### One-to-One
-
-একটি record অন্য table-এর সর্বোচ্চ একটি record-এর সাথে যুক্ত থাকে।
-
-উদাহরণ:
-
-```text
-User -> UserProfile
-```
-
-চেনার উপায়:
-
-- `profiles` table-এ `user_id` foreign key থাকবে।
-- `user_id` সাধারণত unique constraint সহ থাকবে।
-- একটি user-এর একটি profile, এবং একটি profile শুধু একটি user-এর।
-
-### One-to-Many
-
-একটি parent record-এর অনেকগুলো child record থাকতে পারে, কিন্তু প্রতিটি child record একটি parent-এর সাথে যুক্ত থাকে।
-
-উদাহরণ:
-
-```text
-Customer -> Orders
-Post -> Comments
-Category -> Products
-```
-
-চেনার উপায়:
-
-- foreign key সবসময় many side-এ থাকে।
-- `orders` table-এ `customer_id` থাকবে।
-- একটি customer অনেক order করতে পারে, কিন্তু একটি order একটি customer-এর।
-
-### Many-to-Many
-
-দুই দিকেই একাধিক record যুক্ত হতে পারে। এই relationship বাস্তবায়নের জন্য একটি junction, bridge বা pivot table দরকার হয়।
-
-উদাহরণ:
-
-```text
-Student <-> Course
-Post <-> Tag
-```
-
-চেনার উপায়:
-
-- মাঝখানে আলাদা table থাকে।
-- `enrollments(student_id, course_id)` বা `post_tags(post_id, tag_id)` এর মতো structure ব্যবহার হয়।
-- junction table-এ প্রয়োজনে অতিরিক্ত column রাখা যায়, যেমন `enrolled_at`, `status`, `created_at`।
-
-## Foreign Key Placement
-
-| Relationship | Foreign Key কোথায় থাকবে |
-| :--- | :--- |
-| One-to-One | যেই table dependent, সেখানে unique foreign key |
-| One-to-Many | many side বা child table-এ |
-| Many-to-Many | junction বা pivot table-এ দুই table-এর foreign key |
-
-## SQL Delete Rules
-
-Referential action নির্ধারণ করে parent row delete বা update হলে child table-এর related row-গুলোর ওপর কী প্রভাব পড়বে।
-
-### ON DELETE CASCADE
-
-Parent row delete হলে child table-এর related row-গুলোও delete হয়ে যায়।
-
-ব্যবহার করবেন যখন child data parent ছাড়া অর্থপূর্ণ নয়। যেমন একটি invoice delete হলে তার invoice items delete হওয়া স্বাভাবিক হতে পারে।
-
-### ON DELETE SET NULL
-
-Parent row delete হলে child table-এর foreign key column `NULL` হয়ে যায়। এ ক্ষেত্রে foreign key column nullable হতে হবে।
-
-ব্যবহার করবেন যখন child data রাখতে হবে, কিন্তু relationship বিচ্ছিন্ন করা যাবে। যেমন কোনো employee resign করলে project table-এর `manager_id` null করা।
-
-### ON DELETE RESTRICT বা NO ACTION
-
-Child row থাকা অবস্থায় parent row delete করতে দেয় না। এটি accidental delete থেকে data protect করে।
-
-ব্যবহার করবেন যখন parent data delete করার আগে related child data manually handle করা প্রয়োজন।
-
-### ON DELETE SET DEFAULT
-
-Parent row delete হলে child foreign key column একটি predefined default value পায়। এটি database support এবং schema design-এর ওপর নির্ভর করে।
-
-### Referential Action Summary
-
-| Rule | Parent delete হলে child data |
-| :--- | :--- |
-| CASCADE | related row delete হয় |
-| SET NULL | foreign key null হয় |
-| RESTRICT / NO ACTION | delete operation block হয় |
-| SET DEFAULT | default value বসে |
-
-SQL উদাহরণ:
-
-```sql
-CREATE TABLE orders (
-  id INT PRIMARY KEY,
-  customer_id INT,
-  FOREIGN KEY (customer_id)
-    REFERENCES customers(id)
-    ON DELETE CASCADE
-);
-```
-
-## WHERE vs HAVING
-
-`WHERE` এবং `HAVING` দুটোই filtering-এর জন্য ব্যবহৃত হয়, কিন্তু তাদের কাজের সময় আলাদা।
-
-| বিষয় | WHERE | HAVING |
+| Normal Form | Target Dependency | Solution Method |
 | :--- | :--- | :--- |
-| কখন কাজ করে | grouping-এর আগে | grouping-এর পরে |
-| কী filter করে | individual row | grouped result |
-| aggregate function | সাধারণত ব্যবহার করা যায় না | aggregate condition-এ ব্যবহার হয় |
-| performance impact | আগেই row কমায় | group তৈরি হওয়ার পর filter করে |
+| **1NF** | Repeating Groups / Multi-values | সেলের মানগুলোকে আলাদা রো বা রিলেটেড টেবিলে বিভক্ত করা। |
+| **2NF** | Partial Dependencies | Composite primary key-এর আংশিক নির্ভরশীল কলামগুলো আলাদা টেবিলে সরানো। |
+| **3NF** | Transitive Dependencies | নন-কী থেকে নন-কী কলামের নির্ভরশীলতা ভেঙে নতুন রিলেশনশিপ তৈরি করা। |
+| **BCNF** | Non-Super Key Determinants | প্রতিটি ডিটারমিন্যান্টকে সুপার কী হিসেবে গ্যারান্টি দিয়ে টেবিল ডিকম্পোজ করা। |
 
-উদাহরণ:
+### Senior Insight: OLTP vs OLAP Design (Normalization vs Denormalization)
+* **OLTP (Online Transaction Processing):** হাই-রাইট (High-Write) ও রিয়েল-টাইম ট্রানজেকশনাল সিস্টেমে আমরা **3NF/BCNF** নরমালাইজেশন ব্যবহার করি। এটি ডেটা ডুপ্লিকেশন কমায়, ফলে ইনসার্ট/আপডেট কুয়েরি অত্যন্ত ফাস্ট হয় এবং ডেটা করাপশন এড়ানো যায়।
+* **OLAP (Online Analytical Processing):** বিগ ডেটা, অ্যানালিটিক্স এবং রিড-হেভি (Read-Heavy) ডেটা ওয়্যারহাউসে আমরা ইচ্ছাকৃতভাবে **Denormalization** (যেমন Star Schema, Snowflake Schema) করি। এখানে একাধিক জয়েন এড়াতে টেবিলে ডেটা ডুপ্লিকেট করে রাখা হয়, যাতে অ্যানালিটিক্যাল কুয়েরি দ্রুত সম্পন্ন হয়।
 
-```sql
-SELECT customer_id, COUNT(*) AS total_orders
-FROM orders
-WHERE status = 'paid'
-GROUP BY customer_id
-HAVING COUNT(*) >= 5;
+---
+
+## ২. The N+1 Query Problem
+
+### Core Idea
+N+1 Query Problem ঘটে যখন আমরা একটি প্যারেন্ট লিস্ট (যেমন ১০টি পোস্ট) তুলে আনতে ১টি কুয়েরি চালাই, কিন্তু প্রতিটি প্যারেন্ট রো-এর চাইল্ড ডেটা (যেমন প্রতিটি পোস্টের কমেন্ট) লুপের ভেতর কোয়েরি করতে গিয়ে আরও N সংখ্যক অতিরিক্ত ডাটাবেজ রাউন্ড-ট্রিপ কুয়েরি জেনারেট করি।
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor App as Backend Application
+    participant DB as Database Engine
+
+    App->>DB: 1. SELECT * FROM posts LIMIT 10; (Parent Query)
+    DB-->>App: Returns 10 Post Rows
+    
+    rect rgb(30, 20, 20)
+        Note over App, DB: N+1 Loop Starts (Repeated N Times)
+        App->>DB: 2. SELECT * FROM comments WHERE post_id = 1;
+        DB-->>App: Returns comments for post 1
+        App->>DB: 3. SELECT * FROM comments WHERE post_id = 2;
+        DB-->>App: Returns comments for post 2
+        App->>DB: ... Repeat up to Post 10 ...
+    end
+    
+    Note over App, DB: Total DB Round-trips = 1 + 10 = 11 Queries!
 ```
 
-এখানে `WHERE` paid order ছাড়া অন্য row বাদ দেয়। এরপর `GROUP BY` customer অনুযায়ী group তৈরি করে। শেষে `HAVING` শুধু সেই customer রাখে যাদের paid order সংখ্যা ৫ বা তার বেশি।
+### The Cost: DB Connection Pool Exhaustion
+প্রোডাকশন সিস্টেমে যদি হোমপেজে ১০০টি পোস্ট দেখাতে গিয়ে এই N+1 লুপ চলে, তবে প্রতিবার পেজ লোডে ১০১টি কুয়েরি ডাটাবেজে হিট করবে। মাত্র ১০০ জন কনকারেন্ট ইউজার রিকোয়েস্ট পাঠালেই তা **১০,০০০+ কোয়েরি** জেনারেট করবে, যা মুহূর্তের মধ্যে ডাটাবেজের **Connection Pool Exhaust** করে সম্পূর্ণ ব্যাকএন্ড আর্কিটেকচার ক্র্যাশ করাবে।
 
-## GROUP BY
+### Technical Solutions
 
-`GROUP BY` একই value থাকা row-গুলোকে group করে summary result তৈরি করে। এটি সাধারণত aggregate function-এর সাথে ব্যবহার হয়।
-
-Common aggregate function:
-
-- `COUNT()` total row count বের করে।
-- `SUM()` numeric value-এর total বের করে।
-- `AVG()` average বের করে।
-- `MAX()` সবচেয়ে বড় value বের করে।
-- `MIN()` সবচেয়ে ছোট value বের করে।
-
-উদাহরণ:
-
+#### ১. Eager Loading (SQL JOIN)
+লুপের বাইরে আগে থেকেই জয়েন দিয়ে এক কুয়েরিতে সব ডেটা রিড করা:
 ```sql
-SELECT category_id, COUNT(*) AS total_products
-FROM products
-GROUP BY category_id;
+SELECT posts.*, comments.*
+FROM posts
+LEFT JOIN comments ON posts.id = comments.post_id;
 ```
 
-এই query প্রতিটি category-তে কতটি product আছে তা দেখাবে।
+#### ২. Batch Preloading (IN Operator)
+জয়েন না করে ব্যাকএন্ড ওআরএম (ORM) মাত্র ২টি কুয়েরিতে ডেটা তুলে আনে:
+```sql
+-- Query 1: Fetch Parents
+SELECT id FROM posts LIMIT 10; -- returns IDs: 1, 2, 3...10
 
-## SQL Execution Order
+-- Query 2: Fetch all related children in one batch
+SELECT * FROM comments WHERE post_id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+```
 
-SQL query লেখার order এবং execution order এক নয়। সাধারণত logical execution order এমন:
+#### ৩. DataLoader Pattern (GraphQL-এর সমাধান)
+গ্রাফকিউএল (GraphQL) বা মাইক্রোসার্ভিস এনভায়রনমেন্টে বিভিন্ন ফিল্ড রিজলভারের কুয়েরি রিকোয়েস্টগুলোকে মেমরিতে **Batch & Coalesce** করে প্রসেস করা, যাতে রানটাইমে N+1 সমস্যা চিরতরে নির্মূল হয়।
 
-1. `FROM`
-2. `JOIN`
-3. `WHERE`
-4. `GROUP BY`
-5. `HAVING`
-6. `SELECT`
-7. `ORDER BY`
-8. `LIMIT`
+---
 
-এই order বুঝলে `WHERE`, `GROUP BY` এবং `HAVING` ঠিকভাবে ব্যবহার করা সহজ হয়।
+## ৩. Enterprise Relationships & Indexing Strategies
+
+### Core Idea
+ডাটাবেজ রিলেশনশিপ নির্ধারণের সঠিক নিয়ম হলো—উভয় দিক থেকে ডেটার কার্ডিনালিটি (Cardinality) প্রশ্ন করা এবং ডেটার ওনারশিপ অনুযায়ী Foreign Key (এফকে) প্লেসমেন্ট করা।
+
+```mermaid
+erDiagram
+    USERS ||--|| PROFILES : "1:1 (user_id unique FK)"
+    CUSTOMERS ||--o{ ORDERS : "1:N (customer_id FK)"
+    STUDENTS }|..|{ COURSES : "N:M (Junction Table)"
+
+    USERS {
+        int id PK
+        string email
+    }
+    PROFILES {
+        int id PK
+        int user_id FK "Unique"
+        string bio
+    }
+    CUSTOMERS {
+        int id PK
+        string name
+    }
+    ORDERS {
+        int id PK
+        int customer_id FK
+        decimal total
+    }
+    STUDENTS {
+        int id PK
+        string name
+    }
+    COURSES {
+        int id PK
+        string title
+    }
+```
+
+### Foreign Key Placement & Indexing Rules
+
+#### One-to-One (1:1)
+* **Rule:** ডিপেন্ডেন্ট বা চাইল্ড টেবিলে Foreign Key থাকবে এবং সেটিতে অবশ্যই **`UNIQUE` Constraint** যুক্ত করতে হবে, যাতে একটি প্যারেন্টের সাথে সর্বোচ্চ একটি চাইল্ড যুক্ত হতে পারে।
+
+#### One-to-Many (1:N)
+* **Rule:** Foreign Key সর্বদা **Many Side (চাইল্ড টেবিলে)** থাকবে।
+* **Senior Best Practice (Foreign Key Indexing):** আরডিবিএমএস (যেমন MySQL, PostgreSQL) প্যারেন্ট টেবিলে প্রাইমারি কী ইনডেক্স করলেও **Foreign Key কলামগুলোতে অটোমেটিক ইনডেক্স তৈরি করে না**। জয়েন কুয়েরির পারফরম্যান্স অপ্টিমাইজ রাখতে প্রতিটি Foreign Key কলামে ম্যানুয়ালি ইনডেক্স তৈরি করা বাধ্যতামূলক।
+
+#### Many-to-Many (N:M)
+* **Rule:** সরাসরি রিলেশন সম্ভব নয়; এর জন্য মাঝখানে একটি **Junction Table** (বা Pivot/Bridge Table) তৈরি করতে হবে, যেখানে উভয় টেবিলের Foreign Key থাকবে।
+* **Composite Index Strategy:** জাংশন টেবিলে সাধারণত দুটি এফকে নিয়ে একটি **Composite Primary Key** `(student_id, course_id)` তৈরি করা হয়, যা ডুপ্লিকেট রিলেশনশিপ এড়ায়।
+
+---
+
+## ৪. SQL Delete Rules & Referential Integrity
+
+### Core Idea
+Referential Action নির্ধারণ করে—প্যারেন্ট টেবিলের কোনো রো ডিলিট বা আপডেট হলে চাইল্ড টেবিলের রিলেটেড ডেটার ওপর কী প্রভাব পড়বে।
+
+### Cascading vs Restricting Performance Trade-offs
+
+#### ON DELETE CASCADE
+* **Behavior:** প্যারেন্ট রো ডিলিট হওয়ার সাথে সাথে চাইল্ড টেবিলের সব রিলেটেড রো ডেটাবেজ ইঞ্জিন স্বয়ংক্রিয়ভাবে ডিলিট করে দেয়।
+* **Production Caution:** হাই-ট্রাফিক প্রোডাকশন ডাটাবেজে (যেখানে চাইল্ড টেবিলে লাখ লাখ ডেটা রয়েছে) `CASCADE` ডিলিট চালানো অত্যন্ত ঝুঁকিপূর্ণ। এটি বড় ধরনের মেমরি লক তৈরি করে এবং **Replication Lag** বাড়িয়ে দেয়, যার ফলে সম্পূর্ণ ডাটাবেজ কয়েক সেকেন্ড বা মিনিটের জন্য আন-রেসপন্সিভ হয়ে যেতে পারে।
+* **Mitigation:** এ ক্ষেত্রে ডিলিট অপারেশন ছোট ছোট ব্যাচে ভাগ করে রান করা অথবা ব্যাকগ্রাউন্ড অ্যাসিনক্রোনাস ওয়ার্কার দিয়ে চাইল্ড ডেটা ক্লিনআপ করা স্ট্যান্ডার্ড প্র্যাকটিস।
+
+#### ON DELETE SET NULL
+* **Behavior:** প্যারেন্ট রো ডিলিট হলে চাইল্ডের Foreign Key কলামের মান `NULL` হয়ে যায়। এ ক্ষেত্রে কলামটিকে অবশ্যই `Nullable` হতে হবে।
+
+#### ON DELETE RESTRICT / NO ACTION
+* **Behavior:** চাইল্ড ডেটা থাকা অবস্থায় প্যারেন্টকে কোনোভাবেই ডিলিট করতে দেয় না (অ্যারর থ্রো করে)। এটি অসাবধানতাবশত ডেটা মুছে যাওয়া প্রতিরোধ করার সবচেয়ে নিরাপদ ডিফেন্সিভ গ্যারান্টি।
+
+---
+
+### Referential Action Reference Table
+
+| Rule | Parent Delete Action | Best Use Case |
+| :--- | :--- | :--- |
+| **CASCADE** | চাইল্ডের রিলেটেড সব ডেটা মুছে যায়। | মেটা বা ক্ষণস্থায়ী ডিপেন্ডেন্ট ডেটা (যেমন `InvoiceDetails` যখন `Invoice` ডিলিট হয়)। |
+| **SET NULL** | চাইল্ডের এফকে কলাম `NULL` হয়। | যখন চাইল্ড হিস্টোরি রাখা জরুরি, কিন্তু প্যারেন্ট কানেকশন নেই (যেমন প্রোডাক্ট ডিলিট হলেও সেলস ডাটা থাকবে)। |
+| **RESTRICT** | ডিলিট অপারেশন ব্লক করে অ্যারর দেয়। | মূল মাস্টার ডেটা প্রটেকশনের জন্য (যেমন কাস্টমার ডিলিট করা যাবে না যদি তার কোনো অর্ডার পেন্ডিং থাকে)। |
+
+---
+
+## ৫. SQL Aggregation & Execution Order
+
+### Core Idea
+SQL কুয়েরি যেভাবে লেখা হয় (Syntax Order) এবং ডাটাবেজ ইঞ্জিনের কুয়েরি অপ্টিমাইজার যেভাবে সেটি প্রসেস করে (Logical Execution Order) তা সম্পূর্ণ ভিন্ন। 
+
+```mermaid
+flowchart TD
+    E1[1. FROM / JOIN - Load Dataset] --> E2[2. WHERE - Row level filtering]
+    E2 --> E3[3. GROUP BY - Aggregate row groups]
+    E3 --> E4[4. HAVING - Group level filtering]
+    E4 --> E5[5. SELECT - Project columns]
+    E5 --> E6[6. ORDER BY - Sort results]
+    E6 --> E7[7. LIMIT / OFFSET - Slice output]
+
+    style E1 fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style E2 fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style E3 fill:#065f46,stroke:#10b981,color:#fff
+    style E4 fill:#065f46,stroke:#10b981,color:#fff
+    style E5 fill:#047857,stroke:#10b981,color:#fff
+    style E6 fill:#7f1d1d,stroke:#ef4444,color:#fff
+    style E7 fill:#7f1d1d,stroke:#ef4444,color:#fff
+```
+
+### The Query Engine Pipeline (Execution Order)
+
+1. **`FROM` & `JOIN`:** ডাটাবেজ ইঞ্জিন সর্বপ্রথমে কোন টেবিল এবং তাদের ইন্টারনাল রিলেশন ডেটাসেট লোড হবে তা নির্ধারণ করে।
+2. **`WHERE` (রো-লেভেল ফিল্টারিং):** গ্রুপ তৈরি করার আগেই প্রতিটি রোকে ফিল্টার করে কন্ডিশন অনুযায়ী অপ্রয়োজনীয় রো বাদ দেওয়া হয়।
+   * *Senior Practice:* জয়েনিং বা গ্রুপিংয়ের আগে ফিল্টারিং সম্পন্ন হলে ডাটাবেজের মেমরিতে খুব ছোট ডেটাসেট প্রসেস করতে হয়, যা কুয়েরিকে সুপারফাস্ট করে।
+3. **`GROUP BY`:** ফিল্টার করা রোগুলোকে কলামের মান অনুযায়ী গ্রুপ করা হয় এবং মেমরিতে অ্যারে অব গ্রুপ তৈরি করা হয়।
+4. **`HAVING` (গ্রুপ-লেভেল ফিল্টারিং):** শুধুমাত্র গ্রুপ তৈরি হওয়ার পর এবং এগ্রিগেট কুয়েরি রেজাল্ট (যেমন `COUNT(*)`, `SUM()`) ফিল্টার করতে এটি ব্যবহৃত হয়।
+5. **`SELECT`:** কোন কোন কলাম দেখানো হবে তা ফিল্টারিং শেষে ডাটাবেজ ইঞ্জিন সিলেক্ট করে।
+6. **`ORDER BY`:** চূড়ান্ত সিলেক্টেড ডেটাকে ক্রমানুসারে সাজানো হয় (ইনডেক্সিং ছাড়া এটি প্রচুর মেমরি খায়)।
+7. **`LIMIT` & `OFFSET`:** কুয়েরির শেষ ধাপে এসে ফাইনাল ডেটা থেকে কাঙ্ক্ষিত সংখ্যক স্লাইস তুলে আনা হয়।
+
+### WHERE vs HAVING: The Critical Distinction
+* **`WHERE`:** ইন্ডিভিজুয়াল রো ফিল্টার করে এবং এটি গ্রুপ তৈরির **আগে** কাজ করে। এর ভেতরে কখনো এগ্রিগেট ফাংশন (যেমন `SUM(total) > 500`) ব্যবহার করা যায় না।
+* **`HAVING`:** মেমরিতে এগ্রিগেট গ্রুপ তৈরি হওয়ার **পরে** কাজ করে এবং এটি শুধুমাত্র গ্রুপ ডেটা ফিল্টার করতে ব্যবহৃত হয়।
+
+```sql
+SELECT customer_id, SUM(amount) AS total_spent
+FROM payments
+WHERE status = 'success'    -- 1. filtering payments before group
+GROUP BY customer_id         -- 2. group by customers
+HAVING SUM(amount) >= 1000;  -- 3. filtering grouped aggregate data
+```
+
+### Interview Elevator Pitch (Senior Level)
+> "এসকিউএল কুয়েরি ইঞ্জিনের এক্সিকিউশন অর্ডার বোঝা কুয়েরি অপ্টিমাইজেশনের মূল ভিত্তি। যেহেতু `WHERE` লজিক জয়েন বা গ্রুপিংয়ের আগে ডেটার আকার কমিয়ে ফেলে, তাই বড় ডেটাসেটে `HAVING` এর ওপর নির্ভরশীলতা কমিয়ে `WHERE` দিয়ে আর্লি রো-ফিল্টারিং সম্পন্ন করা এবং এগ্রিগেট কলামগুলোতে কম্পোজিট ইনডেক্সিং সেট করা ব্যাকএন্ড পারফরম্যান্সকে বহুগুণ বাড়িয়ে দেয়।"
