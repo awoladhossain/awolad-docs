@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, BookOpen, FileText, List, Sparkles, Terminal, Cpu, Bookmark, HelpCircle } from 'lucide-react';
 import React, { type ComponentPropsWithoutRef } from 'react';
 import Mermaid from '@/components/Mermaid';
+import remarkGfm from 'remark-gfm';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -518,6 +519,7 @@ export default async function DocPage({ params }: Props) {
                     options={{
                       mdxOptions: {
                         format: 'md',
+                        remarkPlugins: [remarkGfm],
                       },
                     }}
                   />
