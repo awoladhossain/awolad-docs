@@ -74,17 +74,15 @@ flowchart TD
 এটি একটি একক বাইনারি হলেও এর ভেতরে ব্যাকগ্রাউন্ডে অসংখ্য ছোট ছোট ডেমোন বা কন্ট্রোলার লুপ রান করে (যেমন: Node Controller, Deployment Controller, Job Controller)।
 * **Reconciliation Loop (রিকনসিলিয়েশন লুপ):** এটি কুবারনেটিসের সবচেয়ে কোর কনসেপ্ট। এটি অনবরত একটি লুপের মাধ্যমে চেক করে ক্লাস্টারের বর্তমান অবস্থা (Actual State) এবং ইউজারের দেওয়া কাঙ্ক্ষিত অবস্থা (Desired State) এক আছে কিনা। অমিল দেখলেই সে তা সমাধান করে (যেমন: ৩টি রেপ্লিকা থাকার কথা কিন্তু ১টি ক্র্যাশ করেছে, সে সাথে সাথে নতুন ১টি পড বানাবে)।
 
-```
-  +------------------ Desired State (e.g. Replicas = 3) ------------------+
-  |                                                                       |
-  v                                                                       |
-+---------+              +----------------------+              +--------+ |
-| Observe | ---------->  | Compare Actual vs    | ---------->  | Act /  | |
-|  State  |              | Desired State        |              | Adjust | |
-+---------+              +----------------------+              +--------+ |
-  ^                                                                       |
-  |                                                                       |
-  +------------------ Actual State (e.g. Replicas = 2) -------------------+
+```mermaid
+flowchart LR
+    Observe["Observe State <br> (Actual State: e.g., 2 Replicas)"] -->|"Compare"| Compare["Compare Actual <br> vs Desired"]
+    Compare -->|"Action Needed"| Act["Act / Adjust <br> (Create 1 Pod)"]
+    Act -->|"Desired State Achieved: 3 Replicas"| Observe
+    
+    style Observe fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Compare fill:#7c2d12,stroke:#f97316,color:#fff
+    style Act fill:#065f46,stroke:#10b981,color:#fff
 ```
 
 ---
