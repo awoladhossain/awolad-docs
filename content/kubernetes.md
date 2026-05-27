@@ -217,7 +217,272 @@ flowchart LR
 
 ---
 
-## ৮. শীর্ষ ২০টি সিনিয়র-লেভেল কুবারনেটিস ইন্টারভিউ প্রশ্নোত্তর (Top 20 Systems Q&A)
+## ৮. কুবারনেটিস গার্বেজ কালেকশন ও ডিলিট পলিসি (Garbage Collection & OwnerReferences)
+
+কুবারনেটিসে কোনো প্যারেন্ট রিসোর্স ডিলিট করলে (যেমন একটি Deployment), তার সাথে থাকা চাইল্ড রিসোর্সগুলো (যেমন ReplicaSet এবং Pods) কীভাবে রিমুভ হয়? এর পেছনে কাজ করে **Garbage Collector** এবং `ownerReferences` মেটাডেটা।
+
+ডিলিট করার সময় কুবারনেটিস ৩ ধরণের **Cascading Deletion Policy** অফার করে:
+১. **Foreground Cascading Deletion:** এই পলিসিতে প্যারেন্ট অবজেক্টটি ডিলিট হওয়ার সময় প্রথমে একটি `deletionTimestamp` পায় এবং "finalizers" ব্লকে চলে যায়। কুবারনেটিস প্রথমে তার সমস্ত চাইল্ড অবজেক্ট ডিলিট করে, এবং চাইল্ডগুলো সম্পূর্ণ ডিলিট হওয়া শেষ হলে অবশেষে প্যারেন্ট অবজেক্টটিকে ক্লাস্টার থেকে ডিলিট করে।
+২. **Background Cascading Deletion (ডিফল্ট):** কুবারনেটিস এপিআই সার্ভার সাথে সাথে প্যারেন্ট অবজেক্টটিকে ডিলিট করে দেয়। এরপর ব্যাকগ্রাউন্ডে গার্বেজ কালেক্টর সচল হয়ে প্যারেন্টের সাথে লিঙ্ক থাকা সমস্ত চাইল্ড অবজেক্টগুলোকে ক্রমান্বয়ে ডিলিট করতে থাকে। এটি অত্যন্ত ফাস্ট।
+৩. **Orphan Deletion Policy:** এই পলিসিতে প্যারেন্ট ডিলিট হয়ে গেলেও তার আন্ডারে থাকা চাইল্ড অবজেক্টগুলো এতিম বা Orphan হিসেবে ক্লাস্টারে সচল থেকে যায় (তাদের `ownerReferences` নাল হয়ে যায়)।
+
+```mermaid
+flowchart TD
+    subgraph CascadingDeletion ["গার্বেজ কালেকশন ফ্লো (Cascading Deletions)"]
+        Parent["Deployment (Parent) <br> deleted with Background Policy"] -->|"1. API Server deletes instantly"| Deleted["Deployment Gone"]
+        Parent -.->|"2. Garbage Collector identifies orphan children"| Child["ReplicaSet & Pods (Children)"]
+        Child -->|"3. Cleaned up in Background"| Removed["Resources Freed"]
+    end
+    style Parent fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Child fill:#7c2d12,stroke:#f97316,color:#fff
+```
+
+---
+
+## ৯. কিউবলেট সিঙ্ক লুপ ও নোড প্রেশার ইভিকশন (Kubelet Sync Loop & Node Eviction)
+
+ওয়ার্কার নোডে কন্টেইনার এবং মেমরির প্রকৃত দেখভাল করে Kubelet-এর অভ্যন্তরীণ দুটি কোর মেকানিজম:
+
+### ক. Kubelet Sync Loop (`syncLoop`)
+Kubelet ক্রমাগত একটি ইভেন্ট ড্রিভেন **Sync Loop** রান করায় যা ৩টি সোর্স থেকে পডের কনফিগারেশন চেঞ্জের খবর পায় (multiplexes channel):
+১. **File:** নোডের লোকাল ডিরেক্টরি (Static Pods)।
+২. **HTTP:** কোনো ইউআরএল এন্ডপয়েন্ট থেকে আসা PodSpec।
+৩. **Apiserver:** এপিআই সার্ভার থেকে আসা গ্লোবাল পড লিস্ট বা ইভেন্ট।
+
+যেকোনো সোর্স থেকে ডেটা আসবামাত্র Kubelet তার ইন্টারনাল পড লাইফসাইকেল ম্যানেজার (PLEG - Pod Lifecycle Event Generator) দিয়ে নোডের বর্তমান অবস্থার সাথে PodSpec মিলিয়ে CRI-এর সাহায্যে কন্টেইনার অ্যাডজাস্ট করে।
+
+### খ. নোড প্রেশার ইভিকশন (Node Pressure Eviction)
+যখন কোনো নোডে হার্ডওয়্যার রিসোর্স (যেমন RAM বা Disk) অত্যন্ত ঝুঁকিপূর্ণ মাত্রায় চলে যায়, Kubelet ক্লাস্টার ও নোড বাঁচাতে পডগুলোকে জোরপূর্বক কিল বা উচ্ছেদ (Eviction) করে।
+* **Eviction Thresholds:** 
+  - `memory.available < 100Mi`
+  - `nodefs.available < 10%` (ফাইলসিস্টেম)
+  - `imagefs.available < 15%` (কন্টেইনার ইমেজ ক্যাশ)
+* **Hard Eviction:** থ্রেশহোল্ড টাচ করার সাথে সাথে কোনো প্রকার গ্রেস পিরিয়ড না দিয়েই Kubelet পডটিকে কিল করে দেয় এবং এপিআই সার্ভারকে জানায় যাতে পডটি অন্য নোডে শিডিউল হয়।
+* **Soft Eviction:** অ্যাপ্লিকেশনকে গ্রেস পিরিয়ড দেওয়া হয় (যেমন ৫ মিনিট), এর মধ্যে রিসোর্স স্বাভাবিক না হলে অবশেষে পড ইভিক্ট করা হয়।
+
+---
+
+## ১০. এপিআই কনকারেন্সি ও প্যাচ মেকানিজম (Optimistic OCC vs Patches)
+
+কুবারনেটিস ক্লাস্টারে প্রতি মিনিটে হাজার হাজার রিকোয়েস্ট এপিআই সার্ভারে আসে। এই কনকারেন্ট ট্রাফিক হ্যান্ডেল করার জন্য K8s দুটি আর্কিটেকচারাল মেকানিজম ব্যবহার করে:
+
+### ক. Optimistic Concurrency Control (OCC)
+ডাটাবেস লকিং ট্রাফিকের গতি শ্লথ করে দেয়। তাই K8s এপিআই সার্ভার লক মেকানিজম ব্যবহার না করে প্রতিটি অবজেক্টে একটি `metadata.resourceVersion` টোকেন যুক্ত করে।
+* **কাজ করার নিয়ম:** যখন কোনো কন্ট্রোলার একটি পড আপডেট করতে চায়, সে প্রথমে অবজেক্টটি রিড করে তার রিসোর্স ভার্সন দেখে (ধরি `1042`)। আপডেটেড ডাটা রাইট করার সময় সে ওই ভার্সনসহ পাঠায়। যদি ইতিমধ্যে অন্য কেউ পডটি আপডেট করে থাকে, তবে ডেটাবেসের ভার্সন ইতিমধ্যে `1043` হয়ে যাবে এবং প্রথম কন্ট্রোলারের রিকোয়েস্টটি `HTTP 409 Conflict` এরর দিয়ে রিজেক্ট হবে। কন্ট্রোলার তখন আবার নতুন ডাটা রিড করে পুনরায় চেষ্টা (Retry) করে।
+
+### খ. Strategic Merge Patch vs JSON Patch
+কুবারনেটিসে অবজেক্ট এডিট করার জন্য ৩ ধরণের প্যাচ মেকানিজম রয়েছে:
+১. **JSON Merge Patch (RFC 7386):** এটি সিম্পল কী-ভ্যালু রিপ্লেস করে। কিন্তু এর সমস্যা হলো এটি লিস্ট বা অ্যারের ক্ষেত্রে সম্পূর্ণ লিস্টটিকে রিপ্লেস করে ফেলে, যা পডের কনফিগারেশনে ভয়ংকর হতে পারে।
+২. **Strategic Merge Patch:** এটি কুবারনেটিসের ডিফল্ট প্যাচিং প্রসেস। এটি মেটাডেটা স্কিমা দেখে বোঝে লিস্টির চাবি বা ইউনিক কী কোনটি (যেমন পডের কন্টেইনার লিস্টের জন্য চাবি হলো `name`)। ফলে এটি পুরো কন্টেইনার লিস্ট ও পোর্ট রিপ্লেস না করে সুনির্দিষ্ট কন্টেইনারের পোর্ট মডিফাই করতে পারে।
+৩. **JSON Patch (RFC 6902):** এটি অত্যন্ত সুনির্দিষ্ট ডিক্লারেটিভ অপারেশন ডিক্লেয়ার করে (যেমন: `[{"op": "replace", "path": "/spec/replicas", "value": 5}]`)।
+
+---
+
+## ১১. সার্ভিস মেশ বনাম ইনগ্রেস আর্কিটেকচার (North-South vs East-West Traffic)
+
+মাইক্রোসার্ভিসের যুগে ট্রাফিক ম্যানেজমেন্টকে কুবারনেটিসে দুটি প্রধান ক্যাটাগরিতে ভাগ করা হয়:
+
+```mermaid
+flowchart TD
+    subgraph NorthSouth ["North-South Traffic (Ingress Gateway)"]
+        Client["Client / Browser"] -->|"1. Internet Request"| Ingress["Ingress Controller <br> (Nginx / Envoy)"]
+        Ingress -->|"2. Routing to Cluster"| PodA["Pod A (Frontend)"]
+    end
+    
+    subgraph EastWest ["East-West Traffic (Service Mesh)"]
+        PodA -.->|"3. Direct communication intercepted by Envoy Sidecars"| EnvoyA["Envoy Sidecar A"]
+        EnvoyA -->|"4. Mutual TLS (mTLS) Encryption"| EnvoyB["Envoy Sidecar B"]
+        EnvoyB -.-> PodB["Pod B (Payment API)"]
+    end
+    
+    style Ingress fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style EnvoyA fill:#7c2d12,stroke:#f97316,color:#fff
+    style EnvoyB fill:#7c2d12,stroke:#f97316,color:#fff
+```
+
+### ক. Ingress Controller (North-South Traffic)
+এটি ক্লাস্টারের বাইর থেকে ভেতরে আসা ট্রাফিক রাুট করে (উত্তর-দক্ষিণ ট্রাফিক)। এটি মূলত লেয়ার ৭ রিভার্স প্রক্সি (যেমন Nginx, Traefik, HAProxy) যা হোস্ট ও পাথ মডিফাই করে প্যাকেটের রুট সেট করে।
+
+### খ. Service Mesh (East-West Traffic)
+ক্লাস্টারের ভেতরের পডগুলোর পারস্পরিক যোগাযোগকে বলা হয় পূর্ব-পশ্চিম ট্রাফিক। যখন শত শত মাইক্রোসার্ভিস নিজেদের মধ্যে কথা বলে, তখন ট্রাফিকের সিকিউরিটি (mTLS), ট্র্যাকিং এবং রিট্রাই পলিসি ম্যানেজ করার জন্য **Service Mesh** (যেমন: Istio, Linkerd) ব্যবহার করা হয়।
+* **Envoy Sidecar Interception:** সার্ভিস মেশ নোডের লিনাক্স কার্নেলের `iptables` রুলস এমনভাবে কনফিগার করে দেয় যে, পডের মেইন কন্টেইনার থেকে বের হওয়া বা ভেতরে ঢোকা সমস্ত ট্রাফিক স্বয়ংক্রিয়ভাবে তার পাশে থাকা **Envoy Proxy Sidecar**-এ রিডাইরেক্ট হয়ে যায়। মেইন অ্যাপ টের পাওয়ার আগেই Envoy ট্রাফিক এনক্রিপ্ট (mTLS) ও মনিটরিং সম্পন্ন করে ফেলে!
+
+---
+
+## ১২. শিডিউলারের মেমরি মডেল ও এডভান্সড কুয়েস (Scheduler Queues & Constraints)
+
+শিডিউলার কীভাবে হাজার হাজার পডের শিডিউলিং ট্রাফিক জ্যাম ছাড়াই নিমিষে হ্যান্ডেল করে? এর পেছনে রয়েছে এর ইন্টারনাল ৩টি কিউ (Queue) মেকানিজম এবং ডিস্ট্রিবিউশন রুলস:
+
+### ক. Scheduler Queue Internals
+নতুন বা পেন্ডিং পডগুলোকে শিডিউলার নিচের ৩টি কিউতে ম্যানেজ করে:
+১. **ActiveQ (অ্যাক্টিভ কিউ):** শিডিউল হওয়ার জন্য প্রস্তুত পডগুলোর প্রায়োরিটি-ভিত্তিক বাকেট। শিডিউলার এখান থেকে পড নিয়ে নোডে বাইন্ড করার চেষ্টা করে।
+২. **UnschedulableQ:** রিসোর্স বা টেইন্টের অভাবে শিডিউল হতে না পারা পডগুলোকে সাময়িকভাবে এখানে হোল্ড করা হয় যাতে তারা ActiveQ-এর মূল্যবান সিপিইউ সাইকেল নষ্ট না করে। ক্লাস্টারে নতুন নোড যুক্ত হলে বা মেমরি খালি হলে এদের আবার ActiveQ-তে ফেরত আনা হয়।
+৩. **PodBackoffQ:** যে পডগুলো শিডিউল হতে গিয়েও বারবার ফেইল করছে, তাদের একটি নির্দিষ্ট ব্যাক-অফ টাইম পর্যন্ত এখানে ওয়েট করানো হয় যাতে তারা ক্লাস্টারে অতিরিক্ত থ্রোটলিং না ঘটায়।
+
+### খ. Pod Topology Spread Constraints
+প্রোডাকশনে হাই-অ্যাভেইলেবিলিটি নিশ্চিত করতে এটি শিডিউলারের অত্যন্ত শক্তিশালী টুল। এর মাধ্যমে পডগুলোকে ক্লাস্টারের বিভিন্ন ব্যর্থতার ডোমেন বা ফল্ট জোন (যেমন ফিজিক্যাল ড্রাইভ, রেক, ক্লাউড জোন) জুড়ে সমানভাবে ছড়িয়ে দেওয়া যায়।
+* **`topologyKey`:** নির্দেশ করে ডোমেন টাইপ (যেমন `topology.kubernetes.io/zone`)।
+* **`maxSkew`:** দুটি জোনের মধ্যে পডের সংখ্যার সর্বোচ্চ অনুমোদিত পার্থক্য নির্দেশ করে (যেমন `maxSkew: 1` মানে কোনো একটি জোনে অন্য জোনের চেয়ে ১টির বেশি অতিরিক্ত পড থাকতে পারবে না)।
+
+---
+
+## ১৩. কাস্টম কন্ট্রোলারের অভ্যন্তরীণ মেকানিজম (Informers & WorkQueue Lifecycle)
+
+কুবারনেটিসে অপারেটর বা কাস্টম কন্ট্রোলার কীভাবে ক্লাস্টারের কনফিগারেশন চেঞ্জ হওয়ার সাথে সাথে চোখের পলকে রিয়েল-টাইমে অ্যাকশন নেয়? এটি কোনো পোলিং (`GET` রিকোয়েস্ট লুপ) ব্যবহার করে না। এর পেছনে রয়েছে **Client-Go** লাইব্রেরির **Informer Architecture**:
+
+```mermaid
+flowchart TD
+    subgraph ControllerLoop ["কন্ট্রোল লুপ লাইফসাইকেল (Informer Architecture)"]
+        APIServer["kube-apiserver"] -->|"1. HTTP/2 watch connection"| Reflector["Reflector"]
+        Reflector -->|"2. Pushes delta events"| FIFO["DeltaFIFO Queue"]
+        FIFO -->|"3. Pop event"| Informer["Informer (Indexer)"]
+        Informer -->|"4. Update Local Cache"| Cache["Local Cache Store"]
+        Informer -->|"5. Trigger Event Handler"| Handler["Resource Event Handler"]
+        Handler -->|"6. Enqueue Key"| WorkQueue["Rate Limiting WorkQueue"]
+        WorkQueue -->|"7. Process & Reconcile"| Worker["Worker / Controller Logic"]
+    end
+    
+---
+
+## ১৪. পড ডিসরাপশন বাজেট ও নোড ড্রেন পলিসি (PDB & Voluntary vs Involuntary Disruptions)
+
+উচ্চ প্রাপ্যতা (High Availability) নিশ্চিত করতে কুবারনেটিস ক্লাস্টারে সিস্টেম মেইনটেন্যান্স বা ডাউনটাইম কীভাবে সামলানো হয়? এর পেছনে কাজ করে **PDB (Pod Disruption Budget)**।
+
+### ক. Voluntary vs Involuntary Disruptions
+কুবারনেটিস পডের ডাউনটাইম বা বিপর্যয়কে দুটি ক্যাটাগরিতে ভাগ করে:
+১. **Involuntary Disruptions (অনিবার্য বিপর্যয়):** যা মানুষের নিয়ন্ত্রণে থাকে না (যেমন: ফিজিক্যাল সার্ভারের মেমরি ক্যাশ ব্লাস্ট করা, কার্নেল প্যানিক, নেটওয়ার্ক ক্যাবল ডিসকানেক্ট হওয়া বা ফিজিক্যাল ডিস্ক ড্যামেজ হওয়া)।
+২. **Voluntary Disruptions (স্বেচ্ছাধীন বিপর্যয়):** যা অ্যাপ্লিকেশন অ্যাডমিনের কাস্টম বা রিয়েল-টাইম অ্যাকশন (যেমন: নোড ড্রেন করা `kubectl drain` কার্নেল আপগ্রেডের জন্য, ডেপ্লয়মেন্টের রেপ্লিকা টেমপ্লেট পরিবর্তন করা, বা অ্যাপ্লিকেশন আপডেট করা)।
+
+### খ. Pod Disruption Budget (PDB)
+PDB হলো একটি ডিক্লারেটিভ পলিসি যা কুবারনেটিস এপিআই সার্ভারকে বলে দেয়—"আমার নোড মেইনটেন্যান্স বা ড্রেন করার সময়েও যেন এই অ্যাপ্লিকেশনের কমপক্ষে ২টি পড সবসময় একটিভ থাকে।"
+* **কনফিগারেশন:**
+  - `minAvailable`: নুন্যতম কতটি পড বা পার্সেন্টেজ সবসময় সচল থাকতে হবে (যেমন `minAvailable: 2` বা `minAvailable: 80%`)।
+  - `maxUnavailable`: সর্বোচ্চ কতটি পড একসাথে ড্রেন বা ডাউন করা যাবে (যেমন `maxUnavailable: 1`)।
+* **কাজ করার নিয়ম:** যখন এডমিন `kubectl drain` চালায়, এপিআই সার্ভার PDB পলিসি চেক করে নোড খালি করে। PDB পলিসি ভায়োলেট বা লংঘিত হলে ড্রেন প্রসেস সাময়িকভাবে রিজেক্টেড হয়, যতক্ষণ না নতুন নোডে অল্টারনেটিভ পড রান হচ্ছে।
+
+---
+
+## ১৫. পড সিকিউরিটি স্ট্যান্ডার্ডস ও লিনাক্স ক্যাপাবিলিটিজ (PSS, PSA & OS Linux Security)
+
+কুবারনেটিসের প্রাচীন ও জটিল **PodSecurityPolicy (PSP)** কে পুরোপুরি ডেপ্রিকেট বা রিমুভ করে নেক্সট-জেনারেশন ক্লাউড সিকিউরিটির জন্য প্রবর্তন করা হয়েছে **Pod Security Admission (PSA)** এবং **Pod Security Standards (PSS)**।
+
+### ক. Pod Security Standards (PSS)
+কুবারনেটিস পডের সিকিউরিটি পলিসিকে ৩টি প্রমিত ক্যাটাগরিতে ভাগ করে:
+১. **Privileged (অবারিত):** কোনো প্রকার বিধি-নিষেধ ছাড়াই পড হোস্টের ওএসের সমস্ত ডিভাইস ও রুট প্রিভিলেজ সরাসরি অ্যাক্সেস করতে পারে (যেমন CNI ড্রাইভার পড)।
+২. **Baseline (ডিফল্ট ও ব্যালেন্সড):** হোস্ট ওএসের রুট ক্যাবল নেটওয়ার্ক বা প্রিভিলেজ এসকেলেশন ব্লক করে দেয়, তবে সাধারণ অ্যাপ্লিকেশন রান করার অনুমতি দেয়।
+৩. **Restricted (সর্বোচ্চ সিকিউরড):** পডকে ওএসের সর্বোচ্চ টাইট সিকিউরিটি রুলস মানতে বাধ্য করে (যেমন রুট ইউজার হিসেবে রান করা সম্পূর্ণ ব্লক করা, লোকাল ফাইলসিস্টেম রাইট ব্লক করা)।
+
+### খ. Linux Capabilities inside PodSpec
+কুবারনেটিসের পডের ভেতরে লিনাক্স কার্নেলের সিকিউরিটি সক্ষমতা সরাসরি কন্ট্রোল করা সম্ভব:
+```yaml
+securityContext:
+  runAsNonRoot: true                   # পড কখনই হোস্ট ওএসের রুট ইউজার (UID 0) হিসেবে রান করবে না
+  readOnlyRootFilesystem: true         # পডের লোকাল কন্টেইনার ফাইলসিস্টেমকে রিড-অনলি করে দেয়, কোনো ভাইরাস বা হ্যাকার লোকাল ডিস্কে স্ক্রিপ্ট রাইট করতে পারবে না
+  allowPrivilegeEscalation: false      # চাইল্ড প্রসেস যেন প্যারেন্ট প্রসেসের প্রিভিলেজ অ্যাক্সেস করতে না পারে (setuid বাইপাস)
+  seccompProfile:
+    type: RuntimeDefault               # লিনাক্সের Secure Computing (seccomp) ফিল্টার ব্যবহার করে কার্নেলের অপ্রয়োজনীয় সিস্টেম কল ব্লক করে দেয়
+```
+
+---
+
+## ১৬. অ্যাডভান্সড শিডিউলিং ও 'Execution' এনফোর্সমেন্ট (Advanced Node Affinity & Execution Modes)
+
+সাধারণত আমরা পডের নোড সিলেকশনে Node Selector ব্যবহার করি। তবে এন্টারপ্রাইজ স্কেলে এর চেয়ে শক্তিশালী **Node Affinity** পলিসি ব্যবহার করা হয় যা ২ ধরণের 'Execution' মোড সাপোর্ট করে:
+
+```mermaid
+flowchart TD
+    subgraph AffinityExecution ["নোড অ্যাফিনিটি ও এক্সিকিউশন পলিসি"]
+        Required["requiredDuringScheduling <br> IgnoredDuringExecution (Hard)"] -->|"During Scheduling"| CheckNode1["Strict Check: Node must have label 'env=prod'"]
+        Preferred["preferredDuringScheduling <br> IgnoredDuringExecution (Soft)"] -->|"During Scheduling"| CheckNode2["Scored Preference: Try to place on 'env=prod', otherwise fallback"]
+        Ignored["IgnoredDuringExecution"] -->|"During Execution"| RunningState["Labels change on running node -> Pod continues running safely"]
+    end
+```
+
+১. **`requiredDuringSchedulingIgnoredDuringExecution` (Hard Constraint):**
+   - **Scheduling:** অত্যন্ত কঠোর বা হার্ড রুল। নোডে লেবেল না মিললে পড কখনই শিডিউল হবে না, চিরকাল পেন্ডিং হয়ে বসে থাকবে।
+   - **Execution:** পডটি নোডে সফলভাবে রান হওয়ার পর যদি ফিজিক্যাল নোডের লেবেল কেউ এডিট বা ডিলেট করে দেয়, তবুও রানিং পডটিকে কিল করা হবে না। এটি নিরাপদে চলতে থাকবে (`IgnoredDuringExecution`)।
+২. **`preferredDuringSchedulingIgnoredDuringExecution` (Soft Constraint):**
+   - **Scheduling:** নরম বা সফট রুল। শিডিউলার ওই স্পেসিফিক লেবেলযুক্ত নোড খোঁজার সর্বোচ্চ চেষ্টা করবে, না পেলে ক্লাস্টারের যেকোনো সাধারণ ফাঁকা নোডে পডটি শিডিউল করে দেবে।
+৩. **`requiredDuringSchedulingRequiredDuringExecution` (উন্নত ও বিরল):**
+   - এটি এমন এক বিশেষ ফিচার যেখানে শিডিউল হওয়ার সময় যেমন লেবেল মিলতে হবে, পডটি রান থাকা অবস্থায় যদি নোডের লেবেল পরিবর্তন হয়ে যায়—কার্নেল সাথে সাথে পডটিকে কিল করে নোড থেকে উচ্ছেদ করে দেবে!
+
+---
+
+## XVII. সিএসআই ইন্টারনালস এবং ডাইনামিক মাউন্ট প্রসেস (CSI Controller vs Node Plugins)
+
+কুবারনেটিসে যখন আপনি একটি PVC তৈরি করেন, তখন মেঘের আড়ালে বা ব্যাকগ্রাউন্ডে কুবারনেটিস ওএস কীভাবে ফিজিক্যাল ডিস্ক কন্টেইনারের ফাইলসিস্টেমের সাথে সংযুক্ত করে? এর পেছনে রয়েছে **CSI (Container Storage Interface)**-এর দুটি স্বাধীন ড্রাইভার প্লাগইন:
+
+```mermaid
+flowchart TD
+    subgraph CSIArchitecture ["CSI Storage Dynamic Provisioning & Mounting"]
+        PVC["PVC Request"] -->|Trigger| CSIC["CSI Controller Plugin <br> (Runs on Master Node)"]
+        CSIC -->|"1. API Call (e.g. AWS EBS CreateVolume)"| CloudStorage["Cloud Provider Disk Created"]
+        CSIC -->|"2. Attach Disk"| HostMachine["Worker Node Host OS"]
+        
+        HostMachine -->|Trigger| CSIN["CSI Node Plugin <br> (Runs on Worker Node Kubelet)"]
+        CSIN -->|"3. Host OS Kernel Command: mount -t ext4"| MountHost["Mount Block to Host Directory <br> (/var/lib/kubelet/pods/...)"]
+        CSIN -->|"4. Namespace Mount (bind mount)"| ContainerSpace["Container Namespace Filesystem"]
+    end
+    
+    style CSIC fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style CSIN fill:#7c2d12,stroke:#f97316,color:#fff
+    style ContainerSpace fill:#065f46,stroke:#10b981,color:#fff
+```
+
+### ক. CSI Controller Plugin (কন্ট্রোল প্লেনে সচল)
+এই প্লাগইনটি এপিআই সার্ভারে বা মাস্টার নোডে সচল থাকে। এর কাজ হলো সম্পূর্ণ নন-লোকাল বা ক্লাউড ড্রাইভের ম্যানেজমেন্ট।
+* **কাজ:** যখন PVC তৈরি হয়, কন্ট্রোলার প্লাগইন সরাসরি ক্লাউড প্রোভাইডারের এপিআই (যেমন AWS EBS, Azure Disk API) কল করে একটি নতুন ভার্চুয়াল স্টোরেজ ব্লক জেনারেট করে। তারপর সে ড্রাইভটিকে ওয়ার্কার নোডের ফিজিক্যাল হোস্ট মেশিনের সাথে কানেক্ট (Attach) করে দেয়।
+
+### খ. CSI Node Plugin (ওয়ার্কার নোডের কুয়েস্ট)
+এই প্লাগইনটি একটি DaemonSet হিসেবে প্রতিটি ওয়ার্কার নোডের Kubelet-এর সাথে কো-লোকেট হয়ে রান করে। এর কাজ হলো ওএস লেভেলের মাউন্টিং।
+* **কাজ:** হোস্ট ওএসের সাথে ড্রাইভ যুক্ত হওয়ার পর, এই নোড প্লাগইন হোস্টের ভেতরে সশরীরে ফাইলসিস্টেম ফরম্যাটিং কমান্ড চালায় (যেমন `mkfs.ext4`) এবং হোস্ট ওএসের ডিরেক্টরিতে মাউন্ট করে (`/var/lib/kubelet/pods/<pod-uid>/volumes/...`)। অবশেষে লিনাক্সের **`bind mount`** প্রসেস ব্যবহার করে কন্টেইনারের পার্সোনাল ফাইলসিস্টেম নেমস্পেসে ডিস্কটি রুট করে দেয়।
+
+---
+
+## ১৮. এইচপিএ বনাম ভিপিএ সংঘাত ও দ্বৈরথ (HPA vs VPA Conflict & Resolution)
+
+পডের রিসোর্স অটো-স্কেলিংয়ের জন্য কুবারনেটিসের দুটি অন্যতম প্রধান সリューション হলো **HPA (Horizontal Pod Autoscaler)** এবং **VPA (Vertical Pod Autoscaler)**।
+
+| ফিচার | HPA (Horizontal Pod Autoscaler) | VPA (Vertical Pod Autoscaler) |
+| :--- | :--- | :--- |
+| **স্কেলিংয়ের ধরণ** | **Scale-Out:** পডের সংখ্যা বাড়িয়ে দেয় (Replicas 2 -> 10) | **Scale-Up:** রানিং পডের মেমরির সাইজ বাড়িয়ে দেয় (RAM 512Mi -> 2Gi) |
+| **মনিটরিং মেট্রিক্স** | সাধারণত CPU/RAM ইউটিলাইজেশন বা কাস্টম প্রমিথিউস মেট্রিক্স | অ্যাপ্লিকেশনের দীর্ঘমেয়াদী রিসোর্স ব্যবহারের ট্রেন্ড বা হিস্টোরি |
+| **কাজ করার মেথড** | নতুন পড ডাইনামিক্যালি স্পন করে অত্যন্ত দ্রুত ট্রাফিক সামলায় | পড ক্র্যাশ না করিয়ে নোডের রিকোয়েস্ট ইন-প্লেস বা রিস্টার্ট দিয়ে বাড়ায় |
+
+### 💥 HPA বনাম VPA সংঘাত (The Conflict of Auto-scalers)
+প্রোডাকশনে একই অ্যাপ্লিকেশনের বা একই মেট্রিক্সের (যেমন CPU/RAM) ওপর HPA এবং VPA একসাথে চালানো সম্পূর্ণ নিষিদ্ধ এবং ভয়ংকর! কেন?
+* **ডেস্ট্রাকটিভ ফিডব্যাক লুপ (Feedback Loop of Doom):**
+  ১. ধরুন ট্রাফিক বাড়ার কারণে পডের CPU ব্যবহার ১০০% এ চলে গেল।
+  ২. VPA সাথে সাথে পডের আকার বড় করার জন্য পডটিকে কিল বা রিসাইজ করার সিদ্ধান্ত নেবে।
+  ৩. একই সময়ে HPA দেখবে CPU ১০০% এবং পডের সংখ্যা বাড়াতে (Replicas) ডাইনামিক রিকোয়েস্ট পাঠাবে।
+  ৪. দুটি পলিসি একে অপরের ডেটা মডিফাই করে ক্লাস্টারে এক মারাত্মক অস্থিরতা ও ক্র্যাশ লুপ (Tug of War) তৈরি করবে।
+* **সমাধান:** যদি একই পডে দুটিই ব্যবহার করতে হয়, তবে HPA-কে রান করাতে হবে কাস্টম বিজনেস বা অ্যাপ্লিকেশন মেট্রিক্সের ওপর ভিত্তি করে (যেমন HTTP Request per second) এবং VPA-কে রান করাতে হবে ওএস লেভেলের রিসোর্স মেট্রিক্সের ওপর ভিত্তি করে (যেমন CPU/RAM Requests Optimization)।
+
+---
+
+## ১৯. কিউবলেট সিস্টেম ট্রিয়াজ ও ওএস শাটডাউন (Graceful Node Shutdown Systemd Integration)
+
+কখনো ফিজিক্যাল সার্ভার বা নোড যদি ক্র্যাশ করে বা শাটডাউন হয়, Kubelet কীভাবে ওএস শাটডাউন হওয়ার পূর্বে পডগুলোকে নিরাপদে সেভ করার সুযোগ পায়? এর জন্য রয়েছে **Graceful Node Shutdown** মেকানিজম।
+
+```mermaid
+flowchart LR
+    OS["Host OS (systemd-logind)"] -->|"1. Informs Inhibitor Lock"| Kubelet["Kubelet Daemon"]
+    Kubelet -->|"2. Graceful Shutdown Period (e.g. 30s)"| Pods["Evict & Terminate Pods Gracefully"]
+    Pods -->|"3. Clean exit"| OS
+    OS -->|"4. Power Off Server"| Shutdown["Power Off"]
+```
+
+### ক. systemd-logind Integration
+লিনাক্স অপারেটিং সিস্টেমের **systemd** সার্ভিস যখন নোড বন্ধ হওয়ার সিগন্যাল রিসিভ করে, Kubelet লিনাক্সের **systemd-logind inhibitor locks** ব্যবহার করে শাটডাউন প্রসেসকে সাময়িকভাবে হোল্ড বা ব্লক করে দেয়।
+* **শাটডাউনের সময়সীমা:** Kubelet-কে নোটিফাই করা হয় যে নোডটি শাটডাউন হচ্ছে। 
+* **Eviction Period:** Kubelet তখন দুটি প্রি-কনফিগার টাইমস্ট্যাম্প সচল করে:
+  - `shutdownGracePeriod`: নোড সম্পূর্ণ বন্ধ হওয়ার জন্য সর্বোচ্চ কত সেকেন্ড সময় দেওয়া হবে (যেমন ৩০ সেকেন্ড)।
+  - `shutdownGracePeriodCriticalPods`: ক্লাস্টারের কোর বা ক্র্টিকাল পডগুলোকে (যেমন সিএনআই পড) বন্ধ করার জন্য কত সেকেন্ড ছাড় দেওয়া হবে (যেমন ১০ সেকেন্ড)।
+Kubelet এই গ্রেস পিরিয়ডের মধ্যে নোডের পডগুলোকে অত্যন্ত দ্রুত ও সুন্দরভাবে `SIGTERM` দিয়ে বিদায় জানায় এবং এপিআই সার্ভারকে এন্ডপয়েন্ট থেকে পডগুলোর ট্রাফিক রিমুভ করার চূড়ান্ত সুযোগ দেয়, ফলে ইউজারের ব্রাউজারে কোনো রানিং রিকোয়েস্ট হঠাৎ কেটে বা ড্রপ করে যায় না।
+
+---
+
+## ২০. শীর্ষ ২০টি সিনিয়র-লেভেল কুবারনেটিস ইন্টারভিউ প্রশ্নোত্তর (Top 20 Systems Q&A)
 
 #### প্রশ্ন ১: Control Plane-এর কম্পোনেন্টগুলোর মধ্যে "Leader Election" কীভাবে ঘটে? একই সাথে একাধিক API Server এবং Controller Manager কীভাবে ম্যানেজ হয়?
 **উত্তর:** কুবারনেটিসের হাই-অ্যাভেইলেবিলিটি (HA) ক্লাস্টারে একাধিক এপিআই সার্ভার একযোগে একটিভ-একটিভ (Active-Active) মোডে রান করতে পারে, কারণ তারা স্টেটলেস। কিন্তু `kube-controller-manager` এবং `kube-scheduler` একই সাথে রান করলে ক্লাস্টারের স্টেট ডুপ্লিকেট বা কনফ্লিক্ট হতে পারে। তাই তারা **Active-Passive** মোডে রান করে।
