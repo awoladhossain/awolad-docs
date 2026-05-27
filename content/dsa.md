@@ -805,6 +805,180 @@ long long fastPowerIterative(long long base, long long exp) {
 
 ---
 
+### 🚀 ঙ. সেগমেন্টেড সিভ: বিশাল রেঞ্জ ফিল্টারিং (Segmented Sieve)
+
+মডুলার আর্কিটেকচার ডিজাইনে আমরা প্রায়ই একটি মারাত্মক বাধার সম্মুখীন হই। আমাদের চ্যাপ্টার ২-এর প্রমিত সিভ (Normal Sieve) $10^7$ পর্যন্ত রেঞ্জে চমৎকার কাজ করে। কিন্তু যদি আপনাকে বলা হয়—**$L$ থেকে $R$ রেঞ্জের মধ্যে কতগুলো মৌলিক সংখ্যা আছে তা বের করুন**, যেখানে $R$ এর মান $10^{12}$ পর্যন্ত হতে পারে এবং $R - L$ সর্বোচ্চ $10^6$!
+
+* **মেমরি লিমিট বোতলনেক (The 125 GB RAM Problem):** $10^{12}$ সাইজের একটি `vector<bool>` মেমরিতে ডিক্লেয়ার করতে গেলে আপনার ওএস কার্নেলে কমপক্ষে **১২৫ গিগাবাইট (GB) র‍্যাম** প্রমিনেন্টলি লক করতে হবে! এটি সার্ভার লেভেলে একটি চরম দুর্যোগ।
+* **সেগমেন্টেড সিভ সলিউশন:** আমরা যদি রেঞ্জটি লক্ষ্য করি, $R - L \le 10^6$। অর্থাৎ আমাদের মাত্র ১ মিলিয়ন আকারের রেঞ্জ ছাঁকতে হবে। 
+  ১. প্রথমে আমরা $\sqrt{R}$ (যা সর্বোচ্চ $10^6$) পর্যন্ত সমস্ত মৌলিক সংখ্যা প্রমিত সিভ দিয়ে খুঁজে নেব।
+  ২. এরপর আমরা মাত্র $R - L + 1$ আকারের একটি ডাইনামিক অ্যারে মেমরিতে এলোকেট করব (যা নিতে মাত্র কয়েক মেগাবাইট মেমরি নেবে!)।
+  ৩. $\sqrt{R}$ পর্যন্ত পাওয়া মৌলিক সংখ্যাগুলো দিয়ে আমরা শুধু `[L, R]` রেঞ্জের ভেতরের সংখ্যাগুলোর গুণিতককে কেটে দেব!
+
+##### C++ এন্টারপ্রাইজ রেঞ্জ সলভার কোড:
+```cpp
+#include <vector>
+#include <cmath>
+#include <algorithm>
+
+// প্রমিত সিভ (সহায়ক ফাংশন)
+std::vector<int> getSimplePrimes(int limit) {
+    std::vector<bool> isPrime(limit + 1, true);
+    std::vector<int> primes;
+    for (int i = 2; i * i <= limit; i++) {
+        if (isPrime[i]) {
+            for (int j = i * i; j <= limit; j += i) isPrime[j] = false;
+        }
+    }
+    for (int i = 2; i <= limit; i++) {
+        if (isPrime[i]) primes.push_back(i);
+    }
+    return primes;
+}
+
+// সেগমেন্টেড সিভ - O(sqrt(R) + (R - L) log log R) Time, O(R - L) Space
+std::vector<long long> segmentedSieve(long long L, long long R) {
+    long long limit = std::sqrt(R);
+    std::vector<int> primes = getSimplePrimes(limit);
+    
+    // R - L + 1 সাইজের ছোট ছাঁকনি
+    std::vector<bool> isPrimeRange(R - L + 1, true);
+    if (L == 1) isPrimeRange[0] = false; // ১ মৌলিক নয়
+    
+    for (int p : primes) {
+        // L এর ঠিক কাছাকাছি p-এর প্রথম গুণিতকটি খুঁজে বের করা
+        long long firstMultiple = (L / p) * p;
+        if (firstMultiple < L) firstMultiple += p;
+        
+        // যদি গুণিতকটি p নিজেই হয় (যেমন: L=2, p=2 হলে firstMultiple=2), 
+        // তবে আমরা সেটিকে মৌলিক হিসেবে বাঁচিয়ে রেখে তার পরবর্তী গুণিতক (4) থেকে কাটা শুরু করব
+        if (firstMultiple == p) firstMultiple += p;
+        
+        for (long long j = firstMultiple; j <= R; j += p) {
+            isPrimeRange[j - L] = false; // ইন্ডেক্স অফসেট j - L ব্যবহার করে কাটা হচ্ছে!
+        }
+    }
+    
+    std::vector<long long> rangePrimes;
+    for (long long i = 0; i <= R - L; i++) {
+        if (isPrimeRange[i]) rangePrimes.push_back(L + i);
+    }
+    return rangePrimes;
+}
+```
+
+##### আর্কিটেকচারাল ইমপ্যাক্ট:
+* এই অসাধারণ মেকানিজম দিয়ে আমরা সার্ভারের ১২৫ গিগাবাইট র‍্যাম অপচয়ের ঝুঁকিকে চিরতরে ধ্বংস করে মাত্র **২ মেগাবাইট** মেমরিতে কোটি কোটি গুণ স্পিডে রেঞ্জ ফিল্টারিং করতে পেরেছি!
+
+---
+
+### 🔑 চ. ফার্মার লিটল থিওরেম ও মডুলার ইনভার্স (Fermat's Little Theorem & Modular Inverse)
+
+মডুলার অ্যারিথমেটিকে যোগ, বিয়োগ এবং গুণ করা অত্যন্ত সহজ। কিন্তু যখনই আমাদের **ভাগের (Division)** কাজ করতে হয়, তখনই বিপর্যয় ঘটে।
+
+<Math>
+\left(\frac{A}{B}\right) \pmod M \neq \left( \frac{A \pmod M}{B \pmod M} \right) \pmod M
+</Math>
+
+ভাগের ক্ষেত্রে আমাদের ব্যবহার করতে হয় **Modular Multiplicative Inverse ($B^{-1}$)**। অর্থাৎ `(A / B) % M` কে আমাদের লিখতে হবে `(A * B^-1) % M`।
+
+> [!IMPORTANT]
+> **ফার্মার লিটল থিওরেম (Fermat's Little Theorem):**
+> যদি $M$ একটি মৌলিক সংখ্যা (Prime Number) হয় এবং $A$ এমন একটি সংখ্যা যা $M$ দ্বারা বিভাজ্য নয়, তবে গাণিতিক সত্য অনুযায়ী:
+
+<Math>
+A^{M-1} \equiv 1 \pmod M
+</Math>
+
+সমীকরণের উভয় পক্ষকে $A^{-1}$ দ্বারা গুণ করলে আমরা পাই:
+
+<Math>
+A^{M-2} \equiv A^{-1} \pmod M
+</Math>
+
+* **ম্যাজিক লজিক:** অর্থাৎ মডুলো $M$ এর সাপেক্ষে কোনো সংখ্যা $A$ এর বিপরীত ভগ্নাংশ বা ইনভার্স হলো **$A^{M-2} \pmod M$**! আর এটি আমরা আমাদের চ্যাপ্টার ২-এর **Binary Exponentiation** অ্যালগরিদম দিয়ে মাত্র `O(log M)` সময়ে বের করতে পারি!
+
+##### C++ মডুলার ডিভিশন কোড:
+```cpp
+long long MOD = 1e9 + 7;
+
+// আইটারেটিভ ফাস্ট পাওয়ার (সহায়ক ফাংশন)
+long long power(long long base, long long exp) {
+    long long res = 1;
+    base = base % MOD;
+    while (exp > 0) {
+        if (exp & 1) res = (res * base) % MOD;
+        base = (base * base) % MOD;
+        exp >>= 1;
+    }
+    return res;
+}
+
+// ফার্মার লিটল থিওরেম মডুলার ইনভার্স গণনা - O(log MOD) Time
+long long modInverse(long long n) {
+    return power(n, MOD - 2); // A^(M-2) % M
+}
+
+// সফল মডুলার ডিভিশন ফাংশন
+long long modDivide(long long A, long long B) {
+    A = A % MOD;
+    long long inv = modInverse(B);
+    return (A * inv) % MOD; // (A / B) % MOD = (A * B^-1) % MOD
+}
+```
+
+---
+
+### 🌲 ছ. মৌলিক উৎপাদকে বিশ্লেষণ ও ভাজক সংখ্যা (Prime Factorization & Divisors Count)
+
+সংখ্যাতত্ত্বের আরেকটি অত্যন্ত কোর মেকানিজম হলো যেকোনো সংখ্যাকে তার মৌলিক উৎপাদকের গুণফলে রূপান্তর করা (Prime Factorization)।
+
+গাণিতিক সত্য অনুযায়ী, যেকোনো ধনাত্মক সংখ্যা $N$ কে আমরা অনন্য মৌলিক উৎপাদকের শক্তির গুণফল হিসেবে লিখতে পারি:
+
+<Math>
+N = p_1^{a_1} \times p_2^{a_2} \times \dots \times p_k^{a_k}
+</Math>
+
+##### ১. উৎপাদকে বিশ্লেষণ C++ কোড ($O(\sqrt{N})$):
+```cpp
+#include <vector>
+#include <utility>
+
+std::vector<std::pair<int, int>> primeFactorization(int n) {
+    std::vector<std::pair<int, int>> factors; // {prime_factor, power}
+    
+    for (int i = 2; i * i <= n; i++) {
+        if (n % i == 0) {
+            int count = 0;
+            while (n % i == 0) {
+                count++;
+                n /= i;
+            }
+            factors.push_back({i, count});
+        }
+    }
+    if (n > 1) {
+        factors.push_back({n, 1}); // অবশিষ্ট মৌলিক সংখ্যাটি নিজেই
+    }
+    return factors;
+}
+```
+
+##### ২. মোট ভাজক সংখ্যা (Count of Divisors Formula):
+যদি কোনো সংখ্যার মৌলিক উৎপাদকের বিশ্লেষণ জানা থাকে, তবে তার মোট ভাজক বা ডিভিজর সংখ্যা $d(N)$ বের করার স্বর্গীয় সূত্রটি হলো:
+
+<Math>
+d(N) = (a_1 + 1) \times (a_2 + 1) \times \dots \times (a_k + 1)
+</Math>
+
+* **বাস্তব উদাহরণ:** $N = 12$। 
+  * $12 = 2^2 \times 3^1$
+  * এখানে সূচক বা পাওয়ারগুলো হলো: $a_1 = 2, a_2 = 1$।
+  * মোট ভাজক সংখ্যা $d(12) = (2 + 1) \times (1 + 1) = 3 \times 2 = 6$টি! 
+  * (বাস্তবে ১২ এর ভাজকগুলো হলো: ১, ২, ৩, ৪, ৬, ১২—যা নিখুঁতভাবে ৬টি!)
+
+---
+
 ### 🎯 চ্যাপ্টার ২ সলভিং চ্যালেঞ্জ! (LeetCode Practice)
 
 #### 📌 LeetCode 50: Pow(x, n)
