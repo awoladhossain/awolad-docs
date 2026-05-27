@@ -57,7 +57,7 @@ flowchart LR
 | **01** | [URL Shortener (TinyURL)](#-chapter-01-url-shortener-tinyurl-scale-10b-links) | 🟢 **Active** | Snowflake ID, Base62 Encoding, Redis, DB Indexing |
 | **02** | [YouTube & Netflix (Video Streaming)](#-chapter-02-youtube--netflix-video-streaming-platform) | 🟢 **Active** | Transcoding, CDN Edge, HLS/DASH Streaming, Blob Store |
 | **03** | [High-Concurrency E-Commerce (Amazon)](#-chapter-03-high-concurrency-e-commerce-system) | 🟢 **Active** | Flash Sales, Redis Distributed Locks, Saga Pattern, Idempotency |
-| **04** | WhatsApp & Messenger | 🔒 *Locked* | WebSockets, Message Gateway, Cassandra Store, Push Notifications |
+| **04** | [WhatsApp & Messenger](#-chapter-04-whatsapp--messenger-real-time-chat-engine) | 🟢 **Active** | WebSockets, Message Gateway, Cassandra Store, Connection Registry |
 | **05** | Uber & Grab (Ride-Sharing) | 🔒 *Locked* | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
 | **06** | Twitter/X (News Feed & Timeline) | 🔒 *Locked* | Fanout-on-write vs Fanout-on-read, Push vs Pull |
 | **07** | Ticketmaster (Ticketing Engine) | 🔒 *Locked* | High-Concurrency Booking, Distributed Locking, Queueing System |
@@ -496,15 +496,181 @@ sequenceDiagram
 
 ---
 
-## 🔒 Chapters 04 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 04: WhatsApp & Messenger (Real-Time Chat Engine)
 
-বাকি ১৭টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+রিয়েল-টাইম চ্যাট সিস্টেমের আর্কিটেকচার সাধারণ HTTP অ্যাপের চেয়ে একেবারেই আলাদা। এখানে প্রতি সেকেন্ডে লাখ লাখ ইউজারের রিয়েল-টাইম কানেকশন ধরে রাখতে হয় এবং মিলি-সেকেন্ড লেটেন্সিতে মেসেজ ডেলিভারি এনশিওর করতে হয়।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ওয়ান-টু-ওয়ান মেসেজিং অত্যন্ত কম লেটেন্সিতে (< ১০০ মিলি-সেকেন্ড)।
+  - অনলাইন/অফলাইন স্ট্যাটাস ট্র্যাক করা (Presence Service)।
+  - মেসেজের ৩টি ক্লাসিক ডেলিভারি স্ট্যাটাস: Sent, Delivered, Read (Ticks)।
+  - পারসিস্টেন্ট চ্যাট হিস্ট্রি (অফলাইনেও আগের চ্যাট স্ক্রোল করা যাবে)।
+- **Non-Functional:**
+  - **Strict Reliability:** কোনো মেসেজ ডিলিট বা লস হওয়া যাবে না।
+  - **High Availability:** রিড-রাইট ফ্লো সব সময় আপটাইম থাকতে হবে।
+  - **Massive Scale:** ১০০ মিলিয়ন ডেইলি একটিভ ইউজার (DAU) এবং প্রতিদিন ১০ বিলিয়ন মেসেজ হ্যান্ডেল করা।
+
+### ২. Back-of-the-envelope Estimation
+* `Message QPS = 10,000,000,000 / 86,400 seconds ≈` **115,000 messages/sec average QPS**
+* `Peak QPS = 115,000 * 3 ≈` **345,000 messages/sec**
+* `Concurrent Active WebSocket Connections = 100M DAU * 10% peak online ≈` **10 Million concurrent active sockets**
+* `Storage for 10 Years (avg message 100 bytes) = 10B * 100 bytes = 1 TB/day`
+  * `10-Year Total Storage = 1 TB * 365 days * 10 years ≈` **3.65 Petabytes**
+  * যেহেতু ডেটা হেভি রাইট-ইনটেনসিভ এবং ডিরেক্ট `userId` বা `chatId` কুয়েরি করা হবে, নোএসকিউএল ওয়াইড-কলাম ডাটাবেস (যেমন **Cassandra** বা **ScyllaDB**) এখানে পারফেক্ট।
+
+### ৩. API & Database Schema Design
+রিয়েল-টাইম মেসেজিংয়ে পোলিং বাদ দিয়ে আমরা **WebSocket** প্রোটোকল ব্যবহার করব, যা ক্লায়েন্ট এবং সার্ভারের মধ্যে একটি দ্বিমুখী (Bidirectional), লং-লিভড টিসিপি কানেকশন বজায় রাখে। 
+হিস্ট্রি কোয়েরির জন্য একটি ব্যাকআপ REST API থাকবে:
+- `GET /api/v1/messages?chat_id={chat_id}&limit=50` (প্যাজিনেটেড চ্যাট হিস্ট্রি)
+
+#### Database Schema (Cassandra Wide-Column Model)
+Cassandra-র স্টোরেজ আর্কিটেকচার ডেটাকে মেমোরিতে (MemTable) রাইট করে সরাসরি ক্রনোলজিক্যালি ডিস্কে (SSTable) সেভ করে, যার ফলে ডিস্কের কোনো র্যান্ডম সিক ছাড়াই এটি বিলিয়ন বিলিয়ন রো লিখতে পারে।
+
+```sql
+CREATE TABLE chat_messages (
+    chat_id uuid,
+    message_id timeuuid, -- Embeds timestamp, Chronological order guarantees
+    sender_id uuid,
+    content text,
+    status varchar, -- 'sent', 'delivered', 'read'
+    PRIMARY KEY (chat_id, message_id)
+) WITH CLUSTERING ORDER BY (message_id DESC);
+```
+*(নোট: এখানে `chat_id` হলো **Partition Key**, যা একটি চ্যাটের সব মেসেজকে ফিজিক্যালি একই হার্ডওয়্যার নোডে স্টোর করে। আর `message_id` হলো **Clustering Key**, যা মেসেজগুলোকে সময় অনুযায়ী ডিসেন্ডিং অর্ডারে সর্ট করে রাখে। ফলে চ্যাট লোড করা অত্যন্ত ফাস্ট হয়)।*
+
+### ৪. High-Level Architecture
+সিস্টেমের রিয়েল-টাইম মেসেজ রাউটিং ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    BrowserClientA["Client A (Online)"] -->|1. WebSocket Conn| WSGatewayA["WebSocket Server A"]
+    BrowserClientB["Client B (Online)"] -->|WebSocket Conn| WSGatewayB["WebSocket Server B"]
+    
+    WSGatewayA -->|2. Check Route| PresenceRedis["Presence Service (Redis)"]
+    WSGatewayA -->|3. Publish Message| MsgBroker["Message Broker (Kafka / RabbitMQ)"]
+    
+    MsgBroker -->|4. Save Async| ChatService["Chat Service (Cassandra DB)"]
+    MsgBroker -->|5. Forward Event| WSGatewayB
+    WSGatewayB -->|6. Instant Delivery| BrowserClientB
+    
+    style BrowserClientA fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style WSGatewayA fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style MsgBroker fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style ChatService fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Connection Registry Implementation
+যেহেতু আমাদের ১০ মিলিয়ন কনকারেন্ট সকেট থাকবে, এগুলোকে কোনো একটি সিঙ্গেল সার্ভারে রাখা সম্ভব নয়। আমাদের ১০০+ গেটওয়ে সার্ভার লাগবে। ইউজার A যখন ইউজার B-কে মেসেজ পাঠাবে, তখন গেটওয়ে A-কে জানতে হবে ইউজার B কোন গেটওয়ে সার্ভারে কানেক্টেড আছে, যাতে মেসেজটি সঠিক নোডে পুশ করা যায়।
+
+নিচে Redis-ভিত্তিক একটি প্রোডাকশন-গ্রেড ডিস্ট্রিবিউটেড **Connection Routing & Presence Registry** কোড দেওয়া হলো:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  timestamp: number;
+}
+
+export class MessageGatewayRegistry {
+  private static readonly PRESENCE_PREFIX = "presence:user:";
+  private static readonly ROUTING_PREFIX = "routing:user:";
+  
+  private currentServerId: string;
+
+  constructor(serverId: string) {
+    this.currentServerId = serverId;
+  }
+
+  /**
+   * ইউজার গেটওয়েতে কানেক্ট হলে তার অনলাইন স্ট্যাটাস এবং রাউটিং টার্গেট সেট করে
+   */
+  public async registerUserConnection(userId: string): Promise<void> {
+    const multi = redis.multi();
+    // Presence set to online with 5 mins TTL (Heartbeat keeps this alive)
+    multi.set(`${MessageGatewayRegistry.PRESENCE_PREFIX}${userId}`, "online", "EX", 300);
+    // Map user socket to this specific WebSocket gateway server
+    multi.set(`${MessageGatewayRegistry.ROUTING_PREFIX}${userId}`, this.currentServerId);
+    await multi.exec();
+    console.log(`User ${userId} successfully registered on Gateway ${this.currentServerId}`);
+  }
+
+  /**
+   * ইউজার ডিসকানেক্ট হলে স্ট্যাটাস ডিলিট করে
+   */
+  public async deregisterUserConnection(userId: string): Promise<void> {
+    const multi = redis.multi();
+    multi.del(`${MessageGatewayRegistry.PRESENCE_PREFIX}${userId}`);
+    multi.del(`${MessageGatewayRegistry.ROUTING_PREFIX}${userId}`);
+    await multi.exec();
+  }
+
+  /**
+   * টার্গেট ইউজার কোন গেটওয়েতে কানেক্টেড আছে তা ট্র্যাক করে
+   */
+  public async getRouteForUser(userId: string): Promise<string | null> {
+    return await redis.get(`${MessageGatewayRegistry.ROUTING_PREFIX}${userId}`);
+  }
+
+  /**
+   * Redis Pub/Sub এর মাধ্যমে রিয়েল-টাইম মেসেজ সঠিক গেটওয়েতে রিলে করে দেয়
+   */
+  public async relayMessage(message: ChatMessage): Promise<boolean> {
+    const targetServerId = await this.getRouteForUser(message.receiverId);
+    
+    if (!targetServerId) {
+      console.log(`Receiver ${message.receiverId} is offline. Pushing to offline queue.`);
+      await this.queueOfflineMessage(message);
+      return false;
+    }
+
+    // Publish to the specific channel of the target WebSocket Server
+    const channelName = `gateway:channel:${targetServerId}`;
+    await redis.publish(channelName, JSON.stringify(message));
+    console.log(`Message successfully published to ${channelName} for user ${message.receiverId}`);
+    return true;
+  }
+
+  private async queueOfflineMessage(message: ChatMessage): Promise<void> {
+    // অফলাইনে থাকা অবস্থায় মেসেজটি কিউতে অ্যাড করে মোবাইল পুশ নোটিফিকেশন ট্রিগার করা হবে
+    await redis.lpush(`offline:queue:user:${message.receiverId}`, JSON.stringify(message));
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+রিয়েল-টাইম চ্যাট স্কেলিংয়ের ক্ষেত্রে প্রোডাকশনে ফেস করা ৩টি অত্যন্ত জঘন্য সমস্যা ও তাদের সিনিয়র লেভেল সমাধান:
+
+#### ১. Operating System Socket Limits & VIP Load Balancing
+১০ মিলিয়ন কনকারেন্ট কানেকশনের অর্থ হলো গেটওয়ে সার্ভারগুলোর ওপর ১০ মিলিয়ন লং-লিভড টিসিপি কানেকশন খোলা রাখা। লিনাক্স অপারেটিং সিস্টেমে প্রতি ফিজিক্যাল নোডে বাই-ডিফল্ট ৬৫,৫৩৫ টির বেশি আউটবাউন্ড সকেট কানেকশন হ্যান্ডেল করা যায় না।
+* **মিটিগেশন A (Linux OS Kernel Tuning):** লিনাক্স কার্নেল কনফিগারেশনে ফাইল ডেসক্রিপ্টরের লিমিট বাড়াতে হবে। `sysctl` ফাইলে `fs.file-max` লিমিট এবং `nofile` সফট/হার্ড লিমিট ১০ লাখের ওপরে সেট করতে হবে।
+* **মিটিগেশন B (Virtual IPs - VIPs):** লোড ব্যালেন্সারে মাল্টিপল ফিজিক্যাল আইপি অ্যাসাইন করা। ক্লায়েন্টদের কানেক্ট করার জন্য আমরা **Consistent Hashing** ব্যবহার করে লোড সমানভাবে ডিস্ট্রিবিউট করব যাতে কোনো নির্দিষ্ট গেটওয়েতে সকেট ক্র্যাশ না হয়।
+
+#### ২. Delivery receipts Storm under High Concurrency
+প্রতিটি মেসেজ ডেলিভারির জন্য ৩টি করে টিক (Sent, Delivered, Read) জেনারেট হয়। অর্থাৎ প্রতিদিন ১০ বিলিয়ন মেসেজ পাঠানো হলে সিস্টেমে মোট ৩০ বিলিয়ন এক্সট্রা স্ট্যাটাস আপডেট রাইট ইভেন্ট আসে। এটি সরাসরি ডাটাবেসে বা গেটওয়েতে ট্রানজেক্ট করা হলে পুরো নেটওয়ার্ক থ্রোটল হয়ে যাবে।
+* **মিটিগেশন:** **Delivery Receipt Batching & Coalescing**। ক্লায়েন্ট ডিভাইস যখন চ্যাট স্ক্রিন স্ক্রোল করে, সে প্রতি মেসেজে আলাদা রিকোয়েস্ট না পাঠিয়ে ১ সেকেন্ডের বাফারে রিসিপ্ট ডেটা জমা করে (যেমন: "Message 1 to 50 are Read")। তারপর সিঙ্গেল রিকোয়েস্ট পাঠিয়ে ডাটাবেসে বাল্ক আপডেট করে। এতে ডাটাবেসের রাইট অপারেশন ৩০ বিলিয়ন থেকে কমে মাত্র ৩০০ মিলিয়নে নেমে আসে!
+
+#### ৩. Hotspots in Cassandra Partitioning (Massive Group Chats)
+যদি ১০,০০০ মেম্বার বিশিষ্ট কোনো পপুলার গ্রুপ চ্যাটে মেসেজ আদান-প্রদান হতে থাকে, তবে `chat_id` পার্টিকুলারলি একটি ডাটাবেস পার্টিকপ্ট নোডের ওপর চরম চাপ তৈরি করবে। Cassandra-র একটি ফিজিক্যাল পার্টিকপ্ট সাধারণত ১০০MB-এর বেশি হলে পারফরম্যান্স কড়া শুরু করে।
+* **মিটিগেশন (Partition Key Salting):** আমরা `chat_id` এর সাথে একটি বাকেট ভ্যালু যুক্ত করব (যেমন `chat_id + bucket_id`), যেখানে `bucket_id` হবে `timestamp / 1-hour` অথবা একটি সাইক্লিক কাউন্টার `(1 to 10)`। এর ফলে একই গ্রুপের মেসেজগুলো ডাটাবেসের আলাদা আলাদা ফিজিক্যাল ডিস্ক ব্লকে ডিস্ট্রিবিউট হয়ে যাবে এবং ডাটাবেস বটলনেক সম্পূর্ণ ভ্যানিশ হয়ে যাবে।
+
+---
+
+## 🔒 Chapters 05 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১৬টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
 
 যেমন:
-- **চ্যাপ্টার ০৪ (WhatsApp):** শিখবো কীভাবে WebSockets এবং Redis Pub/Sub দিয়ে রিয়েল-টাইম মেসেজিং গেটওয়ে তৈরি করতে হয় এবং Cassandra বা ScyllaDB-তে কীভাবে ক্লিক-টু-রিড লেটেন্সি কমানো যায়।
-- **চ্যাপ্টার ০৫ (Uber):** বুঝবো কীভাবে Google maps-এর মতো রিয়েল-টাইম ড্রাইভারদের Geolocation ট্র্যাক করা যায় **H3 Geohash Grid** বা **Quadtree** ডাটা স্ট্রাকচার দিয়ে।
+- **চ্যাপ্টার ০৫ (Uber):** বুঝবো কীভাবে Google maps-এর মতো রিয়েল-тим ড্রাইভারদের Geolocation ট্র্যাক করা যায় **H3 Geohash Grid** বা **Quadtree** ডাটা স্ট্রাকচার দিয়ে।
 - **চ্যাপ্টার ০৬ (Twitter):** জানবো কেন সেলিব্রিটিদের টুইট ফিড এবং আমাদের নরমাল ইউজারদের টুইট ফিড তৈরিতে সম্পূর্ণ আলাদা **Push vs Pull (Fanout)** আর্কিটেকচার ব্যবহার করতে হয়।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** আপনি কি আমাদের এই ২০টি টপিকের রোডম্যাপ এপ্রুভ করছেন? আমরা কি এখন **Chapter 04 (WhatsApp/Messenger Real-time System)** নিয়ে ডিপ-ডাইভ করে সেটি আনলক করবো, নাকি এর মধ্য থেকে আপনার কোনো ফেভারিট কাস্টম টপিক শুরু করবো? Let's discuss and design!
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 04 (WhatsApp/Messenger Chat Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের ২০টি টপিকের রোডম্যাপ এপ্রুভ করে **Chapter 05 (Uber/Grab Geolocation Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
