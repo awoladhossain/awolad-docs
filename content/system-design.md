@@ -65,7 +65,7 @@ flowchart LR
 | **09** | [Web Crawler (Search Engine Indexer)](#-chapter-09-web-crawler-search-engine-indexer) | 🟢 **Active** | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
 | **10** | [Distributed Notification System](#-chapter-10-distributed-notification-system) | 🟢 **Active** | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
 | **11** | [API Gateway & Distributed Rate Limiter](#-chapter-11-api-gateway--distributed-rate-limiter) | 🟢 **Active** | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
-| **12** | Airbnb (Hotel/Home Booking) | 🔒 *Locked* | Double Booking Prevention, Temporal Querying, Geo-search |
+| **12** | [Airbnb (Hotel/Home Booking)](#-chapter-12-airbnb-hotelhome-booking) | 🟢 **Active** | Double Booking Prevention, Temporal Querying, Geo-search |
 | **13** | Robinhood / Stock Trading Engine | 🔒 *Locked* | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
 | **14** | Distributed Cache (Redis Internals) | 🔒 *Locked* | Replication, Sentinel, Clustering & Partitioning, Eviction (LRU) |
 | **15** | Metrics & Monitoring System (Prometheus) | 🔒 *Locked* | Time Series DB (TSDB), Pull vs Push, Metrics Aggregation |
@@ -1851,14 +1851,242 @@ export class DistributedRateLimiter {
 
 ---
 
-## 🔒 Chapters 12 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 12: Airbnb (Hotel/Home Booking)
 
-বাকি ৯টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+এয়ারবিএনবি বা বুকিং ডট কমের মতো হাই-স্কেল হোটেল ও হোম বুকিং সিস্টেমের সবচেয়ে জটিল আর্কিটেকচারাল চ্যালেঞ্জ হলো **ডবল বুকিং প্রতিরোধ করা**। একই মিলি-সেকেন্ডে দুজন ইউজার যদি একই রুমের জন্য একই ডেট রেঞ্জে "বুক" বাটনে ক্লিক করেন, তবে সিস্টেম কীভাবে তা রিয়েল-টাইমে হ্যান্ডেল করবে এবং লাখ লাখ লোকেশন-ভিত্তিক সার্চ কুয়েরি কীভাবে মিলি-সেকেন্ড লেটেন্সিতে সার্ভ করবে, তা এই চ্যাপ্টারে আলোচনা করা হলো।
 
-যেমন:
-- **চ্যাপ্টার ১২ (Airbnb Hotel/Home Booking):** জানবো কীভাবে ডবল বুকিং প্রতিরোধ ও ডাইনামিক রিয়েল-টাইম এভেইলেবিলিটি কুয়েরি স্কেল করতে হয়।
-- **চ্যাপ্টার ১৩ (Robinhood / Stock Trading Engine):** বুঝবো কীভাবে LMAX Disruptor ব্যবহার করে মিলিয়ন মিলিয়ন ফাইনান্সিয়াল অর্ডার আল্ট্রা-লো ল্যাটেন্সিতে ম্যাচ করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজাররা নির্দিষ্ট লোকেশন ও ডেট রেঞ্জে (`check_in_date` থেকে `check_out_date`) রুম বা বাড়ি সার্চ করতে পারবেন।
+  - বুকিং কনফার্মেশনের জন্য ইউজারকে সাময়িক ১০ মিনিটের ইনভেন্টরি লক দেওয়া (Payment Hold)।
+  - ডবল বুকিং প্রতিরোধ: কোনো রুমের জন্য আংশিক ওভারল্যাপিং ডেট রেঞ্জে বুকিং রিজেক্ট করা।
+- **Non-Functional:**
+  - **Temporal Consistency:** কনফার্মড বা সাময়িক লকড রুমগুলো যাতে সার্চ রেজাল্ট থেকে রিয়েল-টাইমে ফিল্টার আউট হয়ে যায়।
+  - **High Write Concurrency:** ফ্ল্যাশ সেল বা ভ্যাকশন ওপেনিংয়ের সময় সেকেন্ডে হাজার হাজার বুকিং ট্রাই করা হ্যান্ডেল করা।
+  - **Overbooking Zero Tolerance:** আর্থিক ক্ষতি ও কাস্টমার ডিসস্যাটিসফ্যাকশন এড়াতে ওভারবুকিং শতভাগ বন্ধ করা।
+
+### ২. Back-of-the-envelope Estimation
+* **সিস্টেমের স্কেল ও ম্যাট্রিক্স:**
+  * মোট একটিভ হোটেল ও হোমস লিস্টিং = ১০ মিলিয়ন (10 Million Listings)
+  * দৈনিক বুকিং ভলিউম = ১০০,০০০ বুকিং / দিন
+  * **Average Bookings Write QPS = ১০০,০০০ / ৮৬,৪০০ সেকেন্ড ≈** **1.2 writes/sec (Average)**
+  * **Peak Booking Surge (ফ্ল্যাশ ভ্যাকেশন ডিল):** **5,000 requests/sec**
+  * **Search & Lookup Read QPS (1000:1 Read-to-Write ratio):** **50,000 queries/sec**
+* **ইনভেন্টরি ইন্ডেক্স মেমোরি ক্যালকুলেশন (Redis Bitmaps):**
+  * আমরা প্রতিটি লিস্টিংয়ের জন্য আগামী ৩৬৫ দিনের বুকিং স্লট ১টি করে বিট (১ = বুকড, ০ = খালি) দিয়ে ক্যাশে ট্র্যাক করব।
+  * ৩৬৫ দিন = ৩৬৫ বিট ≈ ৪৫ বাইট প্রতি লিস্টিং প্রতি বছর।
+  * **১০ মিলিয়ন লিস্টিংয়ের ইন-মেমোরি ক্যাশ সাইজ = ১০,০০০,০০০ * ৪৫ বাইট ≈** **450 Megabytes of Redis RAM**! অর্থাৎ, মাত্র ৪৫০ মেগাবাইট মেমোরি ব্যবহার করে আমরা রিয়েল-টাইম এভেইলেবিলিটি র্যামেই মিলি-সেকেন্ড লেটেন্সিতে ট্র্যাক করতে পারব।
+
+### ৩. API & Database Schema Design
+বুকিং লক এপিআই এবং রিলেশনাল ডেটাবেস স্কিমা ডিজাইন:
+- `POST /api/v1/bookings/lock`
+  - Body: `{ listingId, checkIn: "2026-06-01", checkOut: "2026-06-05", userId: 9948 }` -> Returns `{ success: true, lockId: 77102, lockedUntil: "2026-05-27T18:13:27Z" }`
+
+#### Database Schema Design (PostgreSQL using GiST Indexes)
+বুকিং এবং লিস্টিং ডেটা নিখুঁতভাবে মেইনটেইন করার জন্য ACID রিলেশনাল ডাটাবেস সবচেয়ে বেশি নিরাপদ:
+
+```sql
+-- হোটেল/হোম লিস্টিং টেবিল
+CREATE TABLE listings (
+    id bigint PRIMARY KEY,
+    title varchar(255),
+    price decimal(10,2)
+);
+
+-- বুকিং টেবিল (PostgreSQL Date Range এক্সক্লুশন রুল সহ)
+CREATE TABLE bookings (
+    id bigint PRIMARY KEY,
+    listing_id bigint REFERENCES listings(id),
+    user_id bigint,
+    check_in date NOT NULL,
+    check_out date NOT NULL,
+    status varchar(20), -- 'LOCKED', 'CONFIRMED', 'CANCELLED'
+    locked_until timestamp,
+    -- GiST (Generalized Search Tree) ব্যবহার করে ওভারল্যাপিং ডেট বুকিং ডাটাবেস লেয়ারেই অসম্ভব করা হলো
+    CONSTRAINT no_overlap EXCLUDE USING gist (
+        listing_id WITH =,
+        daterange(check_in, check_out, '[]') WITH &&
+    )
+);
+```
+
+### ৪. High-Level Architecture
+এয়ারবিএনবি বুকিং ফ্লো, ডিস্ট্রিবিউটেড লকিং এবং রিয়েল-টাইম টেম্পোরাল সার্চ আর্কিটেকচার নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Client App"] -->|1. Search listings by date| GeoSearch["Geospatial and Temporal Search ElasticSearch"]
+    Client -->|2. Try Booking Lock| BookingSvc["Distributed Booking Service"]
+    
+    BookingSvc -->|3. Acquire Distributed Lock| Redlock["Redis Redlock Manager Listing Lock"]
+    Redlock -->|4. Lock Acquired| BookingSvc
+    
+    BookingSvc -->|5. Insert Booking under ACID Transaction| PG["PostgreSQL ACID Database"]
+    PG -->|6. Overlap Check Success| BookingSvc
+    
+    BookingSvc -->|7. Return Lock Token to Payment| Client
+    Client -->|8. Callback Confirm| PaymentSvc["Payment Processing Service"]
+    PaymentSvc -->|9. Commit Status to CONFIRMED| PG
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style Redlock fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style PG fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style GeoSearch fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Temporal Overlap Booking Manager
+নিচে একটি প্রোডাকশন-রেডি **Temporal Booking Manager** কোড দেওয়া হলো যা PostgreSQL ট্রানজেকশনে `SELECT FOR UPDATE` লক ব্যবহার করে তারিখ ওভারল্যাপ এভয়েড করে রিয়েল-টাইমে ইনভেন্টরি লক নিশ্চিত করে:
+
+```typescript
+import { Client } from "pg";
+import Redis from "ioredis";
+
+const redis = new Redis();
+const pgClient = new Client();
+
+interface BookingRequest {
+  listingId: number;
+  userId: number;
+  checkIn: string; // "YYYY-MM-DD"
+  checkOut: string; // "YYYY-MM-DD"
+}
+
+interface LockResult {
+  success: boolean;
+  message: string;
+  bookingId?: number;
+}
+
+export class TemporalBookingManager {
+  private static readonly LOCK_TTL_SECONDS = 600; // ১০ মিনিট হোল্ড পিরিয়ড
+
+  /**
+   * নির্দিষ্ট লিস্টিং ও তারিখের জন্য ওভারল্যাপ চেক করে রুমটি সাময়িকভাবে লক করে
+   */
+  public async tryLockListingForDates(req: BookingRequest): Promise<LockResult> {
+    const redisLockKey = `lock:listing:${req.listingId}`;
+    
+    // ১. ডিস্ট্রিবিউটেড লকিং (Redis Lock) যাতে দুই ক্র্যাডল রিকোয়েস্ট একই সময়ে এন্ট্রি না নেয়
+    const acquired = await redis.set(redisLockKey, req.userId, "NX", "EX", 10);
+    if (!acquired) {
+      return {
+        success: false,
+        message: "This listing is currently being modified by another transaction. Please retry in a few seconds.",
+      };
+    }
+
+    try {
+      // ২. PostgreSQL ACID ট্রানজেকশন ব্লক শুরু
+      await pgClient.query("BEGIN");
+
+      // ৩. SELECT FOR UPDATE দিয়ে ডাটাবেস রো লক করা যাতে কোনো কন্টেন্ট এডিট না হয়
+      const listingCheck = await pgClient.query(
+        "SELECT id FROM listings WHERE id = $1 FOR UPDATE",
+        [req.listingId]
+      );
+
+      if (listingCheck.rows.length === 0) {
+        throw new Error("Listing does not exist.");
+      }
+
+      // ৪. কোয়েরি চালিয়ে দেখা যে উক্ত তারিখের ভেতরে কোনো কনফার্মড বা একটিভ লক বুকিং আছে কি না
+      const overlapQuery = `
+        SELECT id FROM bookings 
+        WHERE listing_id = $1 
+        AND status IN ('CONFIRMED', 'LOCKED')
+        AND (
+          (check_in <= $2 AND check_out >= $2) OR
+          (check_in <= $3 AND check_out >= $3) OR
+          (check_in >= $2 AND check_out <= $3)
+        )
+        LIMIT 1
+      `;
+      
+      const overlapResult = await pgClient.query(overlapQuery, [
+        req.listingId,
+        req.checkIn,
+        req.checkOut,
+      ]);
+
+      if (overlapResult.rows.length > 0) {
+        // ওভারল্যাপ পাওয়া গেছে!
+        await pgClient.query("ROLLBACK");
+        return {
+          success: false,
+          message: "Sorry, this room is already booked or locked for the requested dates.",
+        };
+      }
+
+      // ৫. ওভারল্যাপ না থাকলে সাময়িকভাবে LOCKED স্ট্যাটাসে ১০ মিনিটের এক্সপায়ার ডেট দিয়ে বুকিং ইনসার্ট
+      const lockedUntil = new Date(Date.now() + TemporalBookingManager.LOCK_TTL_SECONDS * 1000);
+      const insertQuery = `
+        INSERT INTO bookings (listing_id, user_id, check_in, check_out, status, locked_until)
+        VALUES ($1, $2, $3, $4, 'LOCKED', $5)
+        RETURNING id
+      `;
+
+      const insertResult = await pgClient.query(insertQuery, [
+        req.listingId,
+        req.userId,
+        req.checkIn,
+        req.checkOut,
+        lockedUntil,
+      ]);
+
+      await pgClient.query("COMMIT");
+      
+      return {
+        success: true,
+        message: "Room locked successfully for 10 minutes. Please proceed to payment.",
+        bookingId: insertResult.rows[0].id,
+      };
+
+    } catch (error) {
+      await pgClient.query("ROLLBACK");
+      console.error("Booking transactional failure:", error);
+      return {
+        success: false,
+        message: "System encountered an unexpected transaction failure. Rollback complete.",
+      };
+    } finally {
+      // ডিস্ট্রিবিউটেড লক রিলিজ করা
+      const currentLockVal = await redis.get(redisLockKey);
+      if (currentLockVal === String(req.userId)) {
+        await redis.del(redisLockKey);
+      }
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব বুকিং প্লাটফর্মে প্রোডাকশন স্কেলে ফেস করা ৩টি মারাত্মক আর্কিটেকচারাল গ্যাপ এবং স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Microsecond Double-Booking Race Condition (Snapshot Isolation Leak)
+ট্রানজেকশনাল এপিআইতে দুজন ইউজার একই সাথে `SELECT` কুয়েরি চালিয়ে যদি দেখতে পান ডেট ফাঁকা আছে, তবে দুজনেই একই সাথে `INSERT` স্টেটমেন্ট এক্সিকিউট করবেন। ডাটাবেস ইঞ্জিন রিড স্লোনেস বা আইসোলেশন লেভেলের ফারাক থাকলে দুজনের বুকিংকেই সাকসেসফুলি ইনসার্ট করে দেবে, ফলে কনফার্মড ডবল বুকিং ঘটে যাবে যা মারাত্মক ক্র্যাশ।
+* **মিটিগেশন (PostgreSQL GiST Exclude Constraints):** আমাদের স্কিমা ডিজাইনে আমরা PostgreSQL-এর ডেডিকেটেড `daterange` ও `GiST` এক্সক্লুশন কনস্ট্রেইন্ট ব্যবহার করেছি: `CONSTRAINT no_overlap EXCLUDE USING gist (listing_id WITH =, daterange(check_in, check_out, '[]') WITH &&)`। এটি ডাটাবেসের ফিজিক্যাল মেমোরি লেভেলের রুল। ট্রানজেকশনের রিড চেক বাইপাস করে যদি ওয়ান ইন এ মিলিয়ন চান্সে দুটি সমসাময়িক থ্রেড একই তারিখে ইনসার্ট করতে যায়, ডাটাবেস ফিজিক্যালি সেকেন্ড রিকোয়েস্টটিকে `Constraint Violation` এরর ছুড়ে রিজেক্ট করে দেবে, যা ডবল বুকিংকে জিরো পার্সেন্টে নামিয়ে আনে।
+
+#### ২. Orphan Holds & Payment Outage Deadlocks
+ইউজার একটি বিলাসবহুল ভিলা ১০ মিনিটের জন্য লক করলেন এবং পেমেন্ট গেটওয়েতে রিডাইরেক্ট হলেন। এরপর ইউজার ব্রাউজার ক্লোজ করে দিলেন অথবা পেমেন্ট করতে গিয়ে তার ব্যাংক ট্রানজেকশন হ্যাং হয়ে গেল। যদি পেমেন্ট গেটওয়ে কোনো রেসপন্স না পাঠায়, রুমটি চিরদিনের জন্য `LOCKED` স্টেটে থেকে ইনভেন্টরি লক করে রাখবে এবং অন্য কেউ সেটি সার্চে দেখতে পাবে না।
+* **মিটিগেশন (Redis TTL Keyspace Notification Rollbacks):** আমরা যখন ডেটাবেসে বুকিং লক জেনারেট করব, একই সময়ে Redis-এ একটি কী রাখব `booking:hold:${bookingId}` যার TTL সেট করব ১০ মিনিট। আমরা আমাদের নোড সার্ভারে **Redis Keyspace Event Notification** (`__keyevent@0__:expired`) লিসেন করব। ১০ মিনিট পর Redis কী-টি এক্সপায়ার হলে আমাদের ব্যাকগ্রাউন্ড লিসেনার পড ইভেন্ট রিসিভ করবে এবং একটি অ্যাসিক্রোনাস কুয়েরি চালিয়ে PostgreSQL-এ উক্ত বুকিংয়ের স্ট্যাটাস `LOCKED` থেকে `CANCELLED` এ রোলব্যাক করে দিয়ে ইনভেন্টরি রিলিজ করে দেবে।
+
+#### ৩. Spatial-Temporal Search Read Scale at 50,000 QPS
+পিক সিজনে কোটি কোটি সার্চ কুয়েরি আসে। প্রতিবার "ক্যাটালোনিয়া অঞ্চলে ১ থেকে ৫ জুলাই কোন কোন অ্যাপার্টমেন্ট খালি আছে?" সার্চ করার জন্য আমাদের মেইন বুকিং টেবিল স্ক্যান করা অসম্ভব এবং এতে CPU ১০০% হিট করে সার্ভার ডাউন হয়ে যাবে।
+* **মিটিগেশন (Elasticsearch + Redis Availability Bitmaps):**
+  * **Spatial Check:** ভৌগোলিক লোকেশন ফিল্টারিং এর জন্য আমরা **Elasticsearch Geospatial Query** ব্যবহার করব। লোকেশনের রেঞ্জের ভেতরের Apartment ID-গুলো আমরা ES থেকে বের করব।
+  * **Temporal Check:** এভেইলেবিলিটি চেকের জন্য আমরা ডাটাবেস টাচই করব না। প্রতিটি অ্যাপার্টমেন্টের জন্য একটি ৩৬৫-বিটের **Redis Bitmap** থাকবে। ১ থেকে ৫ জুলাই বুকিং এভেইলেবল কি না দেখতে সার্চ ইঞ্জিন অ্যাপার্টমেন্টগুলোর বিটম্যাপের বিট নং ১৮২ থেকে ১৮৬ রিড করবে। যদি সবগুলো বিট `0` থাকে, তবেই পেজে সেটি এভেইলেবল দেখাবে। এই ডুয়াল পাইপলাইন মেইন ডাটাবেসকে সম্পূর্ণ রিড ফ্রি রাখে।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 11 (API Gateway & Distributed Rate Limiter)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 12 (Airbnb Hotel/Home Booking: Inventory Management)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 13 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ৮টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১৩ (Robinhood / Stock Trading Engine):** বুঝবো কীভাবে LMAX Disruptor ব্যবহার করে মিলিয়ন মিলিয়ন ফাইনান্সিয়াল অর্ডার ম্যাচ করতে হয়।
+- **চ্যাপ্টার ১৪ (Distributed Cache - Redis Internals):** জানবো কীভাবে রেডিসের ইন্টারনাল ক্লাস্টারিং, সেন্টিনেল রেপ্লিকেশন এবং LRU ইভিকশন মেকানিজম কাজ করে।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 12 (Airbnb Hotel/Home Booking: Inventory Management)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 13 (Robinhood / Stock Trading Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
