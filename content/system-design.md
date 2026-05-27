@@ -1,0 +1,2322 @@
+---
+title: "System Design Handbook"
+description: "১০+ বছরের রিয়েল-ওয়ার্ল্ড এক্সপেরিয়েন্স থেকে তৈরি ২০টি হাই-পারফরম্যান্স সিস্টেম ডিজাইন ও প্র্যাক্টিক্যাল ইমপ্লিমেন্টেশন গাইড।"
+category: "Architecture"
+---
+
+# 🌐 System Design Masterclass: 10-Year Architect Guide
+
+স্বাগতম! এই হ্যান্ডবুকটি কোনো তাত্ত্বিক ডক নয়। এটি ১০+ বছরের রিয়েল-ওয়ার্ল্ড লার্জ স্কেল ডিস্ট্রিবিউটেড সিস্টেম আর্কিটেক্ট করার এক্সপেরিয়েন্স এবং প্রোডাকশন ফেইলিউর থেকে শেখা লেসন বুক। আমরা এখানে ২০টি ক্লাসিক ও মডার্ন সিস্টেম ডিজাইন শিখবো। 
+
+শুধুমাত্র হাই-লেভেল ব্লক ডায়গ্রাম এঁকে আমরা থেমে থাকবো না। প্রতিটা টপিকের পেছনে **কীভাবে চিন্তা করতে হয় (Mental Framework)**, **ক্যালকুলেশন কীভাবে করতে হয় (Back-of-the-envelope Estimation)**, এবং **কোডে কীভাবে রিফ্লেক্ট করতে হয় (Practical Code Snippets)** — সবগুলো আমরা এই ইন্টারেক্টিভ গাইডে কাভার করবো।
+
+---
+
+## 🛠️ The 10-Year Architect's Framework
+
+যেকোনো সিস্টেম ডিজাইন ইন্টারভিউ বা রিয়েল-ওয়ার্ল্ড প্রজেক্ট রিকোয়ারমেন্ট হ্যান্ডেল করার জন্য আমি এই **৫-ধাপের আর্কিটেকচারাল ফ্রেমওয়ার্ক** ব্যবহার করি। এটি আমাদের পুরো হ্যান্ডবুকের কোর স্ট্রাকচার হিসেবে কাজ করবে:
+
+```mermaid
+flowchart LR
+    R[1. Requirements & Scope] --> E[2. Capacity Estimation]
+    E --> A[3. API Design & Schema]
+    A --> H[4. High-Level Design]
+    H --> D[5. Deep Dive & Scaling]
+    
+    style R fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style E fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style A fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style H fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#fff
+    style D fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+1. **Requirements Gathering (স্কোপ ডিটেকশন):** 
+   - **Functional:** সিস্টেমটি কী কী কাজ করবে (যেমন: ইউজার ইউআরএল শর্ট করবে)।
+   - **Non-Functional:** সিস্টেমের পারফরম্যান্স টার্গেট কী (High Availability, Low Latency, Read-Heavy vs Write-Heavy)।
+2. **Back-of-the-envelope Estimation (ক্যাপাসিটি হিসাব):**
+   - কত QPS (Queries Per Second) আসবে?
+   - ১০ বছরে কত পিটাবাইট ডেটা স্টোর করতে হবে?
+   - ব্যান্ডউইথ রিকোয়ারমেন্ট কেমন হবে?
+3. **API & Data Model Design (চুক্তি ও স্কিমা):**
+   - এপিআই এন্ডপয়েন্ট ডিজাইন (Input, Output, HTTP Status Codes)।
+   - ডাটাবেস স্কিমা (SQL vs NoSQL) এবং কুয়েরি প্যাটার্ন।
+4. **High-Level Design (বক্স আর্কিটেকচার):**
+   - ক্লায়েন্ট থেকে ডাটাবেস পর্যন্ত এন্ড-টু-এন্ড ট্রাফিক ফ্লো (DNS, Load Balancer, CDN, API Gateway, App Servers, Cache, Database)।
+5. **Deep Dive & Scaling Bottlenecks (সিনিয়র লেভেল সল্যুশন):**
+   - সিঙ্গেল পয়েন্ট অফ ফেইলিউর (SPOF) রিমুভ করা।
+   - ডিস্ট্রিবিউটেড লকিং, ক্যাশ স্ট্যাম্পিড, ডিবি শার্ডিং এবং ডাটা কনসিস্টেন্সি হ্যান্ডলিং।
+
+---
+
+## 📚 Table of Contents: The 20-Chapter Roadmap
+
+আমরা প্রতিটা চ্যাপ্টারকে ইন্টারেক্টিভলি শেষ করবো। নিচের ইনডেক্স থেকে কারেন্ট প্রোগ্রেস ট্র্যাক করতে পারবে:
+
+| Chapter | Topic | Status | Focus Core Concept |
+| :--- | :--- | :---: | :--- |
+| **01** | [URL Shortener (TinyURL)](#-chapter-01-url-shortener-tinyurl-scale-10b-links) | 🟢 **Active** | Snowflake ID, Base62 Encoding, Redis, DB Indexing |
+| **02** | [YouTube & Netflix (Video Streaming)](#-chapter-02-youtube--netflix-video-streaming-platform) | 🟢 **Active** | Transcoding, CDN Edge, HLS/DASH Streaming, Blob Store |
+| **03** | [High-Concurrency E-Commerce (Amazon)](#-chapter-03-high-concurrency-e-commerce-system) | 🟢 **Active** | Flash Sales, Redis Distributed Locks, Saga Pattern, Idempotency |
+| **04** | [WhatsApp & Messenger](#-chapter-04-whatsapp--messenger-real-time-chat-engine) | 🟢 **Active** | WebSockets, Message Gateway, Cassandra Store, Connection Registry |
+| **05** | [Uber & Grab (Ride-Sharing)](#-chapter-05-uber--grab-ride-sharing-geospatial-engine) | 🟢 **Active** | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
+| **06** | [Twitter/X (News Feed & Timeline)](#-chapter-06-twitterx-news-feed--timeline-fanout-engine) | 🟢 **Active** | Fanout-on-write vs Fanout-on-read, Push vs Pull |
+| **07** | [Ticketmaster (Ticketing Engine)](#-chapter-07-ticketmaster-high-concurrency-booking-engine) | 🟢 **Active** | High-Concurrency Booking, Distributed Locking, Queueing System |
+| **08** | [Google Drive / Dropbox](#-chapter-08-google-drive--dropbox-distributed-file-storage-engine) | 🟢 **Active** | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
+| **09** | [Web Crawler (Search Engine Indexer)](#-chapter-09-web-crawler-search-engine-indexer) | 🟢 **Active** | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
+| **10** | [Distributed Notification System](#-chapter-10-distributed-notification-system) | 🟢 **Active** | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
+| **11** | [API Gateway & Distributed Rate Limiter](#-chapter-11-api-gateway--distributed-rate-limiter) | 🟢 **Active** | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
+| **12** | [Airbnb (Hotel/Home Booking)](#-chapter-12-airbnb-hotelhome-booking) | 🟢 **Active** | Double Booking Prevention, Temporal Querying, Geo-search |
+| **13** | [Robinhood / Stock Trading Engine](#-chapter-13-robinhood--stock-trading-engine) | 🟢 **Active** | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
+| **14** | Distributed Cache (Redis Internals) | 🔒 *Locked* | Replication, Sentinel, Clustering & Partitioning, Eviction (LRU) |
+| **15** | Metrics & Monitoring System (Prometheus) | 🔒 *Locked* | Time Series DB (TSDB), Pull vs Push, Metrics Aggregation |
+| **16** | Ad Click Aggregator | 🔒 *Locked* | Real-time Streaming, Apache Flink, Kafka, MapReduce |
+| **17** | Auto-complete / Typeahead Search | 🔒 *Locked* | Trie Data Structure, Frequency Aggregation, Cache Optimization |
+| **18** | Tinder / Geosocial Matchmaker | 🔒 *Locked* | Recommendation Engines, Geopoint Queries, Profile Caching |
+| **19** | Distributed Unique ID Generator | 🔒 *Locked* | Snowflake Algorithm, Ticket Server, UUID Collisions |
+| **20** | Stripe-like Payment Integration Engine | 🔒 *Locked* | Ledger Reconciliation, Retry Policies, Double Entry Bookkeeping |
+
+> [!TIP]
+> আমরা প্রথম ৩টি কোর চ্যাপ্টার সম্পূর্ণ প্রডাকশন-গ্রেড আর্কিটেকচার ও কোডসহ বিস্তারিত নিচে যুক্ত করেছি। পরবর্তী চ্যাপ্টারগুলো আমরা একের পর এক রিয়েল-টাইম আলোচনা করে এবং রিকোয়ারমেন্ট কাস্টমাইজ করে আনলক করবো!
+
+---
+
+## 📖 Chapter 01: URL Shortener (TinyURL) [Scale: 10B Links]
+
+এটি সিস্টেম ডিজাইনের "Hello World"। তবে এর গভীরে গেলে ডিস্ট্রিবিউটেড আইডির চমৎকার ইঞ্জিনিয়ারিং বের হয়ে আসে।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার একটি লং ইউআরএল সাবমিট করলে সিস্টেম একটি শর্ট ইউআরএল রিটার্ন করবে (যেমন: `https://tiny.com/aB3x9Z`)।
+  - শর্ট ইউআরএলে হিট করলে ইউজার ইনস্ট্যান্টলি আসল লং ইউআরএলে রিডাইরেক্ট হবে।
+  - কাস্টম অ্যালিয়াস দিতে পারবে (ঐচ্ছিক)।
+  - শর্ট লিংকের এক্সপায়ারি ডেট থাকবে।
+- **Non-Functional:**
+  - **High Availability:** রিডাইরেকশন কোনোভাবেই ফেইল করা যাবে না (৯৯.৯৯% আপটাইম)।
+  - **Low Latency:** রিডাইরেকশন লেটেন্সি < ৫০ মিলি-সেকেন্ড হতে হবে।
+  - **Write-Heavy / Read-Heavy:** এটি অত্যন্ত **Read-Heavy** সিস্টেম (Read:Write Ratio = 100:1)।
+
+### ২. Back-of-the-envelope Estimation
+ধরুন, আমাদের সিস্টেমে প্রতি মাসে **১০০ মিলিয়ন (100M)** নতুন শর্ট লিংক তৈরি হয়।
+- **Write QPS:**
+  * `Write QPS = 100,000,000 / (30 days * 24 hours * 3600 seconds) ≈` **40 writes/sec**
+- **Read QPS (100:1 Ratio):**
+  * `Read QPS = 40 writes/sec * 100 =` **4,000 reads/sec**
+- **Storage for 10 Years:**
+  প্রতিটি রেকর্ড (Long URL, Short URL, ID, Created_At, Expire_At) এভারেজ ৫০০ বাইট স্টোরেজ নেয়।
+  * `Total Records = 100M * 12 months * 10 years =` **12 Billion records**
+  * `Total Storage = 12B * 500 bytes ≈` **6 Terabytes**
+- **Cache Memory (80-20 Rule):**
+  ডেইলি ট্রাফিকের ২০% হট লিংক ক্যাশে রাখবো।
+  * `Daily Reads = 4,000 reads/sec * 86,400 seconds ≈` **345 Million reads/day**
+  * `Memory Required = 345M * 20% hot links * 500 bytes ≈` **34.5 GB**
+
+### ৩. API & Database Schema Design
+আমরা দুটি সিম্পল REST এপিআই ডিজাইন করবো:
+- **Create Short Link:**
+  `POST /api/v1/shorten`
+  ```json
+  // Request
+  {
+    "long_url": "https://medium.com/engineering/how-we-scaled-our-databases-to-10m-users",
+    "custom_alias": "dbscale", // Optional
+    "expires_at": "2030-01-01T00:00:00Z" // Optional
+  }
+  // Response (201 Created)
+  {
+    "short_url": "https://tiny.com/dbscale",
+    "short_key": "dbscale"
+  }
+  ```
+- **Redirect Link:**
+  `GET /{short_key}` -> HTTP status `302 Found` (Redirect)
+  *(নোট: আমরা 301 Permanent Redirect ব্যবহার করবো না, কারণ 302 ব্যবহার করলে প্রতিটা হিট আমাদের ব্যাকএন্ড সার্ভারে আসে, যার ফলে আমরা নিখুঁত ক্লিক অ্যানালিটিক্স ট্র্যাক করতে পারি। 301 দিলে ব্রাউজার নিজের ক্যাশে রেখে দেয় এবং ব্যাকএন্ডে রিকোয়েস্ট আসে না।)*
+
+#### Database Selection & Schema
+যেহেতু আমাদের কোনো কমপ্লেক্স রিলেশন বা জয়েন কোয়েরি নেই এবং সিস্টেমে বিলিয়ন বিলিয়ন রো স্টোর হবে, একটি নোএসকিউএল কী-ভ্যালু বা ওয়াইড-কলাম ডাটাবেস (যেমন **Cassandra** বা **DynamoDB**) স্টোরেজ ও হরাইজন্টাল স্কেলিংয়ের জন্য বেস্ট।
+
+```sql
+-- Conceptual Schema (Cassandra/Postgres representation)
+CREATE TABLE url_mappings (
+    short_key VARCHAR(10) PRIMARY KEY,
+    long_url VARCHAR(2048) NOT NULL,
+    created_at TIMESTAMP,
+    expires_at TIMESTAMP,
+    user_id VARCHAR(64)
+);
+```
+
+### ৪. High-Level Architecture
+সিস্টেমের হাই-লেভেল ট্রাফিক ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    BrowserClient["Browser Client"] -->|1. GET Short URL| DNSResolver["DNS Resolver"]
+    DNSResolver -->|2. Resolve IP| LoadBalancer["Load Balancer"]
+    LoadBalancer -->|3. Route Request| AppServer["App Servers"]
+    AppServer -->|4. Read Cache| CacheRedis["Redis Cache (RAM)"]
+    
+    CacheRedis -->|5. Cache Hit - Return URL| AppServer
+    CacheRedis -->|6. Cache Miss - Query DB| DbCassandra["Cassandra DB (Disk)"]
+    DbCassandra -->|7. Set Cache and Return| AppServer
+    
+    AppServer -->|8. HTTP 302 Redirect| BrowserClient
+    
+    style BrowserClient fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style CacheRedis fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style DbCassandra fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+```
+
+### ৫. Deep Dive: Unique ID / Key Generator Strategy
+ইউনিক শর্ট কী (যেমন `aB3x9Z`) কীভাবে জেনারেট করব? এটিই ইন্টারভিউয়ের মূল আকর্ষণ।
+আমরা যদি **Base62 Encoding** (`[a-z, A-Z, 0-9]` মোট ৬২টি ক্যারেক্টার) ব্যবহার করি, তবে ৭ ক্যারেক্টারের ইউনিক কী দিয়ে আমরা কতগুলো ইউনিক কম্বিনেশন তৈরি করতে পারবো?
+* `62⁷ ≈ 3.5 Trillion unique keys`
+যা আমাদের ১০ বছরের টার্গেটের (১২ বিলিয়ন) চেয়ে অনেক বেশি!
+
+#### অপশন A: MD5 / Cryptographic Hash (ফেইলর প্রন)
+লং ইউআরএলকে MD5 দিয়ে হ্যাশ করে প্রথম ৭ ক্যারেক্টার নেওয়া।
+- **সমস্যা:** হ্যাশ কলিশন (Collision) হবেই। ২ জন ইউজার ভিন্ন ডোমেইন দিলে একই শর্ট কি জেনারেট হতে পারে। এটি হ্যান্ডেল করতে ডাটাবেসে চেক করতে হবে, যা অত্যন্ত স্লো।
+
+#### অপশন B: Base62 Conversion with Auto-Increment (স্কেলিং প্রবলেম)
+ডাটাবেসের অটো-ইনক্রিমেন্ট আইডি (যেমন ১, ২, ৩...) নিয়ে তাকে Base62-তে কনভার্ট করা।
+- **সমস্যা:** ডিস্ট্রিবিউটেড ডাটাবেসে মাল্টিপল নোড থাকলে অটো-ইনক্রিমেন্ট কনফ্লিক্ট করবে। সিঙ্গেল ডাটাবেস রাখলে রাইট পারফরম্যান্সে Bottleneck তৈরি হবে।
+
+#### অপশন C: Distributed Snowflake ID Generator (Staff Architect Solution)
+একটি ডেডিকেটেড আইডি জেনারেট সার্ভিস ব্যবহার করা।
+যেমন **Twitter Snowflake** যা ৬৪ বিটের ইউনিক আইডি জেনারেট করে:
+- **Timestamp (41 bits):** এপোচ টাইম মিলি-সেকেন্ডে।
+- **Machine/Worker ID (10 bits):** ১০২৪টি আলাদা সার্ভার নোড হ্যান্ডেল করতে পারে।
+- **Sequence Number (12 bits):** প্রতি সার্ভার প্রতি মিলি-সেকেন্ডে ৪০৯৬টি ইউনিক আইডি তৈরি করতে পারে।
+
+আমরা এই ইউনিক ৬৪-বিট ইন্টিজার আইডিটি জেনারেট করে সরাসরি **Base62**-তে এনকোড করে ফেলবো। যেহেতু আইডি ইউনিক, তাই কোনো ডুপ্লিকেট কি জেনারেট হবে না এবং ডাটাবেস কলিশন চেক করার জিরো ওভারহেড!
+
+### 💻 Practical TypeScript Implementation
+নিচে একটি প্রোডাকশন-রেডি Base62 এনকোডার এবং ডিস্ট্রিবিউটেড আইডি কনভার্টার কোড দেওয়া হলো:
+
+```typescript
+// utils/base62.ts
+export class Base62Encoder {
+  private static readonly CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  private static readonly BASE = 62;
+
+  /**
+   * ইন্টিজার আইডিকে Base62 স্ট্রিংয়ে কনভার্ট করে
+   */
+  public static encode(num: bigint): string {
+    if (num === 0n) return this.CHARS[0];
+    
+    let result = "";
+    let temp = num;
+    
+    while (temp > 0n) {
+      const remainder = Number(temp % BigInt(this.BASE));
+      result = this.CHARS[remainder] + result;
+      temp = temp / BigInt(this.BASE);
+    }
+    
+    return result;
+  }
+
+  /**
+   * Base62 স্ট্রিংকে ডিকোড করে অরিজিনাল ইন্টিজারে ব্যাক করে
+   */
+  public static decode(str: string): bigint {
+    let result = 0n;
+    
+    for (let i = 0; i < str.length; i++) {
+      const charCodeIndex = this.CHARS.indexOf(str[i]);
+      if (charCodeIndex === -1) {
+        throw new Error(`Invalid Base62 character: ${str[i]}`);
+      }
+      result = result * BigInt(this.BASE) + BigInt(charCodeIndex);
+    }
+    
+    return result;
+  }
+}
+
+// Example usage mimicking Snowflake ID Conversion
+const dummySnowflakeId = 17849302919323146n; // 64-bit distributed integer
+const shortKey = Base62Encoder.encode(dummySnowflakeId);
+console.log(`Generated Short Key: ${shortKey}`); // Output: e.g., 'C4g6yZ'
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+রিয়েল-ওয়ার্ল্ড লার্জ স্কেল প্রোডাকশনে এই ৩টি ক্রিটিক্যাল এজ কেস ফেস করতে হবে:
+
+#### ১. Clock Skew in Distributed Snowflake Generator
+Snowflake ID অ্যালগরিদম প্রতিটি মেশিনের ইন্টারনাল সিস্টেম ক্লকের ওপর নির্ভরশীল। যেহেতু নেটওয়ার্ক সিনক্রোনাইজেশনের জন্য NTP (Network Time Protocol) ব্যাকগ্রাউন্ডে টাইম অ্যাডজাস্ট করে, অনেক সময় সিস্টেমের ঘড়ি পেছনে চলে যেতে পারে (Clock Skew)। ঘড়ি পেছনে গেলে ডুপ্লিকেট আইডি জেনারেট হওয়ার রিস্ক থাকে।
+* **মিটিগেশন:** আইডি জেনারেটর কোডে `lastTimestamp` ভ্যারিয়েবল ট্র্যাক রাখতে হবে। যদি বর্তমান টাইমস্ট্যাম্প `lastTimestamp` এর চেয়ে কম হয়, তবে সিস্টেম ক্লক সিঙ্ক হওয়া পর্যন্ত রিকোয়েস্ট ব্লক করে ওয়েট করতে হবে অথবা এরর থ্রো করতে হবে (e.g., `Clock moved backwards. Refusing to generate id`).
+
+#### ২. Custom Alias Collision in High Concurrency
+যদি ২ জন ইউজার একই কাস্টম অ্যালিয়াস (যেমন `my-custom-link`) একই মিলি-সেকেন্ডে তৈরি করতে ট্রাই করে, তবে ডাটাবেসে রিকোয়েস্ট যাওয়ার পর কনফ্লিক্ট ধরা পড়বে যা ডাটাবেসকে অতিরিক্ত লক করবে।
+* **মিটিগেশন:** **Distributed Lock with Redis SETNX (Set if Not Exists)**। ডাটাবেস রাইট করার আগে আমরা Redis-এ অ্যালিয়াসটির কী দিয়ে একটি শর্ট-লাইভড লক নিবো। 
+  `redis.set(alias, "LOCK", "NX", "EX", 5)`
+  লক সাকসেসফুল হলে আমরা Cassandra-তে ডেটা রাইট করব। যদি লক ফেইল করে (অর্থাৎ অলরেডি কেউ নিয়ে নিয়েছে), তবে আমরা সাথে সাথেই ডাটাবেসে হিট না করে `409 Conflict` এরর রিটার্ন করব।
+
+#### ৩. Clean-up of Expired Links (Lazy vs Active Expiration)
+আমাদের সিস্টেমে ১০ বছরে ১২ বিলিয়ন লিংক জমবে। অনেক লিংকেরই এক্সপায়ারি ডেট ওভার হয়ে যাবে। এগুলো ডাটাবেস থেকে ডিলিট না করলে বিলিয়ন বিলিয়ন ডেড ডেটা স্টোরেজ ও ইনডেক্স মেমোরি নষ্ট করবে।
+* **Lazy Expiration (Passive):** যখন কোনো ইউজার কোনো লিংকে ক্লিক করবে, ব্যাকএন্ড লজিক দেখবে সেটির `expires_at < current_time` কিনা। যদি এক্সপায়ার হয়ে থাকে, আমরা সাথে সাথেই ডাটাবেস ও ক্যাশ থেকে এটি ডিলিট করে দিব এবং ইউজারকে `404 Not Found` দেখাবো।
+* **Active Expiration (Background Worker):** ডাটাবেসের (যেমন Cassandra) বিল্ট-ইন **TTL (Time To Live)** ফিচার ব্যবহার করা বেস্ট প্র্যাকটিস। এতে ডেটা ইনসার্ট করার সময়ই ডেটা অটোমেটিক এক্সপায়ার হয়ে ডাটাবেস লেয়ারেই ডিলিট হয়ে যায়। কোনো এক্সট্রা ব্যাকগ্রাউন্ড ক্রন জব বা ডিলিট কোয়েরি লেখার প্রয়োজন হয় না।
+
+---
+
+## 📖 Chapter 02: YouTube & Netflix (Video Streaming Platform)
+
+ভিডিও স্ট্রিমিং আর্কিটেকচার সাধারণ ওয়েব অ্যাপের চেয়ে সম্পূর্ণ আলাদা। এখানে রাইট ট্রাফিক (ভিডিও আপলোড) এবং রিড ট্রাফিক (প্লেব্যাক) সম্পূর্ণ ভিন্ন পাইপলাইনে চলে।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার ভিডিও আপলোড করতে পারবে।
+  - ইউজার যেকোনো ডিভাইসে (মোবাইল, ডেস্কটপ, লো-ব্যান্ডউইথ) স্মুথলি ভিডিও প্লে করতে পারবে।
+  - ভিউ কাউন্ট, লাইক, এবং রিয়েল-টাইম কমেন্ট সিস্টেম থাকবে।
+- **Non-Functional:**
+  - **High Scalability:** লাখ লাখ ইউজার একসাথে ভিডিও দেখবে (High Concurrent Viewers)।
+  - **Zero Buffer (Low Latency):** প্লেব্যাক স্টার্ট হতে দেরি হওয়া যাবে না।
+  - **Reliable Storage:** হাই-কোয়ালিটি ভিডিও ড্রপ বা লস করা যাবে না।
+
+### ২. Video Transcoding & Playback Pipeline (ভিজুয়ালাইজেশন)
+
+ভিডিও আপলোডের পর র ফাইলটি সরাসরি প্লে করা যায় না। এটিকে শত শত ফরম্যাট ও রেজোলিউশনে কনভার্ট করতে হয়।
+
+```mermaid
+flowchart TD
+    subgraph Upload [Upload Pipeline]
+        RawVideo[User Raw Video] -->|Upload| WebServer[API Gateway / Web Server]
+        WebServer -->|File Storage| TempS3[Temporary S3 Bucket]
+        TempS3 -->|Trigger Job| Transcoder[Transcoding Service Engine]
+        
+        Transcoder -->|Resolution Split| Res1080[1080p MP4/H.264]
+        Transcoder -->|Resolution Split| Res720[720p H.264]
+        Transcoder -->|Resolution Split| Res360[360p H.264]
+        
+        Res1080 -->|Segmenting| Chunking[Chunking Service: 4s segments]
+        Res720 -->|Segmenting| Chunking
+        Res360 -->|Segmenting| Chunking
+        
+        Chunking -->|Generate Playlist| Manifest[Create HLS .m3u8 Master Playlists]
+        Manifest -->|Upload Final| RealS3[Production Storage S3]
+    end
+
+    subgraph Playback [Playback Pipeline]
+        RealS3 -->|Geo-Replication| CDN[Content Delivery Network: Cloudflare Edge]
+        Client[Viewer Device] -->|Request Playback| CDN
+    end
+    
+    style RawVideo fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RealS3 fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style CDN fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style Client fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 🎯 Core Architecture Breakdown
+
+#### A. Video Upload & Transcoding (অ্যাসিনক্রোনাস প্রসেস)
+1. **Raw Upload:** ইউজার ভিডিও আপলোড করলে তা প্রথমে একটি টেম্পোরারি স্টোরেজে যায়।
+2. **Transcoding (ভিডিও রূপান্তর):** র ফাইলটিকে বিভিন্ন বিটরেট (Bitrate) এবং রেজোলিউশনে (360p, 720p, 1080p, 4K) কনভার্ট করা হয়।
+3. **Chunking (টুকরো করা):** পুরো ২ ঘন্টার মুভি একসাথে লোড করা বোকামি। আমরা প্রতিটা ভিডিওকে ছোট ছোট ৪-১০ সেকেন্ডের ফিজিক্যাল টুকরো বা **Chunks**-এ বিভক্ত করি।
+4. **HLS & DASH (স্ট্রিমিং প্রোটোকল):** 
+   - **HLS (HTTP Live Streaming - Apple)** বা **DASH (Dynamic Adaptive Streaming over HTTP)** প্রোটোকল ব্যবহার করা হয়।
+   - একটি **Master Manifest file (`.m3u8` বা `.mpd`)** তৈরি করা হয় যা ট্র্যাক রাখে কোন রেজোলিউশনের কোন চঙ্ক ফাইলের পাথ কোথায়।
+
+#### B. Dynamic Playback (Adaptive Bitrate Streaming)
+- ক্লায়েন্ট ডিভাইস যখন ভিডিও রিকোয়েস্ট করে, সে প্রথমে `.m3u8` মাস্টার প্লেলিস্ট ফাইলটি লোড করে।
+- ব্রাউজার ইউজারের ইন্টারনেটের স্পিড মেপে ডিসিশন নেয় সে কোন চঙ্ক ডাউনলোড করবে।
+- স্পিড ভালো থাকলে সে অটোমেটিক `1080p_chunk_001.ts` ফেচ করে। মাঝপথে নেট ড্রপ করলে সে বাফারিং এড়াতে সাথে সাথে পরবর্তী চঙ্ক `360p_chunk_002.ts` রিকোয়েস্ট করে। একেই বলে **Adaptive Bitrate Streaming**।
+
+### 🚀 Senior Scaling Hacks: Netflix Cache System
+- **CDN Edge Placement:** নেটফ্লিক্স বা ইউটিউব ক্লাউড থেকে সরাসরি ইউজারকে ভিডিও দেয় না। তারা বিশ্বজুড়ে বিভিন্ন আইএসপি (ISP) অফিসের ভেতরে নিজেদের ক্যাশ স্টোরেজ বা হার্ডওয়্যার বক্স (যেমন **Netflix Open Connect Appliance**) ফ্রিতে বসিয়ে দেয়।
+- এর ফলে, আপনার এলাকায় যখন কেউ কোনো পপুলার সিরিজ দেখে, তা সরাসরি আপনার লোকাল আইএসপির ভেতরে থাকা স্টোরেজ থেকে ক্যাশড হয়ে লোড হয়, যার ফলে কোনো ব্যাকবোন ইন্টারনেট ক্যাবল বা স্যাটেলাইট ব্যান্ডউইথ খরচ হয় না এবং বাফারিং লেটেন্সি হয় ০ মিলি-সেকেন্ড!
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+ভিডিও স্ট্রিমিং সার্ভিসের প্রোডাকশন এনভায়রনমেন্টে এই ৩টি আর্কিটেকচারাল চ্যালেঞ্জ আসবেই:
+
+#### ১. The Thundering Herd Problem (Origin Shielding)
+যখন পপুলার কোনো সিরিজের নতুন এপিসোড রিলিজ হয়, তখন লাখ লাখ ইউজার একসাথে একই ভিডিও প্লে করতে চায়। যেহেতু এটি নতুন ভিডিও, এটি সিডিএন (CDN) এজ পয়েন্টে ক্যাশড থাকবে না। ফলে প্রথম মিলি-সেকেন্ডেই সব রিকোয়েস্ট সিডিএনকে বাইপাস করে সরাসরি মেইন অরিজিন স্টোরেজে (AWS S3) হিট করবে। একে বলে **Thundering Herd** বা **CDN Cache Stampede**। এর ফলে S3-এর ব্যান্ডউইথ এক্সহস্ট হয়ে পুরো সাইট ডাউন হয়ে যাবে।
+* **মিটিগেশন A (Origin Shield):** সিডিএন প্রোভাইডারে একটি "Origin Shield" (একটি সেন্ট্রাল প্যারেন্ট সিডিএন লেয়ার) কনফিগার করা। সব এজ পয়েন্ট সরাসরি S3-তে হিট না করে এই অরিজিন শিল্ডে হিট করবে। অরিজিন শিল্ড প্রথম রিকোয়েস্টটি নিয়ে S3 থেকে ফাইল এনে ক্যাশ করবে এবং বাকি লাখ লাখ রিকোয়েস্টকে তার নিজের মেমোরি থেকে রেসপন্স করবে।
+* **মিটিগেশন B (Request Collapsing):** অ্যাপ্লিকেশন লেয়ারে মিউচুয়াল এক্সক্লুসিভ লক ব্যবহার করা, যাতে শুধুমাত্র একটি থ্রেড/সার্ভার অরিজিন থেকে ভিডিও চঙ্ক ফেচ করে ক্যাশ আপডেট করে, আর বাকি রিকোয়েস্টগুলো ফাস্ট থ্রেডের ক্যাশ আপডেটের জন্য ওয়েট করে।
+
+#### ২. Playback Heartbeat & Dynamic Resuming State
+ইউজার যখন নেটফ্লিক্সে একটি মুভি মাঝপথে বন্ধ করে আবার পরের দিন ওপেন করে, নেটফ্লিক্স ঠিক সেই সেকেন্ড থেকেই মুভিটি প্লে করে। মিলিয়ন মিলিয়ন ইউজারের এই রিয়েল-টাইম পজিশন কীভাবে ট্র্যাক করা হয়?
+* **ডিজাইন:** ভিডিও প্লেয়ারে একটি **Heartbeat Event** লুপ থাকে যা প্রতি ১০ সেকেন্ড পর পর প্লেব্যাক অফসেট (যেমন `videoId: 101, offset: 4520 seconds`) ব্যাকএন্ডে পাঠায়। 
+* **স্কেলিং:** প্রতি সেকেন্ডে কোটি কোটি হার্টবিট রিকোয়েস্ট সরাসরি মূল ডাটাবেসে (Postgres) রাইট করলে ডাটাবেস ১ সেকেন্ডেই ডাউন হবে। তাই এই হার্টবিট রিকোয়েস্টগুলোকে **Kafka**-তে পুশ করা হয়। কাফকা থেকে অ্যাসিনক্রোনাস কনজিউমার ডেটা নিয়ে অত্যন্ত ফাস্ট ইন-মেমোরি রাইট ডাটাবেসে (যেমন **Redis** বা **Cassandra**) স্টোর করে।
+
+#### ৩. DRM (Digital Rights Management) & Anti-Piracy
+নেটফ্লিক্সের কোনো ভিডিও আপনি ব্রাউজারের ডেভেলপার টুল দিয়ে ভিডিও ট্যাগ বা নেটওয়ার্ক ট্যাব থেকে ডাউনলোড করতে পারবেন না, করলেও তা চলবে না। এর কারণ হলো **DRM**।
+* **ডিজাইন:** ভিডিওর প্রতিটি ৪ সেকেন্ডের চঙ্ক কনভার্ট করার সময়ই **AES-128** বা তার বেশি কি দিয়ে এনক্রিপ্ট করা হয়। প্লেয়ার যখন চঙ্ক লোড করে, সে দেখে এটি লক করা। তখন প্লেয়ার ব্যাকগ্রাউন্ডে একটি **DRM License Server**-এ সিকিউর টোকেন পাঠিয়ে ডিক্রিপশন কি রিকোয়েস্ট করে। প্লেয়ার ডিরেক্টলি রম বা হার্ডওয়্যার ডিক্রিপশন লেয়ারে (Google Widevine L1, Apple FairPlay, Microsoft PlayReady) কি-টি লোড করে রিয়েল-টাইমে চঙ্ক ডিক্রিপ্ট করে দেখায়। ভিডিও সোর্স ফাইল কখনো ইউজারের ডিভাইসের ডিস্কে আনলকড অবস্থায় সেভ হয় না।
+
+---
+
+## 📖 Chapter 03: High-Concurrency E-Commerce System
+
+ই-কমার্স আর্কিটেকচারের সবচেয়ে কঠিন চ্যালেঞ্জ হলো **Flash Sales (ফ্ল্যাশ সেল)** হ্যান্ডেল করা। যখন ১০টি আইটেমের জন্য ১০ লাখ ইউজার একসাথে বাই বাটনে ক্লিক করে, তখন ডাটাবেসে কনকারেন্ট ট্রানজেকশন সামলানো এবং ডুপ্লিকেট পেমেন্ট ও ওভারসেলিং রোধ করাই আসল কাজ।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - প্রোডাক্ট ক্যাটালগ ও সার্চ।
+  - শপিং কার্ট এবং চেকআউট সার্ভিস।
+  - ফ্ল্যাশ সেল ও ডিসকাউন্ট হ্যান্ডলিং।
+  - পেমেন্ট ও ইনভেন্টরি অটো-আপডেট।
+- **Non-Functional:**
+  - **Strict Consistency:** ১০টি প্রোডাক্টের জায়গায় কোনোভাবেই ১১টি অর্ডার নেওয়া যাবে না (No Overselling)।
+  - **High Concurrency:** ফ্ল্যাশ সেলের সময় লাখ লাখ রিকোয়েস্ট হ্যান্ডেল করা।
+  - **Payment Idempotency:** ইউজারের কার্ড থেকে যাতে ২ বার চার্জ না কাটা হয়।
+
+### 🛠️ Flash Sale: Preventing Overselling
+যদি আমরা সরাসরি ডাটাবেসে রিড-রাইট করে ইনভেন্টরি চেক করি:
+```sql
+-- Disaster Prone Transaction
+SELECT quantity FROM inventory WHERE product_id = 99; -- Returns 1
+-- App server logic: if quantity > 0, then:
+UPDATE inventory SET quantity = quantity - 1 WHERE product_id = 99;
+```
+মাল্টিপল থ্রেড বা সার্ভার নোড একসাথে এটি রান করলে **Race Condition** হবে। একাধিক ইউজার একই ভ্যালু `1` রিড করবে এবং সবাই প্রোডাক্ট কিনে ফেলবে, যার ফলে ইনভেন্টরি মাইনাস হয়ে যাবে (Overselling)।
+
+#### Solution A: Database Optimistic Locking (মাঝারি লোডের জন্য)
+```sql
+UPDATE inventory 
+SET quantity = quantity - 1 
+WHERE product_id = 99 AND quantity > 0;
+```
+এই কুয়েরিতে ডাটাবেস রো-লেভেল লক নিয়ে চেক করবে এবং একের বেশি ওভারসেল হতে দেবে না। তবে ডেটাবেস ডিস্ক কুয়েরি অনেক বেশি স্লো হওয়ায় হাই-কনকারেন্সিতে ডাটাবেস সম্পূর্ণ জ্যাম বা লকআপ হয়ে ক্র্যাশ করবে।
+
+#### Solution B: In-Memory Redis Lua Distributed Lock (Staff Architect Standard)
+ডিস্ক ডাটাবেসে হিট করার আগেই আমরা **Redis** ব্যবহার করে মেমোরিতে ইনভেন্টরি চেক ও ডিডাকশন করবো। যেহেতু Redis সিঙ্গেল-থ্রেডেড এবং অত্যন্ত ফাস্ট (>100K ops/sec), আমরা একটি **Atomic Lua Script** দিয়ে চেক ও ডিক্রিমেন্ট একসাথে হ্যান্ডেল করব:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as User / Frontend
+    participant GW as API Gateway / Server
+    participant Cache as Redis (Atomic Cache)
+    participant Queue as Kafka Message Queue
+    participant DB as Postgres (Inventory Service)
+
+    Client->>GW: Click "Buy Now" (Product 99)
+    GW->>Cache: Run Lua Script: Check & Decrement Stock (product_id:99)
+    alt Stock Available (Redis Stock > 0)
+        Cache-->>GW: SUCCESS (Stock Reserved)
+        GW->>Queue: Publish Event "Order_Placed"
+        GW-->>Client: HTTP 202 Accepted (Order processing...)
+        Queue->>DB: Async Consumer Updates PostgreSQL Inventory & Creates Order
+    else Out of Stock
+        Cache-->>GW: FAIL (Sold Out)
+        GW-->>Client: HTTP 410 Gone (Sold Out!)
+    end
+```
+
+### 💻 Production-Grade Redis Lua Script for Inventory Deduction
+এই স্ক্রিপ্টটি Redis মেমোরিতে রান করে এবং রেস কন্ডিশন ছাড়া ১ মিলি-সেকেন্ডে ইনভেন্টরি বুক করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+/**
+ * Atomic Lua script to safety deduct stock in Redis without race conditions
+ */
+const deductStockLua = `
+  local stockKey = KEYS[1]
+  local demand = tonumber(ARGV[1])
+  
+  local currentStock = tonumber(redis.call('get', stockKey))
+  
+  if not currentStock then
+    return -1 -- Code indicating product key not found in Redis
+  end
+  
+  if currentStock >= demand then
+    redis.call('decrby', stockKey, demand)
+    return currentStock - demand -- Return new remaining stock
+  else
+    return -2 -- Code indicating insufficient stock
+  end
+`;
+
+export async function purchaseProduct(productId: string, quantity: number): Promise<boolean> {
+  const stockKey = `stock:product:${productId}`;
+  
+  // Lua script রেজিস্টার ও রান করা (Atomic action)
+  const result = await redis.eval(deductStockLua, 1, stockKey, quantity) as number;
+  
+  if (result >= 0) {
+    console.log(`Stock successfully reserved! Remaining: ${result}`);
+    // এখানে আমরা Kafka/RabbitMQ কিউতে মেসেজ পুশ করবো ডাটাবেসে অ্যাসিনক্রোনাস রাইটের জন্য
+    return true;
+  } else if (result === -1) {
+    console.error("Error: Product is not loaded in Redis Cache!");
+    return false;
+  } else {
+    console.warn("Out of Stock! Purchase failed.");
+    return false;
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+ফ্ল্যাশ সেলের সময় ডুপ্লিকেট পেমেন্ট রোখা এবং মাল্টি-সার্ভিস ডেটা কনসিস্টেন্সি বজায় রাখার জন্য এই ৩টি প্যাটার্ন লাইফ-সেভার:
+
+#### ১. Payment Idempotency (Double Charge Protection)
+ফ্ল্যাশ সেলের সময় ইউজারের ইন্টারনেট স্লো থাকলে বা বাই বাটনে ২ বার ক্লিক করলে একই অর্ডারের জন্য ব্যাংক থেকে যাতে ২ বার টাকা কেটে না নেওয়া হয় তা এনশিওর করা অত্যন্ত জরুরি।
+* **মিটিগেশন:** **Idempotency Keys**। যখনই ক্লায়েন্ট চেকআউট পেজ লোড করে, ব্যাকএন্ড একটি ইউনিক `idempotency_key` (UUID) জেনারেট করে ক্লায়েন্টকে দেয়। পেমেন্ট গেটওয়ে এপিআই রিকোয়েস্টে এই কি-টি হেডার হিসেবে পাঠানো হয়। পেমেন্ট সার্ভিস চার্জ কাটার আগে Redis-এ এই কি-টি চেক করে।
+  * যদি কি-টি প্রথমবার আসে, পেমেন্ট গেটওয়ে চার্জ প্রসেস করে এবং রেজাল্ট Redis-এ সেভ করে (TTL: ২৪ ঘন্টা)।
+  * যদি একই মিলি-সেকেন্ডে ২য় রিকোয়েস্ট আসে, Redis দেখে এটি অলরেডি প্রসেসিং-এ আছে, এবং সে ২য় পেমেন্ট এড়াতে সাথে সাথে আগের প্রসেসড রেজাল্ট বা "Processing..." এরর ফেরত দেয়।
+
+#### ২. Distributed Transactions: The Saga Pattern
+একটি সফল অর্ডারের পেছনে ৩টি মাইক্রোসার্ভিসের অ্যাকশন জড়িত: Inventory Service (স্টক রিজার্ভেশন), Payment Service (কার্ড চার্জ করা), এবং Order Service (অর্ডার বুক করা)। যেহেতু এরা আলাদা ডাটাবেস ব্যবহার করে, এদের মধ্যে কোনো `SQL BEGIN TRANSACTION` করা সম্ভব নয়।
+* **সমাধান (Orchestrator-based Saga):** আমরা একটি **Saga Orchestrator** সার্ভিস ব্যবহার করি। 
+  1. Orchestrator প্রথমে Inventory Service-কে বলে স্টক লক করতে। (সাকসেস)
+  2. এরপর সে Payment Service-কে বলে কার্ড চার্জ করতে। (ধরা যাক পেমেন্ট ফেইল হলো)
+  3. যেহেতু পেমেন্ট ফেইল হয়েছে, Orchestrator একটি **Compensating Transaction** রিলিজ করে। সে Inventory Service-কে ইনস্ট্রাকশন দেয় স্টক রিলিজ করে দিতে এবং Redis ক্যাশ রিব্যাক করতে। এর ফলে পুরো ডিস্ট্রিবিউটেড সিস্টেম কনসিস্টেন্ট থাকে।
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Client
+    participant Orc as Saga Orchestrator
+    participant Inv as Inventory Service
+    participant Pay as Payment Service
+    participant Ord as Order Service
+
+    Client->>Orc: Start Checkout
+    Orc->>Inv: 1. Reserve Stock (Success)
+    Orc->>Pay: 2. Charge Card (FAILED!)
+    Note over Orc,Pay: Payment Failed! Trigger Rollback
+    Orc->>Inv: 3. Compensating Transaction: Release Stock
+    Orc-->>Client: Checkout Failed (Refund/Stock Released)
+```
+
+#### ৩. Transactional Outbox Pattern & CDC (Redis to DB Sync)
+ফ্ল্যাশ সেলের সময় Redis-এ স্টক ডিডাক্ট হওয়ার পর ডাটাবেসে অ্যাসিনক্রোনাসলি ডেটা সিঙ্ক করার জন্য আমরা যদি র্যান্ডম মেসেজ কিউ ব্যবহার করি, তবে অর্ডার সাকসেসফুল কিন্তু ডাটাবেস ডাউন থাকলে মেসেজ হারিয়ে যেতে পারে।
+* **সমাধান:** **Transactional Outbox Pattern**। যখন Order Service ডাটাবেসে অর্ডার ক্রিয়েট করে, সে একই ডাটাবেস ট্রানজেকশনে আরেকটি `outbox` টেবিলে একটি ইভেন্ট মেসেজ লিখে (`INSERT INTO outbox`). যেহেতু একই রিলেশনাল ডিবি-র একক ট্রানজেকশনে লেখা হচ্ছে, তাই অর্ডার ক্রিয়েশন এবং আউটবক্সে মেসেজ রাইট ১০০% গ্যারান্টিড। 
+* এর পর একটি ব্যাকগ্রাউন্ড **CDC Daemon (Debezium + Kafka)** ডাটাবেসের ট্রানজেকশন লোগ (WAL - Write-Ahead Log) রিড করে ওই আউটবক্স মেসেজটি কাফকাতে পুশ করে, যা ইনভেন্টরি ডাটাবেস ও ক্যাশ সিঙ্ক করতে কনজিউম করা হয়। এতে ডাটাবেস ক্র্যাশ করলেও মেসেজ কখনোই হারায় না।
+
+---
+
+## 📖 Chapter 04: WhatsApp & Messenger (Real-Time Chat Engine)
+
+রিয়েল-টাইম চ্যাট সিস্টেমের আর্কিটেকচার সাধারণ HTTP অ্যাপের চেয়ে একেবারেই আলাদা। এখানে প্রতি সেকেন্ডে লাখ লাখ ইউজারের রিয়েল-টাইম কানেকশন ধরে রাখতে হয় এবং মিলি-সেকেন্ড লেটেন্সিতে মেসেজ ডেলিভারি এনশিওর করতে হয়।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ওয়ান-টু-ওয়ান মেসেজিং অত্যন্ত কম লেটেন্সিতে (< ১০০ মিলি-সেকেন্ড)।
+  - অনলাইন/অফলাইন স্ট্যাটাস ট্র্যাক করা (Presence Service)।
+  - মেসেজের ৩টি ক্লাসিক ডেলিভারি স্ট্যাটাস: Sent, Delivered, Read (Ticks)।
+  - পারসিস্টেন্ট চ্যাট হিস্ট্রি (অফলাইনেও আগের চ্যাট স্ক্রোল করা যাবে)।
+- **Non-Functional:**
+  - **Strict Reliability:** কোনো মেসেজ ডিলিট বা লস হওয়া যাবে না।
+  - **High Availability:** রিড-রাইট ফ্লো সব সময় আপটাইম থাকতে হবে।
+  - **Massive Scale:** ১০০ মিলিয়ন ডেইলি একটিভ ইউজার (DAU) এবং প্রতিদিন ১০ বিলিয়ন মেসেজ হ্যান্ডেল করা।
+
+### ২. Back-of-the-envelope Estimation
+* `Message QPS = 10,000,000,000 / 86,400 seconds ≈` **115,000 messages/sec average QPS**
+* `Peak QPS = 115,000 * 3 ≈` **345,000 messages/sec**
+* `Concurrent Active WebSocket Connections = 100M DAU * 10% peak online ≈` **10 Million concurrent active sockets**
+* `Storage for 10 Years (avg message 100 bytes) = 10B * 100 bytes = 1 TB/day`
+  * `10-Year Total Storage = 1 TB * 365 days * 10 years ≈` **3.65 Petabytes**
+  * যেহেতু ডেটা হেভি রাইট-ইনটেনসিভ এবং ডিরেক্ট `userId` বা `chatId` কুয়েরি করা হবে, নোএসকিউএল ওয়াইড-কলাম ডাটাবেস (যেমন **Cassandra** বা **ScyllaDB**) এখানে পারফেক্ট।
+
+### ৩. API & Database Schema Design
+রিয়েল-টাইম মেসেজিংয়ে পোলিং বাদ দিয়ে আমরা **WebSocket** প্রোটোকল ব্যবহার করব, যা ক্লায়েন্ট এবং সার্ভারের মধ্যে একটি দ্বিমুখী (Bidirectional), লং-লিভড টিসিপি কানেকশন বজায় রাখে। 
+হিস্ট্রি কোয়েরির জন্য একটি ব্যাকআপ REST API থাকবে:
+- `GET /api/v1/messages?chat_id={chat_id}&limit=50` (প্যাজিনেটেড চ্যাট হিস্ট্রি)
+
+#### Database Schema (Cassandra Wide-Column Model)
+Cassandra-র স্টোরেজ আর্কিটেকচার ডেটাকে মেমোরিতে (MemTable) রাইট করে সরাসরি ক্রনোলজিক্যালি ডিস্কে (SSTable) সেভ করে, যার ফলে ডিস্কের কোনো র্যান্ডম সিক ছাড়াই এটি বিলিয়ন বিলিয়ন রো লিখতে পারে।
+
+```sql
+CREATE TABLE chat_messages (
+    chat_id uuid,
+    message_id timeuuid, -- Embeds timestamp, Chronological order guarantees
+    sender_id uuid,
+    content text,
+    status varchar, -- 'sent', 'delivered', 'read'
+    PRIMARY KEY (chat_id, message_id)
+) WITH CLUSTERING ORDER BY (message_id DESC);
+```
+*(নোট: এখানে `chat_id` হলো **Partition Key**, যা একটি চ্যাটের সব মেসেজকে ফিজিক্যালি একই হার্ডওয়্যার নোডে স্টোর করে। আর `message_id` হলো **Clustering Key**, যা মেসেজগুলোকে সময় অনুযায়ী ডিসেন্ডিং অর্ডারে সর্ট করে রাখে। ফলে চ্যাট লোড করা অত্যন্ত ফাস্ট হয়)।*
+
+### ৪. High-Level Architecture
+সিস্টেমের রিয়েল-টাইম মেসেজ রাউটিং ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    BrowserClientA["Client A (Online)"] -->|1. WebSocket Conn| WSGatewayA["WebSocket Server A"]
+    BrowserClientB["Client B (Online)"] -->|WebSocket Conn| WSGatewayB["WebSocket Server B"]
+    
+    WSGatewayA -->|2. Check Route| PresenceRedis["Presence Service (Redis)"]
+    WSGatewayA -->|3. Publish Message| MsgBroker["Message Broker (Kafka / RabbitMQ)"]
+    
+    MsgBroker -->|4. Save Async| ChatService["Chat Service (Cassandra DB)"]
+    MsgBroker -->|5. Forward Event| WSGatewayB
+    WSGatewayB -->|6. Instant Delivery| BrowserClientB
+    
+    style BrowserClientA fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style WSGatewayA fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style MsgBroker fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style ChatService fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Connection Registry Implementation
+যেহেতু আমাদের ১০ মিলিয়ন কনকারেন্ট সকেট থাকবে, এগুলোকে কোনো একটি সিঙ্গেল সার্ভারে রাখা সম্ভব নয়। আমাদের ১০০+ গেটওয়ে সার্ভার লাগবে। ইউজার A যখন ইউজার B-কে মেসেজ পাঠাবে, তখন গেটওয়ে A-কে জানতে হবে ইউজার B কোন গেটওয়ে সার্ভারে কানেক্টেড আছে, যাতে মেসেজটি সঠিক নোডে পুশ করা যায়।
+
+নিচে Redis-ভিত্তিক একটি প্রোডাকশন-গ্রেড ডিস্ট্রিবিউটেড **Connection Routing & Presence Registry** কোড দেওয়া হলো:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  timestamp: number;
+}
+
+export class MessageGatewayRegistry {
+  private static readonly PRESENCE_PREFIX = "presence:user:";
+  private static readonly ROUTING_PREFIX = "routing:user:";
+  
+  private currentServerId: string;
+
+  constructor(serverId: string) {
+    this.currentServerId = serverId;
+  }
+
+  /**
+   * ইউজার গেটওয়েতে কানেক্ট হলে তার অনলাইন স্ট্যাটাস এবং রাউটিং টার্গেট সেট করে
+   */
+  public async registerUserConnection(userId: string): Promise<void> {
+    const multi = redis.multi();
+    // Presence set to online with 5 mins TTL (Heartbeat keeps this alive)
+    multi.set(`${MessageGatewayRegistry.PRESENCE_PREFIX}${userId}`, "online", "EX", 300);
+    // Map user socket to this specific WebSocket gateway server
+    multi.set(`${MessageGatewayRegistry.ROUTING_PREFIX}${userId}`, this.currentServerId);
+    await multi.exec();
+    console.log(`User ${userId} successfully registered on Gateway ${this.currentServerId}`);
+  }
+
+  /**
+   * ইউজার ডিসকানেক্ট হলে স্ট্যাটাস ডিলিট করে
+   */
+  public async deregisterUserConnection(userId: string): Promise<void> {
+    const multi = redis.multi();
+    multi.del(`${MessageGatewayRegistry.PRESENCE_PREFIX}${userId}`);
+    multi.del(`${MessageGatewayRegistry.ROUTING_PREFIX}${userId}`);
+    await multi.exec();
+  }
+
+  /**
+   * টার্গেট ইউজার কোন গেটওয়েতে কানেক্টেড আছে তা ট্র্যাক করে
+   */
+  public async getRouteForUser(userId: string): Promise<string | null> {
+    return await redis.get(`${MessageGatewayRegistry.ROUTING_PREFIX}${userId}`);
+  }
+
+  /**
+   * Redis Pub/Sub এর মাধ্যমে রিয়েল-টাইম মেসেজ সঠিক গেটওয়েতে রিলে করে দেয়
+   */
+  public async relayMessage(message: ChatMessage): Promise<boolean> {
+    const targetServerId = await this.getRouteForUser(message.receiverId);
+    
+    if (!targetServerId) {
+      console.log(`Receiver ${message.receiverId} is offline. Pushing to offline queue.`);
+      await this.queueOfflineMessage(message);
+      return false;
+    }
+
+    // Publish to the specific channel of the target WebSocket Server
+    const channelName = `gateway:channel:${targetServerId}`;
+    await redis.publish(channelName, JSON.stringify(message));
+    console.log(`Message successfully published to ${channelName} for user ${message.receiverId}`);
+    return true;
+  }
+
+  private async queueOfflineMessage(message: ChatMessage): Promise<void> {
+    // অফলাইনে থাকা অবস্থায় মেসেজটি কিউতে অ্যাড করে মোবাইল পুশ নোটিফিকেশন ট্রিগার করা হবে
+    await redis.lpush(`offline:queue:user:${message.receiverId}`, JSON.stringify(message));
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+রিয়েল-টাইম চ্যাট স্কেলিংয়ের ক্ষেত্রে প্রোডাকশনে ফেস করা ৩টি অত্যন্ত জঘন্য সমস্যা ও তাদের সিনিয়র লেভেল সমাধান:
+
+#### ১. Operating System Socket Limits & VIP Load Balancing
+১০ মিলিয়ন কনকারেন্ট কানেকশনের অর্থ হলো গেটওয়ে সার্ভারগুলোর ওপর ১০ মিলিয়ন লং-লিভড টিসিপি কানেকশন খোলা রাখা। লিনাক্স অপারেটিং সিস্টেমে প্রতি ফিজিক্যাল নোডে বাই-ডিফল্ট ৬৫,৫৩৫ টির বেশি আউটবাউন্ড সকেট কানেকশন হ্যান্ডেল করা যায় না।
+* **মিটিগেশন A (Linux OS Kernel Tuning):** লিনাক্স কার্নেল কনফিগারেশনে ফাইল ডেসক্রিপ্টরের লিমিট বাড়াতে হবে। `sysctl` ফাইলে `fs.file-max` লিমিট এবং `nofile` সফট/হার্ড লিমিট ১০ লাখের ওপরে সেট করতে হবে।
+* **মিটিগেশন B (Virtual IPs - VIPs):** লোড ব্যালেন্সারে মাল্টিপল ফিজিক্যাল আইপি অ্যাসাইন করা। ক্লায়েন্টদের কানেক্ট করার জন্য আমরা **Consistent Hashing** ব্যবহার করে লোড সমানভাবে ডিস্ট্রিবিউট করব যাতে কোনো নির্দিষ্ট গেটওয়েতে সকেট ক্র্যাশ না হয়।
+
+#### ২. Delivery receipts Storm under High Concurrency
+প্রতিটি মেসেজ ডেলিভারির জন্য ৩টি করে টিক (Sent, Delivered, Read) জেনারেট হয়। অর্থাৎ প্রতিদিন ১০ বিলিয়ন মেসেজ পাঠানো হলে সিস্টেমে মোট ৩০ বিলিয়ন এক্সট্রা স্ট্যাটাস আপডেট রাইট ইভেন্ট আসে। এটি সরাসরি ডাটাবেসে বা গেটওয়েতে ট্রানজেক্ট করা হলে পুরো নেটওয়ার্ক থ্রোটল হয়ে যাবে।
+* **মিটিগেশন:** **Delivery Receipt Batching & Coalescing**। ক্লায়েন্ট ডিভাইস যখন চ্যাট স্ক্রিন স্ক্রোল করে, সে প্রতি মেসেজে আলাদা রিকোয়েস্ট না পাঠিয়ে ১ সেকেন্ডের বাফারে রিসিপ্ট ডেটা জমা করে (যেমন: "Message 1 to 50 are Read")। তারপর সিঙ্গেল রিকোয়েস্ট পাঠিয়ে ডাটাবেসে বাল্ক আপডেট করে। এতে ডাটাবেসের রাইট অপারেশন ৩০ বিলিয়ন থেকে কমে মাত্র ৩০০ মিলিয়নে নেমে আসে!
+
+#### ৩. Hotspots in Cassandra Partitioning (Massive Group Chats)
+যদি ১০,০০০ মেম্বার বিশিষ্ট কোনো পপুলার গ্রুপ চ্যাটে মেসেজ আদান-প্রদান হতে থাকে, তবে `chat_id` পার্টিকুলারলি একটি ডাটাবেস পার্টিকপ্ট নোডের ওপর চরম চাপ তৈরি করবে। Cassandra-র একটি ফিজিক্যাল পার্টিকপ্ট সাধারণত ১০০MB-এর বেশি হলে পারফরম্যান্স কড়া শুরু করে।
+* **মিটিগেশন (Partition Key Salting):** আমরা `chat_id` এর সাথে একটি বাকেট ভ্যালু যুক্ত করব (যেমন `chat_id + bucket_id`), যেখানে `bucket_id` হবে `timestamp / 1-hour` অথবা একটি সাইক্লিক কাউন্টার `(1 to 10)`। এর ফলে একই গ্রুপের মেসেজগুলো ডাটাবেসের আলাদা আলাদা ফিজিক্যাল ডিস্ক ব্লকে ডিস্ট্রিবিউট হয়ে যাবে এবং ডাটাবেস বটলনেক সম্পূর্ণ ভ্যানিশ হয়ে যাবে।
+
+---
+
+## 📖 Chapter 05: Uber & Grab (Ride-Sharing Geospatial Engine)
+
+রাইড-শেয়ারিং সিস্টেমের মূল কারিগরি চ্যালেঞ্জ হলো প্রতি সেকেন্ডে লাখ লাখ ড্রাইভারের দ্রুত পরিবর্তনশীল ভৌগলিক অবস্থান (Geolocation) রিয়েল-টাইমে ট্র্যাক করা এবং কোনো রাইডার রিকোয়েস্ট পাঠালে ১ কিলোমিটারের মধ্যে থাকা পারফেক্ট ড্রাইভারটিকে ৫০ মিলি-সেকেন্ডের মধ্যে খুঁজে বের করা।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ড্রাইভাররা প্রতি ৪ সেকেন্ড পর পর তাদের রিয়েল-টাইম জিপিএস স্থানাঙ্ক (Latitude, Longitude) ব্যাকএন্ডে পাঠাবে।
+  - রাইডাররা তাদের চারপাশের ৩ কিলোমিটার ব্যাসার্ধের মধ্যে থাকা সব এভেইলেবল ড্রাইভার রিয়েল-টাইমে ম্যাপে দেখতে পাবে।
+  - রাইডার রাইড রিকোয়েস্ট করলে সিস্টেম সবচেয়ে কাছের ড্রাইভারকে তার সাথে ট্রিপ ম্যাচ করিয়ে দেবে।
+- **Non-Functional:**
+  - **Ultra-low Latency:** ড্রাইভার ম্যাচিং এবং সার্চ কুয়েরি অত্যন্ত ফাস্ট হতে হবে (< ৫০ মিলি-সেকেন্ড)।
+  - **High Scalability:** ১ মিলিয়ন একটিভ ড্রাইভারের সেকেন্ডে লাখ লাখ জিপিএস আপডেট এবং ১০ মিলিয়ন একটিভ রাইডারের কনকারেন্ট কুয়েরি হ্যান্ডেল করা।
+  - **Strict Consistency (Match Lock):** একই ড্রাইভার যাতে একসাথে ২ জন রাইডারের সাথে ম্যাচ না হয়ে যায় (No Double-Booking)।
+
+### ২. Back-of-the-envelope Estimation
+* `Driver Location Write QPS = 1,000,000 active drivers / 4 seconds =` **250,000 writes/sec**
+* `Rider Search Query QPS = 10,000,000 riders / 8 seconds map updates =` **1,250,000 reads/sec**
+* `Location Update Size = driver_id (16 bytes) + latitude (8 bytes) + longitude (8 bytes) = 32 bytes`
+* `Network Write Bandwidth = 250,000 * 32 bytes ≈` **8 MB/sec**
+* **Memory Requirement (Redis Cache):** 
+  * মেমরিতে ১ মিলিয়ন ড্রাইভারের জিপিএস ডেটা স্টোর করতে সাইজ হবে: `1,000,000 * 100 bytes (Redis overhead সহ) ≈` **100 MB RAM**। এটি অত্যন্ত ছোট, তাই সম্পূর্ণ লাইভ ডেটা রেডিসে সুপার-ফাস্ট স্টোর করা সম্ভব।
+
+### ৩. API & Database Schema Design
+যেহেতু জিপিএস রাইট অপারেশন প্রতি সেকেন্ডে ২৫০K বার ঘটে, প্রথাগত HTTP ওভারহেড এড়াতে ড্রাইভার ডিভাইসগুলো **WebSocket** অথবা লাইটওয়েট **UDP/TCP Stream** ব্যবহার করবে। 
+রাইডারদের জন্য এপিআই থাকবে:
+- `GET /api/v1/nearby?lat=23.7561&lng=90.3762&radius=3000` (৩ কিমি ব্যাসার্ধের ড্রাইভার সার্চ)
+
+#### Database Selection: SQL vs NoSQL Spatial Indexes
+ডিস্ক-ভিত্তিক ডাটাবেস (যেমন PostgreSQL PostGIS) ২৫০K QPS রাইট সামলাতে সম্পূর্ণ ক্র্যাশ করবে। তাই লাইভ ট্র্যাকিংয়ের জন্য আমরা **In-memory Redis Geospatial Index (GEOADD, GEORADIUS)** ব্যবহার করব।
+কমপ্লিটেড ট্রিপ ডেটা এবং বিলিং হিস্ট্রি ব্যাকআপের জন্য রিলেশনাল ডাটাবেস (PostgreSQL) ব্যবহার করা হবে।
+
+### ৪. High-Level Architecture
+ভৌগলিক ট্রাফিক ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    DriverApp["Driver Device"] -->|1. Location Stream 4s| IngestGW["Geo-Ingest Gateway"]
+    IngestGW -->|2. Fast Write| RedisGeo["Redis Geo Cluster Live RAM Storage"]
+    
+    RiderApp["Rider Device"] -->|3. Get Nearby Drivers| RiderAPI["Rider API Gateway"]
+    RiderAPI -->|4. GEORADIUS Search| RedisGeo
+    
+    RiderAPI -->|5. Match Ride| MatchService["Ride Match Engine"]
+    MatchService -->|6. Acquire Lock| RedisLock["Redis Distributed Lock Redlock"]
+    MatchService -->|7. Send Push Notification| NotifyService["Push Notification Service"]
+    NotifyService -->|8. Request Ride| DriverApp
+    
+    style DriverApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RedisGeo fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style MatchService fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Geospatial Engine Implementation
+নিচে `ioredis` ব্যবহার করে ড্রাইভারদের লোকেশন আপডেট এবং ৩ কিমি ব্যাসার্ধের এভেইলেবল ড্রাইভার খুঁজে বের করার জন্য একটি প্রোডাকশন-রেডি **Geospatial Tracking Engine** কোড দেওয়া হলো:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface Coordinate {
+  latitude: number;
+  longitude: number;
+}
+
+interface NearbyDriver {
+  driverId: string;
+  latitude: number;
+  longitude: number;
+  distanceInMeters: number;
+}
+
+export class GeoLocationEngine {
+  private static readonly GEO_KEY = "active:drivers:location";
+
+  /**
+   * ড্রাইভারের লাইভ লোকেশন রেডিস জিও-ইনডেক্সে আপডেট করে
+   * Redis internally encodes (latitude, longitude) into a 52-bit Geohash integer
+   */
+  public async updateDriverLocation(driverId: string, lat: number, lng: number): Promise<void> {
+    // GEOADD takes key, longitude, latitude, memberId
+    await redis.geoadd(GeoLocationEngine.GEO_KEY, lng, lat, driverId);
+  }
+
+  /**
+   * ড্রাইভার অফলাইনে গেলে ইনডেক্স থেকে মুছে ফেলে
+   */
+  public async removeOfflineDriver(driverId: string): Promise<void> {
+    await redis.zrem(GeoLocationEngine.GEO_KEY, driverId);
+  }
+
+  /**
+   * রাইডারের ৩ কিলোমিটারের ভেতরে থাকা এভেইলেবল ড্রাইভারদের দূরত্বসহ সর্ট করে নিয়ে আসে
+   */
+  public async findNearbyDrivers(
+    riderLat: number,
+    riderLng: number,
+    radiusInMeters: number,
+    limit = 10
+  ): Promise<NearbyDriver[]> {
+    // GEORADIUS fetches members with distance and raw coordinates sorted ascendingly
+    const results = await redis.georadius(
+      GeoLocationEngine.GEO_KEY,
+      riderLng,
+      riderLat,
+      radiusInMeters,
+      "m", // meters
+      "WITHDIST",
+      "WITHCOORD",
+      "ASC", // closest first
+      "COUNT", limit
+    ) as any[];
+
+    return results.map((item) => {
+      const [driverId, distance, [lngStr, latStr]] = item;
+      return {
+        driverId,
+        distanceInMeters: parseFloat(distance),
+        latitude: parseFloat(latStr),
+        longitude: parseFloat(lngStr),
+      };
+    });
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জীবনের মিলিয়ন-ইউজার স্কেলে রাইড ম্যাচিং ইঞ্জিনে এই ৩টি ক্রিটিক্যাল আর্কিটেকচারাল প্রবলেম আসে:
+
+#### ১. The Grid Boundary Problem (Geohash vs Hexagonal H3 Grid)
+**Geohash** পৃথিবীকে আয়তাকার (Rectangle) গ্রিডে ভাগ করে। যদি কোনো রাইডার ঠিক গ্রিডের সীমানায় (Edge/Boundary) দাঁড়িয়ে থাকে এবং কোনো ড্রাইভার তার থেকে মাত্র ৫ মিটার দূরে অন্য পাশের গ্রিডে থাকে, Geohash কুয়েরি তাকে মিস করে যাবে।
+* **মিটিগেশন (H3 Hexagonal Grid):** উবার এই সমস্যাটি দূর করতে **H3 Spatial Indexing (Hexagonal Hierarchical Spatial Index)** তৈরি করে। হেক্সাগন বা ষড়ভুজের ক্ষেত্রে কেন্দ্র থেকে তার প্রতিটি প্রতিবেশী কোণের দূরত্ব একদম সমান। এর ফলে বাউন্ডারি প্রবলেম সম্পূর্ণ দূর হয় এবং নিখুঁতভাবে চারপাশের ড্রাইভারদের ডিটেক্ট করা যায়।
+
+#### ২. Write Saturation of Redis (Hotspots on Single CPU Core)
+যেহেতু Redis সিঙ্গেল-থ্রেডেড, সেকেন্ডে ২৫০,০০০ রাইট রিকোয়েস্ট যদি একটি মাত্র Redis Key (`active:drivers:location`) এর ওপরে যায়, তবে প্রসেসরের একটিコア ১০০% বিজি হয়ে ক্র্যাশ করবে।
+* **মিটিগেশন (Geographical Sharding):** ড্রাইভারদের লোকেশন সারা বিশ্বের একটি কিতে সেভ না করে আমরা Geohash এর প্রথম ৪ ক্যারেক্টার দিয়ে কি শার্ডিং করব। যেমন, ঢাকার সব ড্রাইভারের ডেটা যাবে `location:shard:dhaka` আর চট্রগ্রামের ডেটা যাবে `location:shard:ctg` শ্যার্ডে। এতে লোড মাল্টিপল নোডে ডিস্ট্রিবিউট হয়ে যাবে এবং Redis ক্লাস্টার সেকেন্ডে মিলিয়ন রাইট অনায়াসে সামলাতে পারবে।
+
+#### ৩. The Double-Booking Race Condition (Ride Matching Lock)
+একই এলাকায় দুজন রাইডার একই মিলি-সেকেন্ডে "Request Ride" বাটনে ক্লিক করলে সিস্টেম যদি তাদের দুজনকে একই ফ্রি ড্রাইভারের কাছে পাঠায়, তবে ড্রাইভার কনফিউজড হবে এবং সিস্টেমে কনফ্লিক্ট দেখা দেবে।
+* **মিটিগেশন:** **Atomic Distributed Lock (Redlock)**। রাইড ম্যাচিং ইঞ্জিন যখনই কোনো ড্রাইভারকে কোনো রাইডারের সাথে এসোসিয়েট করার প্রসেস শুরু করবে, সে সাথে সাথে Redis-এ ওই ড্রাইভারের আইডির বিপরীতে একটি ক্ষণস্থায়ী ডিস্ট্রিবিউটেড লক নেবে:
+  `redis.set("driver:lock:" + driverId, "LOCKED", "NX", "EX", 10)`
+  লকটি সফল হলেই কেবল ড্রাইভারকে অফার পাঠানো হবে। লক ফেইল হলে ম্যাচ মেকার অন্য আরেকটি কাছাকাছি ড্রাইভারকে সাথে সাথেই সিলেক্ট করে নেবে।
+
+---
+
+## 📖 Chapter 06: Twitter/X (News Feed & Timeline Fanout Engine)
+
+সোশ্যাল মিডিয়া ফিড জেনারেট করার মূল কারিগরি চ্যালেঞ্জ হলো চরম রিড-রাইট অসমতা এবং ফ্যানআউট (Fanout)। যখন লাখ লাখ ইউজার প্রতি সেকেন্ডে টুইট করছেন এবং কোটি কোটি ইউজার তাদের হোম টাইমলাইন রিফ্রেশ করছেন, তখন লেটেন্সি ১০০ মিলি-সেকেন্ডের নিচে রাখাই আসল ইঞ্জিনিয়ারিং।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার টুইট পোস্ট করতে পারবেন (টেক্সট এবং মিডিয়া)।
+  - ইউজার অন্য ইউজারদের ফলো করতে পারবেন।
+  - ইউজার তার হোম টাইমলাইন (News Feed) দেখতে পাবেন, যেখানে তার ফলো করা সব মানুষের লেটেস্ট টুইটগুলো ক্রনোলজিক্যালি সাজানো থাকবে।
+  - ইউজার তার নিজস্ব ইউজার টাইমলাইন (টুইট হিস্ট্রি) দেখতে পাবেন।
+- **Non-Functional:**
+  - **Ultra-fast Feed Generation:** হোম ফিড রিকোয়েস্ট করতে ১০০ মিলি-সেকেন্ডের কম সময় লাগতে হবে।
+  - **High Scalability:** ৩০০ মিলিয়ন একটিভ ইউজার এবং প্রতিদিন ৫০০ মিলিয়ন টুইট পোস্ট সামলানো।
+  - **Celebrity Handle (High Fanout):** কোনো সেলিব্রিটি টুইট করলে তা যাতে মুহূর্তের মধ্যে কোটি কোটি ফলোয়ারের ওয়ালে পৌঁছায় আবার সিস্টেমও ক্র্যাশ না করে।
+
+### ২. Back-of-the-envelope Estimation
+* `Tweet Write QPS = 500,000,000 tweets / 86,400 seconds ≈` **5,800 writes/sec average QPS**
+* `Peak Write QPS ≈` **12,000 writes/sec**
+* `Feed Read QPS = 100M DAU * 10 views/day = 1B views / 86400 ≈` **11,500 reads/sec average QPS**
+* `Peak Read QPS ≈` **35,000 reads/sec**
+* **Fanout Multiplying Effect:**
+  * প্রতিটি ইউজারের এভারেজ ফলোয়ার সংখ্যা ১০০ হলে: `5,800 writes/sec * 100 followers =` **580,000 writes/sec** ডিস্ট্রিবিউটেড ফিড ক্যাশে রাইট করতে হবে।
+  * কিন্তু কোনো সেলিব্রিটির (যেমন ক্রিস্টিয়ানো রোনালদো, ১০০M ফলোয়ার) ১টি টুইট ফ্যানআউট করতে গেলে এক মিলি-সেকেন্ডে **১০০,০০০,০০০ টি ক্যাশ রাইট** ট্রাই করবে, যা পুরো সিস্টেম ক্র্যাশ করে দেবে! একেই বলে **Celebrity Write Explosion**।
+
+### ৩. API & Database Schema Design
+ফিড ও টুইট প্রসেসিংয়ের জন্য স্ট্যান্ডার্ড এপিআই ডিজাইন:
+- `POST /api/v1/tweet` (টুইট তৈরি)
+- `GET /api/v1/feed?limit=20` (হোম ফিড ফেচ)
+
+#### Database Tables Structure
+টুইট ডেটা এবং রিলেশনশিপ ম্যাপ করার জন্য রিলেশনাল বা হাই-পারফরম্যান্স নোএসকিউএল ডিবি:
+
+```sql
+CREATE TABLE tweets (
+    tweet_id bigint PRIMARY KEY,
+    user_id bigint,
+    content varchar(280),
+    created_at timestamp
+);
+
+CREATE TABLE follows (
+    follower_id bigint,
+    followee_id bigint,
+    created_at timestamp,
+    PRIMARY KEY (follower_id, followee_id)
+);
+```
+
+### ৪. High-Level Architecture
+টুইটার ফিড জেনারেশনে আমরা **Hybrid Push/Pull Architecture** ব্যবহার করব। নিচে ট্রাফিক ফ্লো দেওয়া হলো:
+
+```mermaid
+flowchart TD
+    UserApp["User Client App"] -->|1. Post Tweet| Gateway["API Gateway and Tweet Service"]
+    Gateway -->|2. Save Raw Tweet| TweetDB["Tweets Storage Postgres Cassandra"]
+    Gateway -->|3. Trigger Fanout| FanoutQueue["Fanout Message Queue Kafka"]
+    
+    FanoutQueue -->|4. Push to Normal Followers| NormalFeedCache["Redis Sorted Set Home Feed Cache"]
+    
+    Gateway -->|5. Read Home Feed| FeedService["Feed Retrieval Service"]
+    FeedService -->|6. Fetch Pre-computed Feed| NormalFeedCache
+    FeedService -->|7. Dynamically Pull Hybrid| CelebCache["Redis Cache Celebrity Tweets"]
+    
+    FeedService -->|8. Sorted and Combined Feed| UserApp
+    
+    style UserApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style NormalFeedCache fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style CelebCache fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style FanoutQueue fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Hybrid Fanout Engine Implementation
+নিচে একটি প্রোডাকশন-রেডি **Hybrid Fanout Engine** কোড দেওয়া হলো যা সেলিব্রিটি এবং সাধারণ ইউজারদের টুইট সম্পূর্ণ আলাদা পাইপলাইনে প্রসেস ও মার্জ করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface Tweet {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: number;
+}
+
+export class NewsFeedFanoutEngine {
+  private static readonly TIMELINE_PREFIX = "timeline:user:";
+  private static readonly CELEB_POSTS_PREFIX = "celeb:tweets:";
+  private static readonly CELEBRITY_THRESHOLD = 10000; // ১০,০০০ ফলোয়ারের বেশি হলে সেলিব্রিটি
+
+  /**
+   * ডেমো ফলোয়ার ডাটা ফেচিং (প্রোডাকশনে ডাটাবেস থেকে আসবে)
+   */
+  private async getFollowers(userId: string): Promise<{ followerIds: string[]; count: number }> {
+    return {
+      followerIds: ["follower_1", "follower_2", "follower_3"],
+      count: 3
+    };
+  }
+
+  /**
+   * নতুন টুইট পোস্ট হওয়ার পর ফ্যানআউট ডিসিশন নেয়
+   */
+  public async processNewTweet(tweet: Tweet): Promise<void> {
+    const { followerIds, count } = await this.getFollowers(tweet.userId);
+
+    if (count > NewsFeedFanoutEngine.CELEBRITY_THRESHOLD) {
+      // 🟢 অপশন A: Fanout-on-read (Pull Model for Celebrities)
+      // সেলিব্রিটির টুইটগুলো তার নিজস্ব ডেডিকেটেড ক্যাশে সেভ থাকবে, কোটি কোটি ওয়ালে পুশ হবে না
+      const celebKey = `${NewsFeedFanoutEngine.CELEB_POSTS_PREFIX}${tweet.userId}`;
+      await redis.zadd(celebKey, tweet.createdAt, JSON.stringify(tweet));
+      await redis.zremrangebyrank(celebKey, 0, -100); // শুধুমাত্র লেটেস্ট ১০০টি টুইট রাখবো
+      console.log(`Celebrity tweet saved to pull cache for user ${tweet.userId}`);
+    } else {
+      // 🟢 অপশন B: Fanout-on-write (Push Model for Normal Users)
+      // নরমাল ইউজারের টুইট সাথে সাথে সব ফলোয়ারের ইন-মেমোরি টাইমলাইনে পুশ করা হবে
+      const pipeline = redis.pipeline();
+      for (const followerId of followerIds) {
+        const timelineKey = `${NewsFeedFanoutEngine.TIMELINE_PREFIX}${followerId}`;
+        pipeline.zadd(timelineKey, tweet.createdAt, JSON.stringify(tweet));
+        pipeline.zremrangebyrank(timelineKey, 0, -500); // হোম ফিডে ম্যাক্স ৫০০টি টুইট ক্যাশ থাকবে
+      }
+      await pipeline.exec();
+      console.log(`Pushed tweet from ${tweet.userId} to ${followerIds.length} followers.`);
+    }
+  }
+
+  /**
+   * ইউজারের জন্য হোম টাইমলাইন বা ফিড জেনারেট করে (Hybrid Merge)
+   */
+  public async getHomeTimeline(userId: string, followedCelebrities: string[], limit = 20): Promise<Tweet[]> {
+    const timelineKey = `${NewsFeedFanoutEngine.TIMELINE_PREFIX}${userId}`;
+    
+    // ১. প্রি-কম্পিউটেড নরমাল ফলোয়ারদের টুইট ক্যাশ থেকে ফেচ করি
+    const normalTweetsRaw = await redis.zrevrange(timelineKey, 0, limit - 1);
+    const tweets: Tweet[] = normalTweetsRaw.map((t) => JSON.parse(t));
+
+    // ২. ফলো করা সেলিব্রিটিদের টুইট রানটাইমে পুল (Pull) করে নিয়ে আসি
+    for (const celebId of followedCelebrities) {
+      const celebKey = `${NewsFeedFanoutEngine.CELEB_POSTS_PREFIX}${celebId}`;
+      const celebTweetsRaw = await redis.zrevrange(celebKey, 0, limit - 1);
+      const celebTweets: Tweet[] = celebTweetsRaw.map((t) => JSON.parse(t));
+      tweets.push(...celebTweets);
+    }
+
+    // ৩. কম্বাইন্ড টুইটগুলোকে ক্রনোলজিক্যালি সর্ট করে মার্জ করি
+    return tweets.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জীবনের সোশ্যাল নেটওয়ার্কিং স্কেলে এই ৩টি অতি জটিল চ্যালেঞ্জ ও তাদের সল্যুশন:
+
+#### ১. The Celebrity Problem & Write Explosion Mitigation
+যদি শুধু **Push Model** ব্যবহার করা হতো, তবে সেলিব্রিটির একটি টুইট কোটি কোটি ইউজারের ক্যাশ আপডেট করতে কয়েক মিনিট লাগিয়ে দিত, যার ফলে লেটেন্সি স্পাইক করত। আবার শুধু **Pull Model** ব্যবহার করলে প্রতি রিডে শত শত ফলোয়ারের টুইট রিড করে সর্ট করা লাগত যা রিড লেটেন্সি বাড়িয়ে দিত।
+* **মিটিগেশন (Hybrid Engine):** আমাদের এই হাইব্রিড ইমপ্লিমেন্টেশনই এর সমাধান। সেলিব্রিটিদের আমরা **Pull** মডেলে রাখি আর সাধারণ বন্ধুদের আমরা **Push** মডেলে রাখি। এতে রাইট বিস্ফোরণও ঘটে না, আবার ফিড লোডিং স্পিডও সুপার-ফাস্ট (< ১০০ms) থাকে।
+
+#### ২. Algorithmic Feed Ranking & Scoring Pipeline
+আজকের দিনের এক্স (Twitter) বা ফেসবুক কেবল সময় অনুযায়ী পোস্ট দেখায় না, বরং ইউজার কোন পোস্টে লাইক/রিয়্যাক্ট করতে পারে তার ওপর ভিত্তি করে এলগরিদমিক ফিড দেখায়। প্রতিবার ফিড রিকোয়েস্টের সাথে সাথে কোটি কোটি পোস্টের স্কোরিং করা অসম্ভব।
+* **মিটিগেশন (Two-Stage Scoring):**
+  * **Stage 1 (Candidate Generation):** প্রথমে ক্যাশ থেকে লেটেস্ট ৫০০টি টুইট (নরমাল + সেলিব্রিটি) তুলে আনা হয়।
+  * **Stage 2 (Scoring & Ranking):** এই ৫০০টি টুইটকে একটি ডেডিকেটেড **Ranking Service**-এ পাঠানো হয়, যা লাইটওয়েট মেমোরি ফিচার স্টোর (Redis) থেকে ইউজারের ইন্টারেস্ট ডেটা নিয়ে টুইটগুলোর স্কোর ক্যালকুলেট করে। স্কোর অনুযায়ী সর্ট করে টপ ৫০টি টুইট ইউজারকে ম্যাপে রেন্ডার করা হয়।
+
+#### ৩. Cache Stampede & Redis Cold Start Pre-warming
+যেহেতু ফিড ফাস্ট দেখানোর জন্য আমরা সম্পুর্ণ ফিড মেমরিতে (Redis) জেনারেট করে রাখি, কোনো কারণে একটি Redis ক্লাস্টার নোড ক্র্যাশ করলে কোটি কোটি ইউজারের ওয়ালেট ডেটা হারিয়ে যাবে। ক্র্যাশের পর যদি সবাই একসাথে ডাটাবেসে রিকোয়েস্ট পাঠায় ফিড রিবিল্ড করার জন্য, তবে মূল ডাটাবেস ক্র্যাশ করবে।
+* **মিটিগেশন (Pre-warming Active Users Only):** রেডিস ক্র্যাশ করলে বা নতুন ক্লাস্টার সেটআপ করলে, ব্যাকগ্রাউন্ড ক্রন জব শুধুমাত্র **Active Users** (যারা গত ৩ দিনে লগইন করেছেন) তাদের ফিড ডাটাবেস থেকে রিবিল্ড করে ক্যাশে আগে থেকেই রেডি রাখবে (Pre-warming)। ইন-একটিভ ইউজাররা যখন পরবর্তী সময়ে লগইন করবে, তখন তাদের ফিড অ্যাসিনক্রোনাসলি এবং অলসভাবে (Lazy Load) রিবিল্ড করা হবে।
+
+---
+
+## 📖 Chapter 07: Ticketmaster (High-Concurrency Ticketing Engine)
+
+টিকিট বুকিং সিস্টেমের সবচেয়ে বড় কারিগরি চ্যালেঞ্জ হলো "হটস্পট ইভেন্ট" (যেমন কোনো পপুলার কনসার্টের টিকিট সেল লাইভ হওয়া)। যখন ১০,০০০ সিটের বিপরীতে ১ লাখ ইউজার ঠিক একই সেকেন্ডে সিট বুক করার ট্রাই করেন, তখন সিস্টেম ক্র্যাশ না করে শতভাগ ডাবল বুকিং ফ্রি সিট হোল্ডিং মেকানিজম গড়ে তোলাই হলো স্টাফ আর্কিটেক্টের সার্থকতা।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার কোনো নির্দিষ্ট ইভেন্ট সার্চ করে তার ফিজিক্যাল সিট ম্যাপ ও এভেইলেবল সিট দেখতে পাবেন।
+  - ইউজার সিট সিলেক্ট করে বুকিং ফ্লোতে গেলে সিটটি ১০ মিনিটের জন্য লক/হোল্ড হবে যাতে সে পেমেন্ট কমপ্লিট করতে পারে।
+  - অন্য কোনো ইউজার ওই ১০ মিনিট ওই সিটগুলো হোল্ড বা বুক করতে পারবেন না।
+  - পেমেন্ট সাকসেসফুল হলে সিটটি পার্মানেন্টলি বুক হবে। ১০ মিনিট পার হলে লক অটোমেটিক এক্সপায়ার হবে এবং সিট আবার ফ্রি হয়ে যাবে।
+- **Non-Functional:**
+  - **Zero Double-Booking:** একই টিকিট বা সিট কখনই দুজন ইউজারের কাছে বিক্রি করা যাবে না।
+  - **High Concurrency Stability:** লাখ লাখ বায়ারের রিয়েল-টাইম হিট হ্যান্ডেল করা এবং ডাটাবেস বটলনেক এড়ানো।
+  - **Orphan Lock Prevention:** কোনো সার্ভার বা প্রসেস ক্র্যাশ করলেও যাতে সিট চিরতরে লকড হয়ে না থাকে।
+
+### ২. Back-of-the-envelope Estimation
+* **সিলারিটি ইভেন্ট ডেটা:**
+  * মোট সিট সংখ্যা = ৫০,০০০
+  * টিকেট লঞ্চের ১ম মিনিটে কনকারেন্ট ট্রাফিক = ১,০০০,০০০ একটিভ ইউজার
+  * **Peak Search QPS (Read QPS):** **50,000 queries/sec**
+  * **Peak Seat Hold QPS (Write QPS):** **20,000 reservations/sec**
+* **ডেটাবেস লকিং ওভারহেড:**
+  * সেকেন্ডে ২০,০০০ রাইট রিকোয়েস্ট যদি সরাসরি SQL ডাটাবেসে `SELECT ... FOR UPDATE` কুয়েরি ট্রিগার করে, তবে লক কনটেনশনের জন্য ডাটাবেস সম্পূর্ণ জ্যাম হয়ে ক্র্যাশ করবে। তাই লাইভ ইন-মেমোরি সিট হোল্ড মেকানিজম ক্যাশ লেয়ারে সম্পন্ন করতে হবে।
+
+### ৩. API & Database Schema Design
+টিকিট বুকিং ও চেকআউট এপিআই ডিজাইন:
+- `POST /api/v1/seats/reserve` (সিট ১০ মিনিটের জন্য লক করা)
+- `POST /api/v1/payments/confirm` (পেমেন্ট সাকসেস ভ্যালিডেশন এবং ফাইনাল বুকিং)
+
+#### Database Schema (ACID Compliant Relation DB)
+সিট বুকিংয়ের ফাইনাল ট্রানজেকশনের জন্য আমরা **PostgreSQL** ডাটাবেস ব্যবহার করব:
+
+```sql
+CREATE TABLE events (
+    event_id bigint PRIMARY KEY,
+    title varchar(255),
+    start_time timestamp
+);
+
+CREATE TABLE seats (
+    seat_id bigint PRIMARY KEY,
+    event_id bigint,
+    seat_number varchar(10),
+    status varchar(20) -- 'AVAILABLE', 'HELD', 'BOOKED'
+);
+
+CREATE TABLE reservations (
+    reservation_id bigint PRIMARY KEY,
+    user_id bigint,
+    seat_id bigint,
+    status varchar(20), -- 'PENDING', 'CONFIRMED', 'EXPIRED'
+    held_until timestamp
+);
+```
+
+### ৪. High-Level Architecture
+টিকিটমাস্টার আর্কিটেকচারে আমরা **Virtual Waiting Room & Atomic Seat Hold** মেকানিজম ব্যবহার করব। নিচে ট্রাফিক ফ্লো দেওয়া হলো:
+
+```mermaid
+flowchart TD
+    UserClient["User Client App"] -->|1. Request Booking| WaitingRoom["Virtual Waiting Room Queueit CDN Edge"]
+    WaitingRoom -->|2. Throttled Traffic Flow| Gateway["API Gateway and Ticket Service"]
+    
+    Gateway -->|3. Try Seat Hold| CacheLock["Redis Seat Hold Lock Cluster"]
+    CacheLock -->|4. Lock Acquired| DB["Postgres DB Relational Transaction"]
+    
+    Gateway -->|5. Seat Held 10 min| PaymentService["Payment Processing Gateway"]
+    PaymentService -->|6. Confirm Payment| DB
+    
+    CacheLock -.->|7. Expiry Job if payment fails| ExpiryWorker["Expiry Background Worker"]
+    ExpiryWorker -.->|8. Release Lock| CacheLock
+    ExpiryWorker -.->|9. Mark Seat Available| DB
+    
+    style UserClient fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style CacheLock fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style DB fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style WaitingRoom fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Redis Lua Seat Reservation
+নিচে একটি অত্যন্ত চমৎকার প্রোডাকশন-রেডি **Atomic Ticketing Lock Manager** কোড দেওয়া হলো যা Redis Lua Script ব্যবহার করে ১ মিলি-সেকেন্ডের নিচে ডাবল বুকিং এরর ছাড়া মাল্টিপল সিট এটমিকালি হোল্ড করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface SeatHoldResult {
+  success: boolean;
+  message: string;
+  heldSeatIds?: string[];
+  heldUntil?: number;
+}
+
+export class TicketingHoldManager {
+  private static readonly HOLD_TTL_SECONDS = 600; // ১০ মিনিট
+
+  /**
+   * এটমিক সিট হোল্ড করার জন্য LUA স্ক্রিপ্ট জেনারেট করে
+   * LUA স্ক্রিপ্ট রেডিসের সিঙ্গেল-থ্রেডেড ইঞ্জিনে ওয়ান-স্টেপ এটমিক ট্রানজেকশন গ্যারান্টি দেয়
+   */
+  private getHoldLuaScript(): string {
+    return `
+      local event_id = ARGV[1]
+      local ttl = tonumber(ARGV[2])
+      local user_id = ARGV[3]
+      
+      -- ১. সব সিট এভেইলেবল আছে কি না চেক করি
+      for i = 1, #KEYS do
+        local seat_key = "seat:" .. event_id .. ":" .. KEYS[i]
+        local current_lock = redis.call("GET", seat_key)
+        if current_lock then
+          return redis.error_reply("SEAT_ALREADY_HELD_OR_BOOKED: " .. KEYS[i])
+        end
+      end
+      
+      -- ২. সব সিট খালি থাকলে এটমিকালি লক হোল্ড নিই
+      local held_until = redis.call("TIME")[1] + ttl
+      for i = 1, #KEYS do
+        local seat_key = "seat:" .. event_id .. ":" .. KEYS[i]
+        redis.call("SET", seat_key, user_id, "EX", ttl)
+      end
+      
+      return tostring(held_until)
+    `;
+  }
+
+  /**
+   * হাই-কনকারেন্ট ট্রাফিকে সিট হোল্ড নিশ্চিত করে
+   */
+  public async holdSeats(userId: string, eventId: string, seatIds: string[]): Promise<SeatHoldResult> {
+    const luaScript = this.getHoldLuaScript();
+    
+    try {
+      // KEYS represent seat IDs, ARGV contains EventID, TTL, and UserID
+      const result = await redis.eval(
+        luaScript,
+        seatIds.length,
+        ...seatIds,
+        eventId,
+        TicketingHoldManager.HOLD_TTL_SECONDS,
+        userId
+      ) as string;
+
+      return {
+        success: true,
+        message: "Seats held successfully for 10 minutes.",
+        heldSeatIds: seatIds,
+        heldUntil: parseInt(result) * 1000, // milliseconds timestamp
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || "Failed to hold seats due to high concurrency.",
+      };
+    }
+  }
+
+  /**
+   * পেমেন্ট সাকসেসফুল হলে সিটগুলো রিলিজ করে ডাটাবেসে বুকড মার্ক করে
+   */
+  public async confirmSeatBooking(eventId: string, seatIds: string[]): Promise<void> {
+    const pipeline = redis.pipeline();
+    for (const seatId of seatIds) {
+      const seatKey = `seat:${eventId}:${seatId}`;
+      pipeline.del(seatKey); // লক রিমুভ করব, ডাটাবেসে পার্মানেন্ট BOOKED আপডেট হবে
+    }
+    await pipeline.exec();
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জীবনের প্রোডাকশন সিস্টেমে টিকিট ফেয়ার ম্যাচিং স্কেলিংয়ের ৩টি গুরুত্বপূর্ণ স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Database Lock Contention & Virtual Waiting Rooms (CDN Edge)
+এমনকি Redis দিয়ে বুকিং করার পরও, বুকিং পেমেন্ট সাকসেস হওয়ার সাথে সাথে যদি প্রতি সেকেন্ডে ২০,০০০ ইউজার ডাটাবেসে ট্রানজেকশন কমপ্লিট করতে চায়, তবে ডেটাবেসের রাইট-লক কনটেনশন চরম আকার ধারণ করবে।
+* **মিটিগেশন (Virtual Waiting Room):** আমরা CDN লেভেলে **Queue-it / Cloudflare Waiting Room** ব্যবহার করে বুকিং ফানেলকে থ্রোটল করব। আমরা শুধুমাত্র প্রতি সেকেন্ডে ৫০০ জন ইউজারকে এপিআই গেটওয়েতে ঢুকতে দেব, যা আমাদের PostgreSQL ডাটাবেসের ম্যাক্সিমাম রাইট ক্যাপাসিটি। বাকি লাখ লাখ ট্রাফিক সিডিএন এজ-এ একটি ডাইনামিক কিউতে ওয়েট করবে, যা ডাটাবেসকে বটলনেক থেকে ১০০% রক্ষা করবে।
+
+#### ২. Expired Holds Handling (The Orphan Lock Problem)
+যদি কোনো ইউজার সিট হোল্ড করার পর তার ব্রাউজার ক্র্যাশ করে বা পেমেন্ট উইন্ডো ক্রস করে দেয়, তবে ১০ মিনিট পর Redis থেকে লক অটোমেটিক মুছে যাবে। কিন্তু ডাটাবেসের `reservations` টেবিলে থাকা রোটি পেন্ডিংই থেকে যাবে, যা নোংরা ডাটাবেস হিস্ট্রি তৈরি করে।
+* **মিটিগেশন (Active CDC Sync Engine):** আমরা **Redis Keyspace Notifications (`__keyevent@0__:expired`)** ইভেন্ট লিসেনার সেটআপ করব। যখনই রেডিস থেকে কোনো সিট লকের TTL এক্সপায়ার হবে, আমাদের ব্যাকগ্রাউন্ড এক্সপায়ার সার্ভিস সেই নোটিফিকেশন শুনে ডাটাবেসের পেন্ডিং ট্রানজেকশনকে এটমিকালি `EXPIRED` করে সিটের স্ট্যাটাস `AVAILABLE` মার্ক করে দেবে।
+
+#### ৩. Scalper Bots Prevention (Idempotent Cryptographic Tokens)
+বট ও স্ক্যালপাররা এপিআই কল বাইপাস করে সেকেন্ডে হাজার হাজার সিট হোল্ড করে নিতে পারে, যার ফলে সাধারণ ক্রেতারা কোনো টিকিটই পায় না।
+* **মিটিগেশন (Signed Ticket Tokens):** সিট সিলেক্ট করার সময় সিস্টেম ক্লায়েন্টকে একটি ক্রিপ্টোগ্রাফিকালি সাইনড টোকেন (JWT) দেবে যার ভেতরে ইউজার আইডি, সিট আইডি এবং টাইমস্ট্যাম্প সাইন করা থাকবে। `seats/reserve` এপিআই শুধুমাত্র সেই রিকোয়েস্টই এক্সেপ্ট করবে যেটিতে আমাদের গেটওয়ের দ্বারা সাইন করা ভ্যালিড টোকেন থাকবে। এতে বটস সরাসরি এপিআই স্প্যাম করে টিকিট বুকিং করতে পারবে না।
+
+---
+
+## 📖 Chapter 08: Google Drive & Dropbox (Distributed File Storage Engine)
+
+ডিস্ট্রিবিউটেড ক্লাউড ড্রাইভের মূল ইঞ্জিনিয়ারিং চ্যালেঞ্জ হলো পেটাবাইট স্কেলের ফাইল স্টোরেজ ম্যানেজমেন্ট, ব্যান্ডউইথ অপ্টিমাইজেশন এবং রিয়েল-টাইম ডিস্ট্রিবিউটেড মেটাডাটা সিঙ্ক মেকানিজম গড়ে তোলা। একটি ১ গিগাবাইটের ফাইলের সামান্য ১ কিলোবাইট পরিবর্তন হলে পুরো ফাইল পুনরায় আপলোড না করে কীভাবে নেটওয়ার্ক এবং ক্লাউড কস্ট সাশ্রয় করা যায়, তা নিচে বিশদভাবে বর্ণনা করা হলো।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার যেকোনো সাইজের ফাইল (সর্বোচ্চ ১০ জিবি) আপলোড, ডাউনলোড ও ডিলিট করতে পারবেন।
+  - ডিভাইস সিঙ্ক্রোনাইজেশন: ডিভাইস A-তে কোনো ফাইল আপলোড বা ইডিট হলে তা সাথে সাথে ডিভাইস B-তে ব্যাকগ্রাউন্ডে রিয়েল-টাইমে সিঙ্ক হবে।
+  - ফাইল হিস্ট্রি ও ভার্সন কন্ট্রোল: ইউজার আগের ভার্সনগুলো ট্র্যাক করতে এবং রিস্টোর করতে পারবেন।
+- **Non-Functional:**
+  - **Bandwidth Optimization:** ফাইলের সামান্য ইডিট হলে পুরো ফাইল পুনরায় আপলোড না করে কেবল পরিবর্তিত অংশটুকু আপলোড করা (Chunking)।
+  - **Storage Cost Optimization:** মাল্টিপল ইউজারের আপলোড করা হুবহু একই ফাইল রিমুভ করে ডুপ্লিকেশন এড়ানো (Deduplication)।
+  - **Consistency:** ফাইল এডিট নিয়ে কনফ্লিক্ট হলে ডেটা লস এড়ানো (Sync Conflict Resolution)।
+
+### ২. Back-of-the-envelope Estimation
+* **স্টোরেজ রিকোয়ারমেন্টস (Capacity Estimation):**
+  * ডেইলি একটিভ ইউজার (DAU) = ১০ মিলিয়ন
+  * এভারেজ আপলোড স্পেস প্রতি ইউজার = ১০ মেগাবাইট / দিন
+  * **টোটাল ইনজেস্ট ডেটা/দিন = ১০,০০০,০০০ * ১০ MB =** **100 Terabytes / day**
+  * **ডি-ডুপ্লিকেশন সেভ ফ্যাক্টর (Deduplication Saving):** আমাদের ইনজেস্ট করা ডেটার ২০% ফাইল ডুপ্লিকেট থাকে (একই ফটো, ভিডিও বা ফাইল মাল্টিপল ইউজার আপলোড করে)।
+  * **নেট প্রয়োজনীয় স্টোরেজ/দিন = ১০০ TB * ০.৮ =** **80 Terabytes / day**
+  * **১০ বছরের মোট প্রয়োজনীয় ক্লাউড স্পেস ≈** **292 Petabytes**
+* **ব্যান্ডউইথ সাশ্রয়ের হিসাব (Chunk-based Upload):**
+  * আমরা ফাইলকে ছোট ছোট **৪ মেগাবাইটের চাঙ্কে (Chunks)** ভাগ করব। যদি কোনো ইউজার তার ১ গিগাবাইটের একটি ফাইলের মাত্র ১টি চাঙ্ক পরিবর্তন করে, তবে চাঙ্কিং করার ফলে পুরো ১ জিবি আপলোডের জায়গায় মাত্র **৪ মেগাবাইট** আপলোড হবে, যা ব্যান্ডউইথ ব্যবহার **৯৯.৬%** কমিয়ে দেয়!
+
+### ৩. API & Database Schema Design
+চাঙ্ক ম্যানেজমেন্ট ও মেটাডাটা আপলোডের জন্য ডিজাইন:
+- `POST /api/v1/chunks/upload` (৪ মেগাবাইটের চাঙ্ক আপলোড, যেখানে চাঙ্ক আইডি হবে চাঙ্কের SHA-256 হ্যাশ)
+- `POST /api/v1/files/commit` (ফাইলের সব চাঙ্ক লিস্ট এবং ফাইল স্ট্রাকচার ডাটাবেসে সেভ করা)
+
+#### Database Schema Design
+ফাইলের মেটাডাটা ও চাঙ্কের রিলেশনশিপ ম্যাপ করার জন্য **PostgreSQL** স্কিমা:
+
+```sql
+CREATE TABLE files (
+    file_id varchar(64) PRIMARY KEY,
+    user_id bigint,
+    name varchar(255),
+    is_directory boolean,
+    version int,
+    parent_id varchar(64)
+);
+
+CREATE TABLE file_chunks (
+    file_id varchar(64),
+    chunk_hash varchar(64), -- SHA-256
+    chunk_order int,
+    PRIMARY KEY (file_id, chunk_hash, chunk_order)
+);
+
+CREATE TABLE chunk_registry (
+    chunk_hash varchar(64) PRIMARY KEY,
+    size_bytes int,
+    storage_path varchar(512),
+    reference_count int -- ডি-ডুপ্লিকেশন ট্র্যাক করার জন্য
+);
+```
+
+### ৪. High-Level Architecture
+ক্লাউড ড্রাইভের মেটাডাটা ট্র্যাকিং ও ক্লাউড স্টোরেজ ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    ClientApp["Client Device"] -->|1. Check Duplicate Chunks| MetadataServer["Metadata Service"]
+    MetadataServer -->|2. Query Hash Registry| HashIndexDB["Postgres Hash Index DB"]
+    
+    ClientApp -->|3. Upload Unique Chunks| BlockServer["Block Storage Service"]
+    BlockServer -->|4. Save Raw Chunks| CloudS3["Cloud Object Storage S3"]
+    
+    ClientApp -->|5. Commit File Metadata| MetadataServer
+    MetadataServer -->|6. Propagate Sync Event| SyncService["Sync Notification Service"]
+    SyncService -->|7. Push Live Sync Notification| ClientDeviceB["Target Sync Device B"]
+    
+    style ClientApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style MetadataServer fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style CloudS3 fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style ClientDeviceB fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Chunk Upload & Deduplication Engine
+নিচে একটি প্রোডাকশন-রেডি **Chunk Deduplication Manager** কোড দেওয়া হলো যা আপলোড করা বাফারের SHA-256 হ্যাশ বের করে এবং ইউনিক চাঙ্কগুলো অবজেক্ট স্টোরেজে (AWS S3) পাঠায় ও ডুপ্লিকেট চাঙ্ক আপলোড স্কিপ করে:
+
+```typescript
+import * as crypto from "crypto";
+
+interface ChunkUploadResponse {
+  chunkHash: string;
+  isDuplicate: boolean;
+  uploadedPath?: string;
+}
+
+export class ChunkDeduplicationManager {
+  // মেমোরি রেজিস্ট্রি ইনডেক্স (বাস্তব প্রোডাকশনে PostgreSQL chunk_registry টেবিলে যাবে)
+  private chunkRegistry = new Map<string, { storagePath: string; refCount: number }>();
+
+  /**
+   * ফাইল বাফারের SHA-256 হ্যাশ বের করে চাঙ্ক আইডি হিসেবে ব্যবহারের জন্য
+   */
+  public computeSHA256(buffer: Buffer): string {
+    return crypto.createHash("sha256").update(buffer).digest("hex");
+  }
+
+  /**
+   * ৪ মেগাবাইটের ফাইল চাঙ্ক প্রসেস করে
+   * হ্যাশ ডুপ্লিকেট হলে আপলোড স্কিপ করে ব্যান্ডউইথ ও মেমোরি সেভ করে
+   */
+  public async uploadChunk(chunkBuffer: Buffer, userId: string): Promise<ChunkUploadResponse> {
+    const hash = this.computeSHA256(chunkBuffer);
+    const existingChunk = this.chunkRegistry.get(hash);
+
+    if (existingChunk) {
+      // 🟢 Deduplication Hit: ফাইল ব্লকটি সার্ভারে অলরেডি আপলোড হয়ে গেছে!
+      // আমরা নতুন করে আপলোড না করে কেবল রেফারেন্স কাউন্ট ১ বাড়িয়ে দেব
+      existingChunk.refCount += 1;
+      this.chunkRegistry.set(hash, existingChunk);
+      
+      return {
+        chunkHash: hash,
+        isDuplicate: true,
+        uploadedPath: existingChunk.storagePath,
+      };
+    }
+
+    // 🔴 Deduplication Miss: ফাইল ব্লকটি একদম নতুন ও ইউনিক!
+    // আমরা ফাইল ব্লকটি ক্লাউড অবজেক্ট স্টোরেজে (AWS S3) সেভ করব
+    const dummyStoragePath = `s3://cloud-drive-bucket/chunks/${hash.slice(0, 2)}/${hash}.bin`;
+    
+    // ফাইল ইনডেক্সে সেভ করি
+    this.chunkRegistry.set(hash, {
+      storagePath: dummyStoragePath,
+      refCount: 1,
+    });
+
+    return {
+      chunkHash: hash,
+      isDuplicate: false,
+      uploadedPath: dummyStoragePath,
+    };
+  }
+
+  /**
+   * ফাইলের চাঙ্কের রেফারেন্স রিলিজ করে
+   * রেফারেন্স কাউন্ট ০ হলে চাঙ্কটি অবজেক্ট স্টোরেজ থেকে ডিলিট করা হবে (Garbage Collector)
+   */
+  public async releaseChunk(hash: string): Promise<void> {
+    const chunk = this.chunkRegistry.get(hash);
+    if (!chunk) return;
+
+    chunk.refCount -= 1;
+    if (chunk.refCount <= 0) {
+      // S3 স্টোরেজ থেকে ফাইল মুছে ফেলার ব্যাকগ্রাউন্ড ইভেন্ট জেনারেট হবে
+      this.chunkRegistry.delete(hash);
+      console.log(`Garbage Collector: Deleted chunk ${hash} from S3 storage.`);
+    } else {
+      this.chunkRegistry.set(hash, chunk);
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+পেটাবাইট স্কেলের ডিস্ট্রিবিউটেড ফাইল সিস্টেমে প্রোডাকশনের ৩টি জটিল প্রবলেম ও স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Dynamic Sync Conflicts (Optimistic Concurrency Control)
+যখন দুজন কোলাবোরেটর অফলাইন অবস্থায় একই এক্সেল শিট মডিফাই করেন এবং পরবর্তীতে অনলাইনে ফিরে আসেন, তখন ডিভাইস B ডিভাইস A-এর ফাইল ওভাররাইট করে ডেটা লস ঘটাতে পারে।
+* **মিটিগেশন (Optimistic Concurrency Control - OCC):** মেটাডাটা সার্ভারে আমরা প্রতিটি ফাইলের সাথে একটি `version` নাম্বার ট্র্যাক করব। যখন ডিভাইস B ফাইল সিঙ্ক করার রিকোয়েস্ট পাঠাবে, তাকে তার লাস্ট ডাউনলোড করা ভার্সন নাম্বারটি দিতে হবে। যদি ডাটাবেসের কারেন্ট ভার্সন অলরেডি আপডেট হয়ে থাকে (যেমন ডিভাইস A আগে কমপ্লিট করেছে), তবে সার্ভার `409 Conflict` রেসপন্স দেবে। ক্লায়েন্ট ডিভাইস তখন ইউজারের কাছে কনফ্লিক্ট দেখাবে এবং ২ ফাইল মার্জ বা আলাদা দুটি কপি সেভ করার ডিসিশন নেবে।
+
+#### ২. Petabyte Scale Cost Optimization (Cold vs Hot Storage Lifecycle)
+ইনজেস্ট করা ফাইলগুলোর ৯০% আপলোডের ৩০ দিন পার হয়ে যাওয়ার পর আর কখনই কোনো ইউজার রিড বা অ্যাক্সেস করে না। পেটাবাইট স্কেলের ডেটা হাই-পারফরম্যান্স SSD তে বছরের পর বছর রেখে দেওয়া লাখ লাখ টাকার ক্লাউড লস।
+* **মিটিগেশন (Storage Class Lifecycle Policies):** আমরা একটি অটোমেটেড পলিসি জেনারেট করব যা প্রতি ৩০ দিন পর পর আন-অ্যাক্সেসড চাঙ্কগুলোকে **S3 Standard (Hot)** থেকে **S3 Standard-IA (Infrequent Access)** এ পাঠাবে। এবং ৯০ দিন পর ফাইলগুলোকে **AWS S3 Glacier Deep Archive (Cold Storage)** ক্লাসে ট্রান্সফার করবে। এতে আমাদের মান্থলি ক্লাউড বিল **৮০% পর্যন্ত হ্রাস** পাবে।
+
+#### ৩. Deduplication Cross-User Side-Channel Exploit (Security Leak)
+কোনো ইউজার একটি সিক্রেট ফাইল আপলোড করার সময় সিস্টেম যদি সাথে সাথে বলে "File already exists (Upload skipped)", তবে ওই ইউজার সাথে সাথে টের পেয়ে গেল যে আমাদের ড্রাইভ সার্ভারে অন্য কেউ ঠিক একই ফাইলটি অলরেডি স্টোর করে রেখেছে! এটি একটি মারাত্মক ইনফরমেশন লিক সিকিউরিটি হোল।
+* **মিটিগেশন (Proof of Custody - PoC):** ক্লায়েন্ট কেবল ফাইলের SHA-256 হ্যাশ পাঠাবে না। সার্ভার ক্লায়েন্টকে একটি চ্যালেঞ্জ পাঠাবে (যেমন: "ফাইলের ১০ম বাইট থেকে ১০০তম বাইটের র্যান্ডম হ্যাশ ক্যালকুলেট করে দেখাও")। এটি প্রমাণ করে যে ফাইলটি আসলেই ক্লায়েন্ট ডিভাইসে ফিজিক্যালি উপস্থিত আছে এবং কেবল ডোপ অনুমান করে হ্যাশ পাঠানো হচ্ছে না। একেই বলে **Proof of Custody (PoC)**।
+
+---
+
+## 📖 Chapter 09: Web Crawler (Search Engine Indexer)
+
+গুগল বা বিং-এর মতো সার্চ ইঞ্জিনের জন্য কোটি কোটি ওয়েব পেজ অটোমেটিকভাবে ক্রল করা এবং ইনডেক্সিং পাইপলাইনে পাঠানো অত্যন্ত জটিল একটি কাজ। বিলিয়ন স্কেলে ওয়েব ক্রলিংয়ের মূল কারিগরি চ্যালেঞ্জ হলো গ্রাফ ট্রাভার্সাল (BFS), ডোমেইন পোলাইটনেস (Politeness), Robots.txt সম্মান করা এবং ইনফিনিট স্পাইডার ট্র্যাপ বা রিডাইরেকশন লুপ প্রিভেন্ট করা।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ওয়েব পেজ থেকে কন্টেন্ট ডাউনলোড এবং তার ভেতরের সব হাইপারলিঙ্ক (`<a href="...">`) এটমিকালি এক্সট্র্যাক্ট করা।
+  - ডাউনলোড করা কন্টেন্ট ক্লাউড অবজেক্ট স্টোরেজে (S3) সেভ করা এবং টেক্সট ডেটা সার্চ ইনডেক্সারে পুশ করা।
+  - প্রতিটি ডোমেইনের **Robots.txt** রুলস পড়া ও কঠোরভাবে মেনে চলা।
+- **Non-Functional:**
+  - **Massive Scalability:** প্রতি মাসে ১৫ বিলিয়ন (15 Billion) পেজ ক্রল করার ক্ষমতা থাকতে হবে।
+  - **Strict Domain Politeness:** কোনো ওয়েবসাইটকে অতিরিক্ত রিকোয়েস্ট পাঠিয়ে যাতে ডাউন না করা হয় (DoS Attack প্রিভেনশন)।
+  - **High Fault Tolerance:** ডেড লিংক, স্লো রেসপন্স, ৪MB পেজ সাইজ এবং মাল্টিপল রিডাইরেকশন এরর সুন্দরভাবে হ্যান্ডেল করা।
+
+### ২. Back-of-the-envelope Estimation
+* **ক্রলার থ্রুপুট (Page Crawl QPS):**
+  * মাসিক ক্রল টার্গেট = ১৫ বিলিয়ন পেজ
+  * দৈনিক ক্রল রেট = ১৫,০০০,০০০,০০০ / ৩০ দিন = ৫০০,০০০,০০০ পেজ / দিন
+  * **Crawl Download QPS = ৫০০,০০০,০০০ / ৮৬,৪০০ সেকেন্ড ≈** **5,800 pages/sec (Average)**
+* **স্টোরেজ রিকোয়ারমেন্টস (Raw HTML Cache - 1 Year):**
+  * এভারেজ পেজ সাইজ = ১০০ কিলোবাইট
+  * দৈনিক ইনজেস্ট স্পেস = ৫০০,০০০,০০০ * ১০০ KB = **50 Terabytes / day**
+  * **১ বছরের টোটাল প্রয়োজনীয় মেমোরি ≈** **18 Petabytes** (তাই S3 Glacier বা অবজেক্ট স্টোরেজ ব্যবহার মাস্ট)।
+* **DNS রিজলভার ওভারহেড:**
+  * সেকেন্ডে ৫,৮০০ পেজ ক্রল করার অর্থ হলো প্রতি সেকেন্ডে ৫,৮০০ টি DNS রিজলভিং কুয়েরি জেনারেট হওয়া। এটি গ্লোবাল পাবলিক DNS-এ পাঠালে সাথে সাথে আমাদের ব্লক করে দেবে। তাই একটি লোকাল ডিস্ট্রিবিউটেড DNS ক্যাশিং সার্ভার ম্যান্ডেটরি।
+
+### ৩. API & Database Schema Design
+ডিস্ট্রিবিউটেড ক্রলাররা ব্যাকগ্রাউন্ড ডেমো ওয়ার্কার হিসেবে কাজ করে, তাই তাদের কোনো ডিরেক্ট ইউজার ফেসড API থাকে না। তারা **Frontier Queue** থেকে ইনপুট নেয় ও প্রসেসিং আউটপুট দেয়।
+
+#### Database Tables Schema (Crawl Frontier Storage)
+ডিজিটাল ইউআরএল-এর স্টেট এবং প্রায়োরিটি ট্র্যাক করার জন্য ডিস্ট্রিবিউটেড **PostgreSQL/Cassandra** নোএসকিউএল ইনডেক্স:
+
+```sql
+CREATE TABLE crawl_frontier (
+    url_hash varchar(64) PRIMARY KEY,
+    url varchar(2048),
+    domain varchar(255),
+    status varchar(20), -- 'DISCOVERED', 'IN_PROGRESS', 'CRAWLED', 'FAILED'
+    last_crawled_at timestamp,
+    priority int
+);
+
+CREATE TABLE robots_cache (
+    domain varchar(255) PRIMARY KEY,
+    rules_text text,
+    expires_at timestamp
+);
+```
+
+### ৪. High-Level Architecture
+ডিস্ট্রিবিউটেড ক্রলিং ফ্লো ও ডি-ডুপ্লিকেশন পাইপলাইন নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Frontier["Crawl Frontier URL Queue"] -->|1. Fetch Next URL| PolitenessQueue["Politeness Queue Manager Redis Domain Queues"]
+    PolitenessQueue -->|2. Get Safe Host URL| CrawlWorker["Distributed Crawl Workers"]
+    
+    CrawlWorker -->|3. DNS Resolve Check| DNSCache["Local Caching DNS Server"]
+    CrawlWorker -->|4. Request robots.txt| TargetServer["Target Web Server"]
+    
+    CrawlWorker -->|5. Download HTML| HTMLParser["HTML Parser and Link Extractor"]
+    
+    HTMLParser -->|6. Save Raw Page| RawStore["Cloud Object Storage S3"]
+    HTMLParser -->|7. Discovered Links| DedupeService["URL Deduplication Filter SHA256"]
+    
+    DedupeService -->|8. New Unique URLs| Frontier
+    
+    style Frontier fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style DNSCache fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style HTMLParser fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style RawStore fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Politeness and Robots.txt Manager
+নিচে একটি প্রোডাকশন-রেডি **Crawl Politeness Manager** কোড দেওয়া হলো যা Redis ক্যাশ ব্যবহার করে Robots.txt-এর রুলস ভ্যালিডেট করে এবং ডোমেইন প্রতি ২ সেকেন্ডের লকিং পোলাইটনেস এনফোর্স করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface CrawlTask {
+  url: string;
+  domain: string;
+}
+
+export class CrawlPolitenessManager {
+  private static readonly POLITENESS_DELAY_MS = 2000; // একই ডোমেইনে সর্বোচ্চ ১টি রিকোয়েস্ট প্রতি ২ সেকেন্ডে
+  private static readonly DISALLOWED_ROBOTS_KEY = "robots:disallowed:";
+
+  /**
+   * ইউআরএল থেকে ডোমেইন এক্সট্র্যাক্ট করে
+   */
+  public extractDomain(urlStr: string): string {
+    try {
+      const url = new URL(urlStr);
+      return url.hostname;
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * Robots.txt ভ্যালিডেট করে পাথ অ্যালাউড কি না নিশ্চিত করে
+   */
+  public async isUrlAllowed(urlStr: string): Promise<boolean> {
+    const domain = this.extractDomain(urlStr);
+    if (!domain) return false;
+
+    // Robots disallow list loaded from Redis cache
+    const disallowRules = await redis.smembers(`${CrawlPolitenessManager.DISALLOWED_ROBOTS_KEY}${domain}`);
+    
+    const url = new URL(urlStr);
+    for (const rule of disallowRules) {
+      if (url.pathname.startsWith(rule)) {
+        console.log(`Crawl Blocked: Robots.txt disallows path ${url.pathname} on ${domain}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * পোলাইটনেস লক অ্যাকোয়ার করে
+   * নির্দিষ্ট ডোমেইনে ২ সেকেন্ডের মধ্যে অন্য কোনো ক্রলার রিকোয়েস্ট পাঠাতে পারবে না
+   */
+  public async acquireCrawlPermission(domain: string): Promise<boolean> {
+    const lockKey = `crawl:lock:domain:${domain}`;
+    
+    // NX: key না থাকলে সেট হবে, EX: ২ সেকেন্ডের জন্য লক থাকবে
+    const lock = await redis.set(lockKey, "ACTIVE", "NX", "PX", CrawlPolitenessManager.POLITENESS_DELAY_MS);
+    
+    if (lock === "OK") {
+      return true; // লক সাকসেস!
+    }
+    
+    return false; // লক ফেইল! পোলাইটনেস ভায়োলেশন এড়াতে হোল্ড করা হবে
+  }
+
+  /**
+   * ডোমেইনে অফলাইন রুল রেজিস্টার করে
+   */
+  public async registerDisallowedPath(domain: string, path: string): Promise<void> {
+    await redis.sadd(`${CrawlPolitenessManager.DISALLOWED_ROBOTS_KEY}${domain}`, path);
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বিলিয়ন-স্কেল ক্রলিং ইঞ্জিনে প্রোডাকশনে ফেস করা ৩টি চরম প্রবলেম ও তাদের সল্যুশন:
+
+#### ১. DNS Resolution Bottleneck (Network Blockages)
+সেকেন্ডে ৫,৮০০ রিকোয়েস্ট প্রসেস করতে গেলে সমপরিমাণ DNS Lookup করতে হয়। যেহেতু DNS Resolution একটি সিঙ্ক্রোনাস এবং ব্লকিং অপারেশন, এটি বাইরের পাবলিক DNS এ পাঠালে লেটেন্সি ৫ সেকেন্ড পার হয়ে যাবে এবং আইপি ব্লক খাবে।
+* **মিটিগেশন (DNS Caching & Asynchronous Resolvers):** আমরা আমাদের ডিস্ট্রিবিউটেড নেটওয়ার্ক পডগুলোতে লোকাল ক্যাশিং DNS সার্ভার (যেমন **Unbound / CoreDNS**) ডেপ্লয় করব। আমাদের ক্রলিং ইঞ্জিন ডিরেক্টলি লোকাল ক্যাশ থেকে IP রিজলভ করবে। এছাড়া অ্যাসিঙ্ক্রোনাস এবং নন-ব্লকিং DNS কুয়েরি মেকানিজম ব্যবহার করা হবে যাতে একটি থ্রেড DNS রিজলভিং-এর জন্য ঝুলে না থাকে।
+
+#### ২. Spider Traps & Dynamic Path Loops
+কিছু ওয়েবসাইট ডাইনামিকালি ইনফিনিট ক্যালেন্ডার বা রিডাইরেকশন লুপ তৈরি করে (যেমন: `/calendar/2026/next-day` যা অফুরন্ত লিংক জেনারেট করে)। ক্রলার এর ভেতরে ঢুকে পড়লে একই সাইটের মিলিয়ন লিংকে ঘুরে রিসোর্স নষ্ট করবে।
+* **মিটিগেশন (Depth Limiting & Bloom Filter Hash Check):** আমরা দুটি ফিল্টার বসাব:
+  * **Max Depth Guard:** যেকোনো ওয়েবসাইটের জন্য BFS ডেপথ সর্বোচ্চ ১৫ লেয়ারে লক করে দেওয়া হবে।
+  * **Bloom Filter Document Duplication:** একটি পেজ ডাউনলোডের পর তার HTML কন্টেন্টকে হ্যাশ করব। ব্লুম ফিল্টার দিয়ে যদি দেখি একই ডোমেইনের কন্টেন্ট হ্যাশ ৫ বারের বেশি ডুপ্লিকেট হচ্ছে (ভিন্ন ইউআরএল-এর অধীনে), তবে বুঝবো এটি একটি স্পাইডার ট্র্যাপ এবং সেই ডোমেইন ক্রলিং করা সাথে সাথে ব্ল্যাকলিস্ট করব।
+
+#### ৩. Crawl Politeness Queue Skewing (Host-based Queues)
+একটি সিঙ্গেল প্রসেসিং কিউ ব্যবহার করলে মাল্টিপল ক্রলার থ্রেড একই সময়ে একই ডোমেইনের (যেমন `wikipedia.org`) মাল্টিপল লিংক তুলে আনতে পারে, যার ফলে পোলাইটনেস রুল ব্রেক হবে এবং আইপি ব্যান খাবে।
+* **মিটিগেশন (Host-based Sub-Queues):** আমরা Crawl Frontier-কে Domain Name অনুযায়ী শার্ডিং করব। প্রতিটি ডোমেইনের জন্য আলাদা ডেডিকেটেড FIFO সাব-কিউ থাকবে। একটি সেন্ট্রাল **Queue Coordinator** প্রতি সাব-কিউ-এর বিপরীতে **ঠিক একটি মাত্র ক্রলিং থ্রেড** অ্যাসাইন করবে। এর ফলে একটি ডোমেইনে কখনো প্যারালাল রিকোয়েস্ট যাবে না, যা নিখুঁত পোলাইটনেস এনশিওর করবে।
+
+---
+
+## 📖 Chapter 10: Distributed Notification System
+
+একটি ডিস্ট্রিবিউটেড নোটিফিকেশন সিস্টেমের মূল ইঞ্জিনিয়ারিং চ্যালেঞ্জ হলো মিলিয়ন মিলিয়ন মোবাইল ও ওয়েব ক্লায়েন্টে চোখের পলকে পুশ নোটিফিকেশন (FCM/APNS), ইমেইল (SendGrid) এবং এসএমএস (Twilio) পাঠানো। ক্রনিকাল মার্কেটিং ক্যাম্পেইনের বাল্ক মেসেজ যেন ট্রানজেকশনাল ওটিপি (OTP) ও সিকিউরিটি এলার্টকে স্লো না করে দেয় এবং কোনো অবস্থায় যেন একজন ইউজার ডুপ্লিকেট মেসেজ না পান, তা স্টাফ আর্কিটেক্ট লেভেলে ডিজাইন করা নিচে চমৎকারভাবে আলোচনা করা হলো।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজারদের বিভিন্ন চ্যানেলে (Push, SMS, Email) নোটিফিকেশন ডেলিভারি দেওয়া।
+  - ওটিপি (OTP) ও সিকিউরিটি অ্যালার্টের মতো গুরুত্বপূর্ণ নোটিফিকেশন অত্যন্ত হাই-স্পিডে পাঠানো।
+  - ইউজার প্রিফারেন্স ম্যানেজমেন্ট (যেমন: ইউজার মার্কেটিং নোটিফিকেশন অফ রাখতে পারলেও ট্রানজেকশনাল ওটিপি ম্যান্ডেটরি রিসিভ করবেন)।
+- **Non-Functional:**
+  - **Ultra Scalability:** প্রতি দিনে ১ বিলিয়ন (1 Billion) নোটিফিকেশন ডেলিভারি হ্যান্ডেল করা।
+  - **Strict Idempotency:** নেটওয়ার্ক বা সার্ভার ফেইলিওরের কারণে একই মেসেজ যেন ইউজার ২ বার না পান (Deduplication)।
+  - **Fault Tolerance:** কোনো গেটওয়ে (যেমন Twilio) ডাউন থাকলে অটোমেটিক অন্য অল্টারনেটিভ গেটওয়েতে রুট হওয়া।
+
+### ২. Back-of-the-envelope Estimation
+* **থ্রুপুট ক্যালকুলেশন (Notification QPS):**
+  * দৈনিক নোটিফিকেশন টার্গেট = ১,০০০,০০০,০০০ নোটিফিকেশন / দিন
+  * **Average Notification QPS = ১,০০০,০০০,০০০ / ৮৬,৪০০ সেকেন্ড ≈** **11,500 notifications/sec**
+  * **Peak Surge QPS (যেমন নববর্ষের ফ্ল্যাশ অ্যালার্ট):** **100,000 notifications/sec**
+* **ব্যান্ডউইথ ক্যাপাসিটি:**
+  * একটি স্ট্যান্ডার্ড নোটিফিকেশন পেলোডের এভারেজ সাইজ = ১ কিলোবাইট (ডিভাইস টোকেন, টাইটেল, বডি)।
+  * **Peak Network Ingest Rate = ১০০,০০০ QPS * ১ KB =** **100 Megabytes / sec**। নোটিফিকেশনগুলোর ব্যাকলগ এড়াতে মেসেজ ব্রোকারকে (Kafka) অত্যন্ত অপ্টিমাইজডভাবে শার্ড বা পার্টিশন করতে হবে।
+
+### ৩. API & Database Schema Design
+নোটিফিকেশন রিকোয়েস্ট এপিআই ও রিলেশনাল ডেটা মডেল:
+- `POST /api/v1/notifications/send`
+  - Body: `{ userId, message, priority: "HIGH" | "LOW", channels: ["PUSH", "SMS"], idempotencyKey: "uuid-12345" }`
+
+#### Database Schema Design
+ইউজারের নোটিফিকেশন পারমিশন ও ডেলিভারি হিস্ট্রি ম্যাপ করার জন্য **PostgreSQL** ও নোএসকিউএল স্কিমা:
+
+```sql
+-- PostgreSQL: ইউজার প্রিফারেন্স টেবিল
+CREATE TABLE notification_preferences (
+    user_id bigint PRIMARY KEY,
+    allow_push boolean DEFAULT true,
+    allow_email boolean DEFAULT true,
+    allow_sms boolean DEFAULT false
+);
+
+-- Cassandra/DynamoDB: হাই-রাইট স্পিডের নোটিফিকেশন ডেলিভারি লগ
+CREATE TABLE notification_logs (
+    notification_id varchar(64) PRIMARY KEY,
+    user_id bigint,
+    channel varchar(20),
+    status varchar(20), -- 'PENDING', 'SENT', 'FAILED'
+    created_at timestamp
+);
+```
+
+### ৪. High-Level Architecture
+ডিস্ট্রিবিউটেড নোটিফিকেশন সিস্টেমের ইডেমপোটেন্সি চেক, প্রায়োরিটি শার্ডিং ও মাল্টি-চ্যানেল ডেলিভারি ট্রাফিক ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Application Client Service"] -->|1. Trigger API| Gateway["API Gateway Notification Service"]
+    Gateway -->|2. Check Deduplication| DedupeStore["Redis Idempotency Store Cache"]
+    
+    Gateway -->|3. Route by Priority| QueueRouter["Kafka Queue Router"]
+    QueueRouter -->|4a. Urgent OTP| HighPriorityQueue["Kafka High Priority Queue"]
+    QueueRouter -->|4b. Bulk Promo| LowPriorityQueue["Kafka Low Priority Queue"]
+    
+    HighPriorityQueue -->|5a. Fetch Job| HighWorker["OTP and Push Workers"]
+    LowPriorityQueue -->|5b. Fetch Job| LowWorker["Marketing Bulk Workers"]
+    
+    HighWorker -->|6a. Send Push| PushGW["FCM and APNS Push Gateways"]
+    LowWorker -->|6b. Send Email SMS| EmailGW["SendGrid and Twilio Gateways"]
+    
+    PushGW & EmailGW -->|7. Callback Update| LogService["Log Update Service"]
+    LogService -->|8. Save Delivery Log| DB["DynamoDB Log Database"]
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style DedupeStore fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style HighPriorityQueue fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style DB fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Idempotent Priority Queue Dispatcher
+নিচে একটি প্রোডাকশন-রেডি **Idempotent Notification Dispatcher** কোড দেওয়া হলো যা Redis ব্যবহার করে ডুপ্লিকেট রিকোয়েস্ট ব্লক করে এবং মেসেজ প্রায়োরিটি মেইনটেইন করে সঠিক কিউতে পুশ করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface NotificationRequest {
+  idempotencyKey: string;
+  userId: string;
+  message: string;
+  priority: "HIGH" | "LOW";
+  channels: Array<"PUSH" | "EMAIL" | "SMS">;
+}
+
+interface DispatchResult {
+  success: boolean;
+  message: string;
+  notificationId?: string;
+}
+
+export class IdempotentNotificationDispatcher {
+  private static readonly IDEMPOTENCY_TTL_SECONDS = 86400; // ২৪ ঘণ্টা
+  private static readonly HIGH_PRIORITY_QUEUE = "queue:notification:high";
+  private static readonly LOW_PRIORITY_QUEUE = "queue:notification:low";
+
+  /**
+   * মিলি-সেকেন্ডে নোটিফিকেশন ডিসপ্যাচ করে এবং ডুপ্লিকেট মেসেজ ডেলিভারি সম্পূর্ণ রুখে দেয়
+   */
+  public async dispatchNotification(req: NotificationRequest): Promise<DispatchResult> {
+    const dedupeKey = `idempotency:notification:${req.idempotencyKey}`;
+    
+    // ১. ওয়ান-স্টেপ এটমিক ইডেমপোটেন্সি চেক (Redis SET with NX)
+    // এটি নিশ্চিত করে যে দুটি সমসাময়িক রিকোয়েস্ট একই মেসেজ ২ বার পাঠাতে পারবে না
+    const isUnique = await redis.set(dedupeKey, "PROCESSING", "NX", "EX", IdempotentNotificationDispatcher.IDEMPOTENCY_TTL_SECONDS);
+    
+    if (!isUnique) {
+      console.log(`Deduplication Hit: Request with key ${req.idempotencyKey} is already being processed.`);
+      return {
+        success: false,
+        message: "Duplicate notification request blocked successfully.",
+      };
+    }
+
+    try {
+      const notificationId = `notif_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // ২. প্রায়োরিটি নির্ধারণ করে সঠিক কিউতে পুশ করা
+      const targetQueue = req.priority === "HIGH" 
+        ? IdempotentNotificationDispatcher.HIGH_PRIORITY_QUEUE 
+        : IdempotentNotificationDispatcher.LOW_PRIORITY_QUEUE;
+      
+      const payload = JSON.stringify({
+        notificationId,
+        userId: req.userId,
+        message: req.message,
+        channels: req.channels,
+        createdAt: Date.now()
+      });
+
+      // ৩. রেডিস লিস্ট (বাস্তব প্রোডাকশনে কাфকা পার্টিশনে যাবে) ব্যবহার করে কিউয়িং
+      await redis.lpush(targetQueue, payload);
+
+      // ৪. স্ট্যাটাস আপডেট করে PROCESSED মার্ক করি
+      await redis.set(dedupeKey, "PROCESSED", "EX", IdempotentNotificationDispatcher.IDEMPOTENCY_TTL_SECONDS);
+
+      console.log(`Notification ${notificationId} successfully queued into ${req.priority} priority queue.`);
+      
+      return {
+        success: true,
+        message: "Notification successfully processed and queued.",
+        notificationId,
+      };
+    } catch (error) {
+      // ফেইল হলে ইডেমপোটেন্সি রিলিজ করি যাতে রিট্রাই সম্ভব হয়
+      await redis.del(dedupeKey);
+      throw error;
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জগতের বিলিয়ন-স্কেল নোটিফিকেশন সিস্টেমে প্রোডাকশনের ৩টি গুরুতর প্রবলেম ও স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Downstream Gateway Rate Limits & Backpressure
+FCM, APNS, Twilio এবং SendGrid-এর মতো ডাউনস্ট্রিম থার্ড-পার্টি সার্ভিসগুলোর কঠোর এপিআই রেট লিমিট থাকে। সেকেন্ডে ১ লাখ রিকোয়েস্ট দিয়ে তাদের হ্যামার করলে আমাদের এপিআই আইপি পার্মানেন্টলি ব্যান খাবে।
+* **মিটিগেশন (Distributed Token Bucket & Outbox Rate Limiters):** প্রতিটি গেটওয়ের বিপরীতে আমরা **Redis Token Bucket Rate Limiter** বসাব। আমাদের ওয়ার্কাররা কাফকা থেকে মেসেজ পুল করে সরাসরি ডাউনস্ট্রিমে না পাঠিয়ে গেটওয়ের রেট লিমিট প্রসেসিং ক্যাপাসিটি অনুযায়ী থ্রোটল করে পাঠাবে (যেমন: Twilio-তে সেকেন্ডে সর্বোচ্চ ৫,০০০ এসএমএস)। যদি কোনো গেটওয়ে ৪২৯ এরর বা সার্ভিস ক্র্যাশ রিটার্ন করে, আমরা ব্যাকগ্রাউন্ডে **Exponential Backoff with Jitter** অ্যালগরিদম ব্যবহার করে রিকোয়েস্ট রিট্রাই করব এবং প্রয়োজনে রুট অন্য ব্যাকআপ পার্টনারে শিফট করব।
+
+#### ২. Visibility Double Notifications under Network Crashes
+একটি ওয়ার্কার কাফকা থেকে ওটিপি টাস্ক তুলে FCM গেটওয়েতে পাঠালো। FCM সাকসেসফুলি ইউজার ডিভাইসে পুশ পাঠিয়ে দিল, কিন্তু ওয়ার্কার ডেটাবেসে নোটিফিকেশনের স্ট্যাটাস `SENT` আপডেট করার ঠিক আগের মুহূর্তে সার্ভার ক্র্যাশ করল। কাফকা মনে করবে রিকোয়েস্টটি প্রসেস হয়নি এবং রি-ডেলিভারি ট্রিগার করবে, যার ফলে ইউজারের কাছে একই ওটিপি বা এলার্ট ২ বার চলে যাবে যা ইউজারের এক্সপেরিয়েন্স নষ্ট করে।
+* **মিটিগেশন (Client-side Notification Deduplication):** আমরা প্রতিটি নোটিফিকেশনের সাথে একটি ক্রিপ্টোগ্রাফিক ইউনিক `NotificationID` এমবেড করে দেব। ইউজার অ্যাপে নোটিফিকেশনটি ডিসপ্লে করার আগে ক্লায়েন্ট কোড (iOS/Android) লোকাল ডিভাইসের SQLite ডাটাবেসে লাস্ট ২ ঘণ্টার রিসিভড মেসেজ আইডি ট্র্যাক করবে। যদি দেখে এই `NotificationID` অলরেডি প্রসেসড, ক্লায়েন্ট অ্যাপ মেসেজটি রেন্ডার না করে সাইলেন্টলি ড্রপ করে দেবে। এটি সম্পূর্ণ জিরো ডুপ্লিকেট রেন্ডারিং গ্যারান্টি দেয়।
+
+#### ৩. Resource Starvation of Transactional OTPs (Queue Segregation)
+মার্কেটিং টিম যদি হঠাৎ করে ৫০ মিলিয়ন ডিস্ট্রিবিউটেড প্রমোশনাল নোটিফিকেশন কিউতে পাঠায়, তবে প্রমোশনাল মেসেজগুলোর বিশাল জ্যামের কারণে ক্রিটিক্যাল সিকিউরিটি ওটিপি (OTP) ডেলিভারি হতে কয়েক ঘণ্টা দেরি হতে পারে, যা গ্রাহকদের লগইন করতে দেবে না।
+* **মিটিগেশন (Physical Queue Segregation & Dedicated Thread Pools):** আমরা হাই-প্রায়োরিটি ট্রানজেকশনাল নোটিফিকেশন ও লো-প্রায়োরিটি মার্কেটিং নোটিফিকেশন সম্পূর্ণ আইসোলেটেড ক্যাটাগরিতে ভাগ করব। ওটিপি নোটিফিকেশনগুলো সম্পূর্ণ আলাদা ডেডিকেটেড কাফকা পার্টিশন, আলাদা Kubernetes রানটাইম পড এবং আলাদা ডেডিকেটেড কানেকশন পুল ব্যবহার করবে। মার্কেটিং ওয়ার্কাররা কোনোভাবেই ওটিপি প্রসেসিং রিজন অবস্ট্রাক্ট করতে পারবে না, ফলে প্রমোশন সার্ভারের বিশাল ট্রাফিক জ্যামেও ওটিপি ডেলিভারি লেটেন্সি **সর্বদা < ১ সেকেন্ড** থাকবে।
+
+---
+
+## 📖 Chapter 11: API Gateway & Distributed Rate Limiter
+
+এপিআই গেটওয়ে হলো যেকোনো মাইক্রোসার্ভিস আর্কিটেকচারের ফ্রন্ট ডোর বা গেটকিপার। এর মূল কাজ হলো ইনকামিং ট্রাফিকের এজ-অথেনটিকেশন (JWT Validation), ডাইনামিক রাউটিং এবং এপিআই অ্যাবিউজ বা ব্রুট-ফোর্স অ্যাটাক রুখতে ডিস্ট্রিবিউটেড রেট লিমিটিং এনফোর্স করা। এই চ্যাপ্টারে আমরা শিখবো কীভাবে রেস কন্ডিশন ছাড়া সেকেন্ডে লাখ লাখ ট্রাফিক অপ্টিমাইজড ল্যাটেন্সিতে রেট লিমিট করা যায়।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইনকামিং রিকোয়েস্টের পাথ রিড করে সঠিক ডাউনস্ট্রিম মাইক্রোসার্ভিসে রাউট করা (Reverse Proxy)।
+  - গেটওয়ে লেয়ারেই ইউজারের JWT টোকেন ভ্যালিডেট করা (Edge Auth) যাতে ব্যাকএন্ড সার্ভিসগুলোতে ডুপ্লিকেট অথেনটিকেশন কুয়েরি না চলে।
+  - প্রতিটি ইউজার বা আইপি এড্রেসের জন্য এপিআই কল লিমিট করা (যেমন: ৬০ সেকেন্ডে সর্বোচ্চ ১০০টি রিকোয়েস্ট)।
+- **Non-Functional:**
+  - **Ultra-low latency overhead:** রাউটিং এবং রেট লিমিটিং প্রসেস করতে ২ মিলি-সেকেন্ডের বেশি সময় নেওয়া যাবে না।
+  - **High Throughput Capability:** পিক আওয়ারে প্রতি সেকেন্ডে ১০০,০০০ রিকোয়েস্ট (100,000 QPS) হ্যান্ডেল করার সক্ষমতা।
+  - **Fault Tolerance (Fail-Open):** আমাদের রেট লিমিটিং ক্যাশ ক্লাস্টার (Redis) ক্র্যাশ করলেও যেন মূল এপিআই শাটডাউন না হয়ে সচল থাকে।
+
+### ২. Back-of-the-envelope Estimation
+* **মেমোরি অপ্টিমাইজেশন (Sliding Window Log Memory):**
+  * ধরি, পিক ট্রাফিকে মোট কনকারেন্ট রিকোয়েস্ট QPS = ১০০,০০০ / সেকেন্ড
+  * আমরা **Sliding Window Log** অ্যালগরিদম ব্যবহার করব। প্রতিটি রিকোয়েস্টের জন্য Redis Sorted Set (ZSET) এ একটি টাইমস্ট্যাম্প (৮ বাইট) এবং র্যান্ডম মেম্বার আইডি (৮ বাইট) = মোট ১৬ বাইট মেমোরি লাগে।
+  * যদি একজন ইউজার প্রতি মিনিটে ১০০টি রিকোয়েস্ট পাঠায়, তবে তার জন্য মেমোরি লাগবে = ১০০ * ১৬ বাইট ≈ ১.৬ কিলোবাইট।
+  * **১০ মিলিয়ন (10M) একটিভ ইউজারের জন্য মোট প্রয়োজনীয় মেমোরি = ১০,০০০,০০০ * ১.৬ KB ≈** **16 Gigabytes of Redis RAM**। এটি একটি ৩-নোডের ছোট Redis Cluster-এ খুব সহজেই ফিট হয়ে যাবে, যা প্রমাণ করে এই আর্কিটেকচার কতটা মেমোরি-দক্ষ।
+
+### ৩. API & Database Schema Design
+এপিআই গেটওয়ে ডিরেক্টলি কোনো রিলেশনাল ডাটাবেস নিয়ে কাজ করে না। এটি তার হাই-স্পিড পলিসি ও রেট লিমিট কাউন্টার সংরক্ষণের জন্য ডিস্ট্রিবিউটেড ইন-মেমোরি **Redis Cluster** ব্যবহার করে।
+
+#### Rate Limiting Key Structure (Redis Data Types)
+- **ZSET (Sorted Set) Key:** `rate_limit:user:${userId}`
+  - Score: Unix timestamp (millisecond)
+  - Value: Unique millisecond timestamp (to guarantee score uniqueness)
+
+### ৪. High-Level Architecture
+এপিআই গেটওয়ের মাধ্যমে রিকোয়েস্ট ফ্লো ও ডিস্ট্রিবিউটেড রেট লিমিটিং আর্কিটেকচার নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Client App"] -->|1. Incoming Request| Gateway["API Gateway Envoy Nginx"]
+    
+    Gateway -->|2. Validate Token| AuthEngine["Edge Auth JWT Validator"]
+    AuthEngine -->|3. Valid JWT Claims| Gateway
+    
+    Gateway -->|4. Check Limit| RedisCluster["Redis Rate Limiter Cluster Live RAM"]
+    RedisCluster -->|5. Token Remaining| Gateway
+    
+    Gateway -->|6a. Within Limit: Forward| UserSvc["Downstream User Service"]
+    Gateway -->|6b. Rate Limit Exceeded| BlockClient["HTTP 429 Too Many Requests"]
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RedisCluster fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style Gateway fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style BlockClient fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Redis Lua Sliding Window Rate Limiter
+নিচে একটি প্রোডাকশন-রেডি **Sliding Window Log Rate Limiter** কোড দেওয়া হলো যা Redis Lua Script ব্যবহার করে ওয়ান-স্টেপ এটমিক ট্রানজেকশনে রেট লিমিটিং সম্পন্ন করে, যা রেস কন্ডিশন সম্পূর্ণ দূর করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  limit: number;
+}
+
+export class DistributedRateLimiter {
+  /**
+   * sliding_window_log এলগরিদম এটমিকালি রান করার জন্য LUA স্ক্রিপ্ট জেনারেট করে
+   * এই স্ক্রিপ্টটি রেস কন্ডিশন সম্পূর্ণ মিটিগেট করে মিলি-সেকেন্ডে এক্সিকিউট হয়
+   */
+  private getSlidingWindowLuaScript(): string {
+    return `
+      local key = KEYS[1]
+      local now = tonumber(ARGV[1])
+      local window = tonumber(ARGV[2])
+      local limit = tonumber(ARGV[3])
+      
+      local clear_before = now - window
+      
+      -- ১. উইন্ডোর আগের পুরনো টাইমস্ট্যাম্পগুলো রিমুভ করি
+      redis.call("ZREMRANGEBYSCORE", key, 0, clear_before)
+      
+      -- ২. বর্তমান উইন্ডোতে ইউজারের মোট রিকোয়েস্ট সংখ্যা চেক করি
+      local current_requests = redis.call("ZCARD", key)
+      
+      if current_requests < limit then
+        -- ৩. লিমিট ক্রস না করলে নতুন রিকোয়েস্ট লগ করি
+        redis.call("ZADD", key, now, now)
+        -- ৪. কি-এর উপর একটি এক্সপায়ার টাইম সেট করি উইন্ডোর সমান
+        redis.call("EXPIRE", key, math.ceil(window / 1000))
+        return {1, limit - current_requests - 1}
+      else
+        -- ৫. লিমিট ক্রস করলে রিজেক্ট করি
+        return {0, 0}
+      end
+    `;
+  }
+
+  /**
+   * ইউজারের রিকোয়েস্ট রেট লিমিট চেক করে (যেমন: ৬০ সেকেন্ডে সর্বোচ্চ ১০০টি রিকোয়েস্ট)
+   */
+  public async isAllowed(userId: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+    const key = `rate_limit:user:${userId}`;
+    const now = Date.now();
+    const luaScript = this.getSlidingWindowLuaScript();
+
+    try {
+      const result = await redis.eval(
+        luaScript,
+        1,
+        key,
+        now,
+        windowMs,
+        limit
+      ) as [number, number];
+
+      const allowed = result[0] === 1;
+      const remaining = result[1];
+
+      return {
+        allowed,
+        remaining,
+        limit,
+      };
+    } catch (error) {
+      // 🟢 Fail-Open Strategy: যদি Redis Cluster ডাউন থাকে বা কোনো এরর ঘটে, 
+      // তবে স্টাফ আর্কিটেকচার অনুযায়ী রিকোয়েস্টটি ব্লক না করে অ্যালাউ করব (Fail-Open)
+      console.error("Rate Limiter Error (Failing Open):", error);
+      return {
+        allowed: true,
+        remaining: 1,
+        limit,
+      };
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+উচ্চ মাত্রায় কনকারেন্ট ও গ্লোবাল আর্কিটেকচারে রেট লিমিটিং স্কেলিংয়ের ৩টি গুরুত্বপূর্ণ স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Concurrent Request Race Conditions (Double-Spend Problem)
+যদি আমরা Node.js/Go ব্যাকএন্ড কোডে প্রথমে রিকোয়েস্ট কাউন্ট রিড করি এবং লিমিট ক্রস না করলে প্লাস ১ করার জন্য অন্য কমান্ড পাঠাই, তবে পিক ট্রাফিকে রেস কন্ডিশন তৈরি হবে। একই মিলি-সেকেন্ডে আসা ১০টি সমসাময়িক রিকোয়েস্ট একই প্রিভিয়াস কাউন্ট দেখতে পাবে এবং সবগুলোকেই সিস্টেম অ্যালাউ করে দেবে, যার ফলে রেট লিমিট বাইপাস হবে।
+* **মিটিগেশন (Atomic Lua Execution):** আমাদের প্রজেক্টে আমরা **Redis Lua Script** ব্যবহার করেছি। যেহেতু রেডিসের ইঞ্জিন সিঙ্গেল-থ্রেডেড, তাই Lua স্ক্রিপ্টটি এক্সিকিউট হওয়ার সময় রিড এবং রাইট অত্যন্ত এটমিকালি ওয়ান-স্টেপ কমান্ডে সম্পূর্ণ হয়। স্ক্রিপ্টটি চলার মাঝখানে অন্য কোনো রিকোয়েস্ট ইন্টারাপ্ট করতে পারে না, যা শতভাগ রেস কন্ডিশন প্রতিরোধ করে।
+
+#### ২. Synchronization Latency across Multi-Region Gateways
+আমাদের এপিআই গেটওয়ে যদি গ্লোবালি ডেপ্লয় করা থাকে (যেমন: US-East, EU-West এবং AP-East) এবং প্রতিটি রিজিয়নের গেটওয়ে লোকাল Redis ক্লাস্টার ব্যবহার করে, তবে এক রিজিয়ন থেকে অন্য রিজিয়নের মেমোরি ডেটা সিঙ্ক হতে লেটেন্সি লাগবে। এই ফাঁকে একজন ইউজার US গেটওয়েতে রেট লিমিট ক্রস করে সাথে সাথে EU গেটওয়েতে ট্রাফিক পাঠিয়ে রেট লিমিটিং সম্পূর্ণ বাইপাস করে দিতে পারে।
+* **মিটিগেশন (Sticky Session & Edge routing with Local Buckets):** আমরা **Anycast DNS** ও **Cloudflare Edge** ব্যবহার করে ইউজারের সব রিকোয়েস্টকে তার নিকটবর্তী স্পেসিফিক গেটওয়েতেই সর্বদা রুট করব (Sticky Gateway Session)। এছাড়া এজ সার্ভারে আমরা একটি লোকাল ইন-মেমোরি **Token Bucket** লিসেনার ব্যবহার করব যা হঠাৎ আসা স্প্যাম রিকোয়েস্ট সাথে সাথে গেটওয়ের লোকাল র্যামেই ব্লক করে দেবে, মেমোরি সিঙ্কের গ্যাপে ডাটাবেস পর্যন্ত রিকোয়েস্ট পৌঁছাতে দেবে না।
+
+#### ৩. Redis Outage & Fail-Open Strategy
+যদি আমাদের মূল Redis Cluster ক্র্যাশ করে বা ডাটাবেস নোডের সাথে কানেকশন লস্ট হয়, তখন গেটওয়েতে রেট লিমিটিং ফেল করবে। এই অবস্থায় যদি আমরা সমস্ত ইনকামিং রিকোয়েস্ট ব্লক করে দিই (Fail-Closed), তবে আমাদের পুরো সাইট ডাউন হয়ে যাবে। আর যদি সব রিকোয়েস্ট ঢুকতে দিই (Fail-Open), তবে অ্যাটাকাররা আমাদের ব্যাকএন্ড ডাটাবেস হ্যামার করে ডাউন করে দিতে পারে।
+* **মিটিগেশন (Adaptive Fail-Open with Local Memory Fallback):** যদি Redis রিকোয়েস্ট ১৫ মিলি-সেকেন্ডের বেশি লেটেন্সি বা এরর দেয়, গেটওয়ে সাথে সাথে **Local Memory Fallback** মোডে সুইচ করবে। প্রতিটি এপিআই গেটওয়ে পডের লোকাল মেমরিতে একটি র্যাম-বেসড **LRU Token Bucket Cache** থাকবে। যদিও এই লোকাল ক্যাশ দিয়ে গ্লোবাল লিমিট নিখুঁতভাবে মেইনটেইন করা যাবে না, তবুও এটি প্রতিটি সিঙ্গেল পডের ওপরে আসা ব্রুট-ফোর্স স্প্যাম ব্লক করতে পারবে এবং আমাদের ডাউনস্ট্রিম মাইক্রোসার্ভিসকে ক্র্যাশ হওয়া থেকে পুরোপুরি সেভ করবে।
+
+---
+
+## 📖 Chapter 12: Airbnb (Hotel/Home Booking)
+
+এয়ারবিএনবি বা বুকিং ডট কমের মতো হাই-স্কেল হোটেল ও হোম বুকিং সিস্টেমের সবচেয়ে জটিল আর্কিটেকচারাল চ্যালেঞ্জ হলো **ডবল বুকিং প্রতিরোধ করা**। একই মিলি-সেকেন্ডে দুজন ইউজার যদি একই রুমের জন্য একই ডেট রেঞ্জে "বুক" বাটনে ক্লিক করেন, তবে সিস্টেম কীভাবে তা রিয়েল-টাইমে হ্যান্ডেল করবে এবং লাখ লাখ লোকেশন-ভিত্তিক সার্চ কুয়েরি কীভাবে মিলি-সেকেন্ড লেটেন্সিতে সার্ভ করবে, তা এই চ্যাপ্টারে আলোচনা করা হলো।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজাররা নির্দিষ্ট লোকেশন ও ডেট রেঞ্জে (`check_in_date` থেকে `check_out_date`) রুম বা বাড়ি সার্চ করতে পারবেন।
+  - বুকিং কনফার্মেশনের জন্য ইউজারকে সাময়িক ১০ মিনিটের ইনভেন্টরি লক দেওয়া (Payment Hold)।
+  - ডবল বুকিং প্রতিরোধ: কোনো রুমের জন্য আংশিক ওভারল্যাপিং ডেট রেঞ্জে বুকিং রিজেক্ট করা।
+- **Non-Functional:**
+  - **Temporal Consistency:** কনফার্মড বা সাময়িক লকড রুমগুলো যাতে সার্চ রেজাল্ট থেকে রিয়েল-টাইমে ফিল্টার আউট হয়ে যায়।
+  - **High Write Concurrency:** ফ্ল্যাশ সেল বা ভ্যাকশন ওপেনিংয়ের সময় সেকেন্ডে হাজার হাজার বুকিং ট্রাই করা হ্যান্ডেল করা।
+  - **Overbooking Zero Tolerance:** আর্থিক ক্ষতি ও কাস্টমার ডিসস্যাটিসফ্যাকশন এড়াতে ওভারবুকিং শতভাগ বন্ধ করা।
+
+### ২. Back-of-the-envelope Estimation
+* **সিস্টেমের স্কেল ও ম্যাট্রিক্স:**
+  * মোট একটিভ হোটেল ও হোমস লিস্টিং = ১০ মিলিয়ন (10 Million Listings)
+  * দৈনিক বুকিং ভলিউম = ১০০,০০০ বুকিং / দিন
+  * **Average Bookings Write QPS = ১০০,০০০ / ৮৬,৪০০ সেকেন্ড ≈** **1.2 writes/sec (Average)**
+  * **Peak Booking Surge (ফ্ল্যাশ ভ্যাকেশন ডিল):** **5,000 requests/sec**
+  * **Search & Lookup Read QPS (1000:1 Read-to-Write ratio):** **50,000 queries/sec**
+* **ইনভেন্টরি ইন্ডেক্স মেমোরি ক্যালকুলেশন (Redis Bitmaps):**
+  * আমরা প্রতিটি লিস্টিংয়ের জন্য আগামী ৩৬৫ দিনের বুকিং স্লট ১টি করে বিট (১ = বুকড, ০ = খালি) দিয়ে ক্যাশে ট্র্যাক করব।
+  * ৩৬৫ দিন = ৩৬৫ বিট ≈ ৪৫ বাইট প্রতি লিস্টিং প্রতি বছর।
+  * **১০ মিলিয়ন লিস্টিংয়ের ইন-মেমোরি ক্যাশ সাইজ = ১০,০০০,০০০ * ৪৫ বাইট ≈** **450 Megabytes of Redis RAM**! অর্থাৎ, মাত্র ৪৫০ মেগাবাইট মেমোরি ব্যবহার করে আমরা রিয়েল-টাইম এভেইলেবিলিটি র্যামেই মিলি-সেকেন্ড লেটেন্সিতে ট্র্যাক করতে পারব।
+
+### ৩. API & Database Schema Design
+বুকিং লক এপিআই এবং রিলেশনাল ডেটাবেস স্কিমা ডিজাইন:
+- `POST /api/v1/bookings/lock`
+  - Body: `{ listingId, checkIn: "2026-06-01", checkOut: "2026-06-05", userId: 9948 }` -> Returns `{ success: true, lockId: 77102, lockedUntil: "2026-05-27T18:13:27Z" }`
+
+#### Database Schema Design (PostgreSQL using GiST Indexes)
+বুকিং এবং লিস্টিং ডেটা নিখুঁতভাবে মেইনটেইন করার জন্য ACID রিলেশনাল ডাটাবেস সবচেয়ে বেশি নিরাপদ:
+
+```sql
+-- হোটেল/হোম লিস্টিং টেবিল
+CREATE TABLE listings (
+    id bigint PRIMARY KEY,
+    title varchar(255),
+    price decimal(10,2)
+);
+
+-- বুকিং টেবিল (PostgreSQL Date Range এক্সক্লুশন রুল সহ)
+CREATE TABLE bookings (
+    id bigint PRIMARY KEY,
+    listing_id bigint REFERENCES listings(id),
+    user_id bigint,
+    check_in date NOT NULL,
+    check_out date NOT NULL,
+    status varchar(20), -- 'LOCKED', 'CONFIRMED', 'CANCELLED'
+    locked_until timestamp,
+    -- GiST (Generalized Search Tree) ব্যবহার করে ওভারল্যাপিং ডেট বুকিং ডাটাবেস লেয়ারেই অসম্ভব করা হলো
+    CONSTRAINT no_overlap EXCLUDE USING gist (
+        listing_id WITH =,
+        daterange(check_in, check_out, '[]') WITH &&
+    )
+);
+```
+
+### ৪. High-Level Architecture
+এয়ারবিএনবি বুকিং ফ্লো, ডিস্ট্রিবিউটেড লকিং এবং রিয়েল-টাইম টেম্পোরাল সার্চ আর্কিটেকচার নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Client App"] -->|1. Search listings by date| GeoSearch["Geospatial and Temporal Search ElasticSearch"]
+    Client -->|2. Try Booking Lock| BookingSvc["Distributed Booking Service"]
+    
+    BookingSvc -->|3. Acquire Distributed Lock| Redlock["Redis Redlock Manager Listing Lock"]
+    Redlock -->|4. Lock Acquired| BookingSvc
+    
+    BookingSvc -->|5. Insert Booking under ACID Transaction| PG["PostgreSQL ACID Database"]
+    PG -->|6. Overlap Check Success| BookingSvc
+    
+    BookingSvc -->|7. Return Lock Token to Payment| Client
+    Client -->|8. Callback Confirm| PaymentSvc["Payment Processing Service"]
+    PaymentSvc -->|9. Commit Status to CONFIRMED| PG
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style Redlock fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style PG fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style GeoSearch fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Temporal Overlap Booking Manager
+নিচে একটি প্রোডাকশন-রেডি **Temporal Booking Manager** কোড দেওয়া হলো যা PostgreSQL ট্রানজেকশনে `SELECT FOR UPDATE` লক ব্যবহার করে তারিখ ওভারল্যাপ এভয়েড করে রিয়েল-টাইমে ইনভেন্টরি লক নিশ্চিত করে:
+
+```typescript
+import { Client } from "pg";
+import Redis from "ioredis";
+
+const redis = new Redis();
+const pgClient = new Client();
+
+interface BookingRequest {
+  listingId: number;
+  userId: number;
+  checkIn: string; // "YYYY-MM-DD"
+  checkOut: string; // "YYYY-MM-DD"
+}
+
+interface LockResult {
+  success: boolean;
+  message: string;
+  bookingId?: number;
+}
+
+export class TemporalBookingManager {
+  private static readonly LOCK_TTL_SECONDS = 600; // ১০ মিনিট হোল্ড পিরিয়ড
+
+  /**
+   * নির্দিষ্ট লিস্টিং ও তারিখের জন্য ওভারল্যাপ চেক করে রুমটি সাময়িকভাবে লক করে
+   */
+  public async tryLockListingForDates(req: BookingRequest): Promise<LockResult> {
+    const redisLockKey = `lock:listing:${req.listingId}`;
+    
+    // ১. ডিস্ট্রিবিউটেড লকিং (Redis Lock) যাতে দুই ক্র্যাডল রিকোয়েস্ট একই সময়ে এন্ট্রি না নেয়
+    const acquired = await redis.set(redisLockKey, req.userId, "NX", "EX", 10);
+    if (!acquired) {
+      return {
+        success: false,
+        message: "This listing is currently being modified by another transaction. Please retry in a few seconds.",
+      };
+    }
+
+    try {
+      // ২. PostgreSQL ACID ট্রানজেকশন ব্লক শুরু
+      await pgClient.query("BEGIN");
+
+      // ৩. SELECT FOR UPDATE দিয়ে ডাটাবেস রো লক করা যাতে কোনো কন্টেন্ট এডিট না হয়
+      const listingCheck = await pgClient.query(
+        "SELECT id FROM listings WHERE id = $1 FOR UPDATE",
+        [req.listingId]
+      );
+
+      if (listingCheck.rows.length === 0) {
+        throw new Error("Listing does not exist.");
+      }
+
+      // ৪. কোয়েরি চালিয়ে দেখা যে উক্ত তারিখের ভেতরে কোনো কনফার্মড বা একটিভ লক বুকিং আছে কি না
+      const overlapQuery = `
+        SELECT id FROM bookings 
+        WHERE listing_id = $1 
+        AND status IN ('CONFIRMED', 'LOCKED')
+        AND (
+          (check_in <= $2 AND check_out >= $2) OR
+          (check_in <= $3 AND check_out >= $3) OR
+          (check_in >= $2 AND check_out <= $3)
+        )
+        LIMIT 1
+      `;
+      
+      const overlapResult = await pgClient.query(overlapQuery, [
+        req.listingId,
+        req.checkIn,
+        req.checkOut,
+      ]);
+
+      if (overlapResult.rows.length > 0) {
+        // ওভারল্যাপ পাওয়া গেছে!
+        await pgClient.query("ROLLBACK");
+        return {
+          success: false,
+          message: "Sorry, this room is already booked or locked for the requested dates.",
+        };
+      }
+
+      // ৫. ওভারল্যাপ না থাকলে সাময়িকভাবে LOCKED স্ট্যাটাসে ১০ মিনিটের এক্সপায়ার ডেট দিয়ে বুকিং ইনসার্ট
+      const lockedUntil = new Date(Date.now() + TemporalBookingManager.LOCK_TTL_SECONDS * 1000);
+      const insertQuery = `
+        INSERT INTO bookings (listing_id, user_id, check_in, check_out, status, locked_until)
+        VALUES ($1, $2, $3, $4, 'LOCKED', $5)
+        RETURNING id
+      `;
+
+      const insertResult = await pgClient.query(insertQuery, [
+        req.listingId,
+        req.userId,
+        req.checkIn,
+        req.checkOut,
+        lockedUntil,
+      ]);
+
+      await pgClient.query("COMMIT");
+      
+      return {
+        success: true,
+        message: "Room locked successfully for 10 minutes. Please proceed to payment.",
+        bookingId: insertResult.rows[0].id,
+      };
+
+    } catch (error) {
+      await pgClient.query("ROLLBACK");
+      console.error("Booking transactional failure:", error);
+      return {
+        success: false,
+        message: "System encountered an unexpected transaction failure. Rollback complete.",
+      };
+    } finally {
+      // ডিস্ট্রিবিউটেড লক রিলিজ করা
+      const currentLockVal = await redis.get(redisLockKey);
+      if (currentLockVal === String(req.userId)) {
+        await redis.del(redisLockKey);
+      }
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব বুকিং প্লাটফর্মে প্রোডাকশন স্কেলে ফেস করা ৩টি মারাত্মক আর্কিটেকচারাল গ্যাপ এবং স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Microsecond Double-Booking Race Condition (Snapshot Isolation Leak)
+ট্রানজেকশনাল এপিআইতে দুজন ইউজার একই সাথে `SELECT` কুয়েরি চালিয়ে যদি দেখতে পান ডেট ফাঁকা আছে, তবে দুজনেই একই সাথে `INSERT` স্টেটমেন্ট এক্সিকিউট করবেন। ডাটাবেস ইঞ্জিন রিড স্লোনেস বা আইসোলেশন লেভেলের ফারাক থাকলে দুজনের বুকিংকেই সাকসেসফুলি ইনসার্ট করে দেবে, ফলে কনফার্মড ডবল বুকিং ঘটে যাবে যা মারাত্মক ক্র্যাশ।
+* **মিটিগেশন (PostgreSQL GiST Exclude Constraints):** আমাদের স্কিমা ডিজাইনে আমরা PostgreSQL-এর ডেডিকেটেড `daterange` ও `GiST` এক্সক্লুশন কনস্ট্রেইন্ট ব্যবহার করেছি: `CONSTRAINT no_overlap EXCLUDE USING gist (listing_id WITH =, daterange(check_in, check_out, '[]') WITH &&)`। এটি ডাটাবেসের ফিজিক্যাল মেমোরি লেভেলের রুল। ট্রানজেকশনের রিড চেক বাইপাস করে যদি ওয়ান ইন এ মিলিয়ন চান্সে দুটি সমসাময়িক থ্রেড একই তারিখে ইনসার্ট করতে যায়, ডাটাবেস ফিজিক্যালি সেকেন্ড রিকোয়েস্টটিকে `Constraint Violation` এরর ছুড়ে রিজেক্ট করে দেবে, যা ডবল বুকিংকে জিরো পার্সেন্টে নামিয়ে আনে।
+
+#### ২. Orphan Holds & Payment Outage Deadlocks
+ইউজার একটি বিলাসবহুল ভিলা ১০ মিনিটের জন্য লক করলেন এবং পেমেন্ট গেটওয়েতে রিডাইরেক্ট হলেন। এরপর ইউজার ব্রাউজার ক্লোজ করে দিলেন অথবা পেমেন্ট করতে গিয়ে তার ব্যাংক ট্রানজেকশন হ্যাং হয়ে গেল। যদি পেমেন্ট গেটওয়ে কোনো রেসপন্স না পাঠায়, রুমটি চিরদিনের জন্য `LOCKED` স্টেটে থেকে ইনভেন্টরি লক করে রাখবে এবং অন্য কেউ সেটি সার্চে দেখতে পাবে না।
+* **মিটিগেশন (Redis TTL Keyspace Notification Rollbacks):** আমরা যখন ডেটাবেসে বুকিং লক জেনারেট করব, একই সময়ে Redis-এ একটি কী রাখব `booking:hold:${bookingId}` যার TTL সেট করব ১০ মিনিট। আমরা আমাদের নোড সার্ভারে **Redis Keyspace Event Notification** (`__keyevent@0__:expired`) লিসেন করব। ১০ মিনিট পর Redis কী-টি এক্সপায়ার হলে আমাদের ব্যাকগ্রাউন্ড লিসেনার পড ইভেন্ট রিসিভ করবে এবং একটি অ্যাসিক্রোনাস কুয়েরি চালিয়ে PostgreSQL-এ উক্ত বুকিংয়ের স্ট্যাটাস `LOCKED` থেকে `CANCELLED` এ রোলব্যাক করে দিয়ে ইনভেন্টরি রিলিজ করে দেবে।
+
+#### ৩. Spatial-Temporal Search Read Scale at 50,000 QPS
+পিক সিজনে কোটি কোটি সার্চ কুয়েরি আসে। প্রতিবার "ক্যাটালোনিয়া অঞ্চলে ১ থেকে ৫ জুলাই কোন কোন অ্যাপার্টমেন্ট খালি আছে?" সার্চ করার জন্য আমাদের মেইন বুকিং টেবিল স্ক্যান করা অসম্ভব এবং এতে CPU ১০০% হিট করে সার্ভার ডাউন হয়ে যাবে।
+* **মিটিগেশন (Elasticsearch + Redis Availability Bitmaps):**
+  * **Spatial Check:** ভৌগোলিক লোকেশন ফিল্টারিং এর জন্য আমরা **Elasticsearch Geospatial Query** ব্যবহার করব। লোকেশনের রেঞ্জের ভেতরের Apartment ID-গুলো আমরা ES থেকে বের করব।
+  * **Temporal Check:** এভেইলেবিলিটি চেকের জন্য আমরা ডাটাবেস টাচই করব না। প্রতিটি অ্যাপার্টমেন্টের জন্য একটি ৩৬৫-বিটের **Redis Bitmap** থাকবে। ১ থেকে ৫ জুলাই বুকিং এভেইলেবল কি না দেখতে সার্চ ইঞ্জিন অ্যাপার্টমেন্টগুলোর বিটম্যাপের বিট নং ১৮২ থেকে ১৮৬ রিড করবে। যদি সবগুলো বিট `0` থাকে, তবেই পেজে সেটি এভেইলেবল দেখাবে। এই ডুয়াল পাইপলাইন মেইন ডাটাবেসকে সম্পূর্ণ রিড ফ্রি রাখে।
+
+---
+
+## 📖 Chapter 13: Robinhood / Stock Trading Engine
+
+রবিনহুড, কয়েনবেস বা নাসডাকের মতো ফাইন্যান্সিয়াল ট্রেডিং প্ল্যাটফর্মের হার্ট বা প্রান হলো এর **Matching Engine (অর্ডার ম্যাচিং ইঞ্জিন)**। এর কাজ হলো প্রতি সেকেন্ডে লাখ লাখ বাই (Buy) এবং সেল (Sell) অর্ডার রিসিভ করে মিলি-সেকেন্ডের শতভাগ কম ল্যাটেন্সিতে সেগুলোকে **Price-Time Priority (FIFO)** অনুযায়ী ম্যাচ করা। ট্রেডিং সিস্টেমে ডাটাবেসের ACID লক ব্যবহার করা অসম্ভব, তাই কীভাবে ইন-মেমোরি আর্কিটেকচার দিয়ে নাসডাক স্কেলের অর্ডার বুক ডিজাইন করা যায়, তা নিচে বিস্তারিত আলোচনা করা হলো।
+
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - দুই ধরনের অর্ডার সাপোর্ট করা: Limit Order (নির্দিষ্ট প্রাইজ বা তার ভালো প্রাইজে বাই/সেল) ও Market Order (মার্কেটের কারেন্ট বেস্ট প্রাইজে সাথে সাথে এক্সিকিউশন)।
+  - প্রতিটি স্টকের বাই অর্ডার (Bids) ও সেল অর্ডার (Asks) প্রাইজ-টাইম প্রায়োরিটি (FIFO) মেইনটেইন করে ইনস্ট্যান্ট ম্যাচ করা।
+  - সফল ম্যাচিংয়ের পর ইনস্ট্যান্ট ট্রেড এক্সিকিউশন রিপোর্ট জেনারেট করা।
+- **Non-Functional:**
+  - **Ultra-low Latency (Microsecond scale):** প্রতিটি অর্ডার ম্যাচ করতে প্রসেসিং ওভারহেড অবশ্যই **< ৫০ মাইক্রো-সেকেন্ড (50 microseconds)** হতে হবে।
+  - **Zero Data Loss & High Durability:** সিস্টেম ক্র্যাশ বা পাওয়ার অফ হলেও একটিও অর্ডার ডেটা বা ট্রেড রেকর্ড হারানো যাবে না।
+  - **Strict Deterministic Sequencing:** সমস্ত অর্ডার একদম নিখুঁত সিকোয়েন্সে প্রসেস হতে হবে, কোনো রেস কন্ডিশন থাকা চলবে না।
+
+### ২. Back-of-the-envelope Estimation
+* **থ্রুপুট ও ল্যাটেন্সি ক্যালকুলেশন:**
+  * পিক আওয়ারে মোট অর্ডার ভলিউম = ৫০০,০০০ অর্ডার / সেকেন্ড (500k QPS)
+  * টার্গেট ম্যাচিং ল্যাটেন্সি = ৫০ মাইক্রো-সেকেন্ড (০.০৫ মিলি-সেকেন্ড) প্রতি অর্ডার।
+  * **সিঙ্গেল-থ্রেড প্রসেসিং ক্যাপাসিটি:**
+    * একটি স্ট্যান্ডার্ড CPU কোড যদি ৫০ মাইক্রো-সেকেন্ডে ১টি অর্ডার ম্যাচ করে, তবে প্রতি সেকেন্ডে সেই কোড সর্বোচ্চ ১,০০০,০০০ / ৫০ = ২০,০০০ অর্ডার প্রসেস করতে পারবে।
+    * তাহলে ৫০০,০০০ QPS হ্যান্ডেল করতে আমাদের এপিআই ট্রানজেকশনে ডাটাবেস লক (যা করতে ৫ মিলি-সেকেন্ডের বেশি সময় লাগে) ব্যবহার করা সম্পূর্ণ অসম্ভব।
+    * এই স্কেল পাওয়ার জন্য আমাদের **স্টক সিম্বল শার্ডিং (Stock Sharding)** এবং মেমরিতে ওয়ান-থ্রেড **LMAX Disruptor Ring Buffer** আর্কিটেকচার ব্যবহার করতে হবে।
+
+### ৩. API & Database Schema Design
+ট্রেড রিকোয়েস্ট এপিআই ও অ্যাসিঙ্ক্রোনাস ট্রানজেকশন রাইট স্কিমা:
+- `POST /api/v1/orders`
+  - Body: `{ symbol: "AAPL", side: "BUY", type: "LIMIT", price: 175.50, quantity: 100, userId: 1205 }` -> Returns `{ orderId: "ord_99a8x", status: "QUEUED" }`
+
+#### Database Schema Design (For Post-Trade Ledger Audit)
+অর্ডার ম্যাচিং সম্পূর্ণ ইন-মেমোরিতে মেমরির ভেতরের ডাটা স্ট্রাকচারে রান করে। সফল ম্যাচ সম্পন্ন হওয়ার পর ট্রেড হিস্ট্রি এবং অডিট রেকর্ড ডাটাবেসে অ্যাসিঙ্ক্রোনাসলি পুশ করা হয়:
+
+```sql
+-- PostgreSQL: পোস্ট-ট্রেড সেটেলমেন্ট ও অডিট লেজার
+CREATE TABLE trade_executions (
+    trade_id varchar(64) PRIMARY KEY,
+    stock_symbol varchar(10),
+    buyer_id bigint,
+    seller_id bigint,
+    price decimal(10,4),
+    quantity bigint,
+    executed_at timestamp
+);
+```
+
+### ৪. High-Level Architecture
+ইন-মেমোরি স্টক শার্ডিং ম্যাচিং ইঞ্জিন, LMAX Disruptor রিং বাফার এবং Write-Ahead Log (WAL) আর্কিটেকচার নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Client Trading App"] -->|1. Submit Order| Gateway["API Gateway Trading Routing"]
+    
+    Gateway -->|2. Route by Symbol Shard| StockShards["Stock Partition Shard AAPL TSLA"]
+    StockShards -->|3. Append to Ring Buffer| RingBuffer["LMAX Disruptor Ring Buffer Seq"]
+    
+    RingBuffer -->|4. Pull Sequenced Job| Matcher["Single-Threaded In-Memory Matching Engine"]
+    Matcher -->|5. Match Bids and Asks| OrderBook["In-Memory Limit Order Book Red-Black Trees"]
+    
+    Matcher -->|6a. Write-Ahead Log WAL| WAL["Physical SSD Write-Ahead Log WAL"]
+    Matcher -->|6b. Executed Trades| ExecQueue["Trade Execution Event Queue Kafka"]
+    
+    ExecQueue -->|7. Persist Async| LedgerDB["PostgreSQL Trade Ledger DB"]
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RingBuffer fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style OrderBook fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style WAL fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript In-Memory Limit Order Book Matcher
+নিচে একটি প্রোডাকশন-রেডি **Stock Matching Engine** কোড দেওয়া হলো যা সম্পূর্ণ ইন-মেমোরি মেথডলজিতে Bids (Buy) এবং Asks (Sell) ডাবল-লিস্ট মেইনটেইন করে Price-Time Priority (FIFO) মেনে অর্ডার ম্যাচিং করে:
+
+```typescript
+interface Order {
+  id: string;
+  userId: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  price: number;
+  quantity: number;
+  timestamp: number;
+}
+
+interface Trade {
+  tradeId: string;
+  symbol: string;
+  buyerId: string;
+  sellerId: string;
+  price: number;
+  quantity: number;
+  timestamp: number;
+}
+
+export class StockMatchingEngine {
+  private symbol: string;
+  // Bids: Buy orders sorted by price (Descending), then timestamp (Ascending)
+  private bids: Order[] = [];
+  // Asks: Sell orders sorted by price (Ascending), then timestamp (Ascending)
+  private asks: Order[] = [];
+
+  constructor(symbol: string) {
+    this.symbol = symbol;
+  }
+
+  /**
+   * লিমিট অর্ডার বুকে নতুন অর্ডার প্লেস করে এবং ইনস্ট্যান্ট ম্যাচ মেকানিজম রান করে
+   */
+  public processLimitOrder(order: Order): Trade[] {
+    const trades: Trade[] = [];
+
+    if (order.side === "BUY") {
+      // বাই অর্ডারের জন্য: সেল সাইডের (Asks) সর্বনিম্ন প্রাইজ ম্যাচের ট্রাই করি
+      this.matchBuyOrder(order, trades);
+      if (order.quantity > 0) {
+        // রিমেইনিং কোয়ান্টিটি অর্ডার বুকে Z-Sorted Bids এ যুক্ত করি
+        this.bids.push(order);
+        this.sortBids();
+      }
+    } else {
+      // সেল অর্ডারের জন্য: বাই সাইডের (Bids) সর্বোচ্চ প্রাইজ ম্যাচের ট্রাই করি
+      this.matchSellOrder(order, trades);
+      if (order.quantity > 0) {
+        // রিমেইনিং কোয়ান্টিটি অর্ডার বুকে Z-Sorted Asks এ যুক্ত করি
+        this.asks.push(order);
+        this.sortAsks();
+      }
+    }
+
+    return trades;
+  }
+
+  private matchBuyOrder(buyOrder: Order, trades: Trade[]): void {
+    while (this.asks.length > 0 && buyOrder.quantity > 0) {
+      const bestAsk = this.asks[0];
+      
+      // লিমিট প্রাইজ কন্ডিশন চেক: বাই প্রাইজ অবশ্যই সেল প্রাইজের সমান বা বেশি হতে হবে
+      if (buyOrder.price >= bestAsk.price) {
+        const matchQuantity = Math.min(buyOrder.quantity, bestAsk.quantity);
+        
+        trades.push({
+          tradeId: `t_${Math.random().toString(36).substr(2, 9)}`,
+          symbol: this.symbol,
+          buyerId: buyOrder.userId,
+          sellerId: bestAsk.userId,
+          price: bestAsk.price, // ট্রেড প্রাইস সর্বদা ফাস্ট প্লেসড মেকারের প্রাইস হবে
+          quantity: matchQuantity,
+          timestamp: Date.now()
+        });
+
+        buyOrder.quantity -= matchQuantity;
+        bestAsk.quantity -= matchQuantity;
+
+        if (bestAsk.quantity === 0) {
+          this.asks.shift(); // সম্পূর্ণ ফিল্ড সেল অর্ডার রিমুভ করি
+        }
+      } else {
+        break; // কোনো উপযুক্ত সেল অফার আর নেই
+      }
+    }
+  }
+
+  private matchSellOrder(sellOrder: Order, trades: Trade[]): void {
+    while (this.bids.length > 0 && sellOrder.quantity > 0) {
+      const bestBid = this.bids[0];
+
+      // লিমিট প্রাইজ কন্ডিশন চেক: সেল প্রাইজ অবশ্যই বাই প্রাইজের সমান বা কম হতে হবে
+      if (sellOrder.price <= bestBid.price) {
+        const matchQuantity = Math.min(sellOrder.quantity, bestBid.quantity);
+
+        trades.push({
+          tradeId: `t_${Math.random().toString(36).substr(2, 9)}`,
+          symbol: this.symbol,
+          buyerId: bestBid.userId,
+          sellerId: sellOrder.userId,
+          price: bestBid.price,
+          quantity: matchQuantity,
+          timestamp: Date.now()
+        });
+
+        sellOrder.quantity -= matchQuantity;
+        bestBid.quantity -= matchQuantity;
+
+        if (bestBid.quantity === 0) {
+          this.bids.shift(); // সম্পূর্ণ ফিল্ড বাই অর্ডার রিমুভ করি
+        }
+      } else {
+        break; // কোনো উপযুক্ত বাই অফার আর নেই
+      }
+    }
+  }
+
+  private sortBids(): void {
+    // প্রাইজ অনুযায়ী বড় থেকে ছোট (descending), সমপ্রাইজের ক্ষেত্রে আগেরটি আগে (ascending timestamp)
+    this.bids.sort((a, b) => b.price - a.price || a.timestamp - b.timestamp);
+  }
+
+  private sortAsks(): void {
+    // প্রাইজ অনুযায়ী ছোট থেকে বড় (ascending), সমপ্রাইজের ক্ষেত্রে আগেরটি আগে (ascending timestamp)
+    this.asks.sort((a, b) => a.price - b.price || a.timestamp - b.timestamp);
+  }
+
+  // Get current book state for assertions
+  public getOrderBookState() {
+    return {
+      bids: this.bids.map(b => ({ price: b.price, quantity: b.quantity })),
+      asks: this.asks.map(a => ({ price: a.price, quantity: a.quantity }))
+    };
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+আল্ট্রা-লো ল্যাটেন্সি ফাইন্যান্সিয়াল সিস্টেমে প্রোডাকশনের ৩টি গুরুতর প্রবলেম ও স্টাফ-লেভেল আর্কিটেকচারাল সল্যুশন:
+
+#### ১. Core Thread Latency Spikes (The Java/Node Garbage Collection Freeze)
+ম্যাচিং ইঞ্জিন রান করার সময় যদি রিয়েল-টাইমে শত শত মেমোরি অবজেক্ট (যেমন অর্ডার বা ট্রেড অবজেক্ট) জেনারেট হতে থাকে, তবে রানিং ইঞ্জিনে হঠাৎ **Garbage Collection (GC) Pause** বা স্টপ-দ্য-ওয়ার্ল্ড পজ ঘটবে। এই ৫০ মিলি-সেকেন্ডের ফ্রিজ পিরিয়ডে ম্যাচিং ইঞ্জিন ঝুলে থাকলে মার্কেট প্রাইস উল্টাপাল্টা হয়ে যাবে এবং মিলিয়ন্স অফ ডলার লস হবে।
+* **মিটিগেশন (Pre-allocated Memory & Object Reuse Pools):** স্টাফ আর্কিটেকচার অনুযায়ী ম্যাচিং ইঞ্জিনগুলো মূলত C++ বা Rust-এ লেখা হয় এবং রানটাইম মেমোরিতে কোনো অবজেক্ট তৈরি বা ডিলিট করা হয় না। প্রজেক্ট স্টার্ট করার সময় **Pre-allocated Flat Memory Array** বা মেমোরি অ্যারেনা রিজার্ভ করা হয়। নতুন অর্ডার ঢুকলে সেই ফ্রি অ্যারেনার ব্লকে ফিক্সড ডাটা রাইট করা হয় এবং অর্ডার ফিল হলে জাস্ট ইনডেক্স ক্লিয়ার করা হয়। এটি শতভাগ নিশ্চিত করে যে কোনো ডাইনামিক হিপ মেমোরি এলোকেশন হবে না, ফলে সম্পূর্ণ জিরো-গারবেজ পজ deterministic থ্রুপুট পাওয়া যাবে।
+
+#### ২. Deterministic Crash Recovery (Write-Ahead Logging SSD Engine)
+যেহেতু হাই-স্পিডের স্বার্থে পুরো অর্ডার বুক মেমরিতে থাকে, তাই যদি ডাটাবেস রানিং নোডে হঠাৎ পাওয়ার চলে যায় বা অপারেটিং সিস্টেম ক্র্যাশ করে, তবে সেকেন্ডের মধ্যে কোটি কোটি টাকার কারেন্ট অর্ডার বুক মেমোরি থেকে সম্পূর্ণ উধাও হয়ে যাবে যা একটি বিরাট বিপর্যয়।
+* **মিটিগেশন (Sequential Write-Ahead Log - WAL & Snapshot Checkpoints):** অর্ডার ম্যাচিং করার ঠিক আগের মিলি-সেকেন্ডে ইনকামিং অর্ডারটিকে আমরা ডিস্কের একটি সিকোয়েনশিয়াল **Write-Ahead Log (WAL)** ফাইলে রাইট করি। যেহেতু সিকোয়েনশিয়াল রাইট অপারেশন SSD ডিস্কে অত্যন্ত ফাস্ট (< ৫ মাইক্রো-সেকেন্ড), এটি ল্যাটেন্সিতে বাধা দেয় না। দিনে একবার আমরা পুরো অর্ডার বুকের একটি চেকপয়েন্ট স্ন্যাপশট মেমরি থেকে হার্ডডিস্কে সেভ করি। যদি সার্ভার ক্র্যাশ করে, ইঞ্জিন রিবুট হয়ে লাস্ট ব্যাকআপ স্ন্যাপশটটি র্যামে লোড করবে এবং তারপর WAL ফাইলে থাকা ট্রেইল সিকোয়েনশিয়াল প্লে করে সেকেন্ডের মধ্যে ক্র্যাশের ঠিক আগের মাইক্রো-সেকেন্ডের অর্ডার বুকে ফিরে যাবে।
+
+#### ৩. Multi-threaded Synchronization Bottle-necks (LMAX Disruptor Pattern)
+একটি ট্রেডিং নোডে যদি মাল্টিপল থ্রেড একই সময়ে বাই ও সেল বুক মডিফাই করতে লক ব্যবহার করে, তবে CPU থ্রেড কনটেক্সট সুইচের লক-কনটেনশনের কারণে অর্ডার ম্যাচিং স্পিড ৫০ মাইক্রো-সেকেন্ড থেকে লাফ দিয়ে ২০ মিলি-সেকেন্ডে চলে যাবে যা নাসডাক স্কেলে হাস্যকর।
+* **মিটিগেশন (Stock Symbol Sharding & Ring Buffer):** 
+  - **Stock Sharding:** আমরা ট্রেডিং ইঞ্জিনকে স্টক সিম্বল দিয়ে শার্ডিং করব (যেমন: AAPL Shard, TSLA Shard)। প্রতিটি Shard থাকবে সম্পূর্ণ আলাদা সার্ভার পডে।
+  - **Single Threaded Execution (Ring Buffer):** প্রতিটি Shard সার্ভারে থাকবে ঠিক **১টি একক প্রসেসর থ্রেড** যা অর্ডার ম্যাচ করবে। কোনো মাল্টি-থ্রেডিং থাকবে না। ইনকামিং রিকোয়েস্ট গেটওয়ে থেকে এসে একটি লক-ফ্রি **LMAX Disruptor Ring Buffer** এ সিকোয়েনশিয়াল লাইন আপ হবে। আমাদের সিঙ্গেল ম্যাচিং থ্রেডটি বাফার থেকে রিকোয়েস্ট তুলে ওয়ান-বাই-ওয়ান প্রসেস করবে। যেহেতু কোনো লকিং মেকানিজম বা প্যারালাল থ্রেড মেমোরি অ্যাক্সেস নেই, তাই র্যামে কোনো থ্রেড কনটেনশন ছাড়াই প্রতি সেকেন্ডে **৫০০,০০০+ ম্যাচিং** সম্পন্ন করা সম্ভব!
+
+---
+
+## 🔒 Chapters 14 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ৭টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১৪ (Distributed Cache - Redis Internals):** জানবো কীভাবে রেডিসের ইন্টারনাল ক্লাস্টারিং, সেন্টিনেল রেপ্লিকেশন এবং LRU ইভিকশন মেকানিজম কাজ করে।
+- **চ্যাপ্টার ১৫ (Metrics & Monitoring System - Prometheus):** বুঝবো কীভাবে TSDB (Time Series DB) ব্যবহার করে পিক আওয়ারে রিয়েল-টাইম মেট্রিক্স স্ক্র্যাপ ও মনিটর করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 13 (Robinhood / Stock Trading Engine: Matching Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 14 (Distributed Cache - Redis Internals)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
