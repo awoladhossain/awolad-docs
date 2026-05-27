@@ -98,17 +98,17 @@ flowchart LR
 ### ২. Back-of-the-envelope Estimation
 ধরুন, আমাদের সিস্টেমে প্রতি মাসে **১০০ মিলিয়ন (100M)** নতুন শর্ট লিংক তৈরি হয়।
 - **Write QPS:**
-  $$\text{Write QPS} = \frac{100,000,000}{30 \times 24 \times 3600} \approx 40 \text{ writes/sec}$$
+  * `Write QPS = 100,000,000 / (30 days * 24 hours * 3600 seconds) ≈` **40 writes/sec**
 - **Read QPS (100:1 Ratio):**
-  $$\text{Read QPS} = 40 \times 100 = 4,000 \text{ reads/sec}$$
+  * `Read QPS = 40 writes/sec * 100 =` **4,000 reads/sec**
 - **Storage for 10 Years:**
   প্রতিটি রেকর্ড (Long URL, Short URL, ID, Created_At, Expire_At) এভারেজ ৫০০ বাইট স্টোরেজ নেয়।
-  $$\text{Total Records} = 100\text{M} \times 12 \text{ months} \times 10 \text{ years} = 12 \text{ Billion}$$
-  $$\text{Total Storage} = 12\text{B} \times 500 \text{ bytes} \approx 6 \text{ Terabytes}$$
+  * `Total Records = 100M * 12 months * 10 years =` **12 Billion records**
+  * `Total Storage = 12B * 500 bytes ≈` **6 Terabytes**
 - **Cache Memory (80-20 Rule):**
   ডেইলি ট্রাফিকের ২০% হট লিংক ক্যাশে রাখবো।
-  $$\text{Daily Reads} = 4,000 \text{ reads/sec} \times 86400 \approx 345 \text{ Million reads/day}$$
-  $$\text{Memory Required} = 345\text{M} \times 20\% \times 500 \text{ bytes} \approx 34.5 \text{ GB}$$
+  * `Daily Reads = 4,000 reads/sec * 86,400 seconds ≈` **345 Million reads/day**
+  * `Memory Required = 345M * 20% hot links * 500 bytes ≈` **34.5 GB**
 
 ### ৩. API & Database Schema Design
 আমরা দুটি সিম্পল REST এপিআই ডিজাইন করবো:
@@ -169,7 +169,7 @@ flowchart TD
 ### ৫. Deep Dive: Unique ID / Key Generator Strategy
 ইউনিক শর্ট কী (যেমন `aB3x9Z`) কীভাবে জেনারেট করব? এটিই ইন্টারভিউয়ের মূল আকর্ষণ।
 আমরা যদি **Base62 Encoding** (`[a-z, A-Z, 0-9]` মোট ৬২টি ক্যারেক্টার) ব্যবহার করি, তবে ৭ ক্যারেক্টারের ইউনিক কী দিয়ে আমরা কতগুলো ইউনিক কম্বিনেশন তৈরি করতে পারবো?
-$$62^7 \approx 3.5 \text{ Trillion unique keys}$$
+* `62⁷ ≈ 3.5 Trillion unique keys`
 যা আমাদের ১০ বছরের টার্গেটের (১২ বিলিয়ন) চেয়ে অনেক বেশি!
 
 #### অপশন A: MD5 / Cryptographic Hash (ফেইলর প্রন)
