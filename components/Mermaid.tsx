@@ -183,7 +183,7 @@ export default function Mermaid({ chart }: MermaidProps) {
   }
 
   return (
-    <div className="relative my-8 w-full lg:w-[125%] lg:-ml-[12.5%] xl:w-[130%] xl:-ml-[15%] max-w-none overflow-hidden rounded-2xl border border-white/10 bg-[#070709]/65 backdrop-blur-md shadow-inner select-none group">
+    <div className="relative my-8 w-full lg:w-[125%] lg:-ml-[12.5%] xl:w-[130%] xl:-ml-[15%] max-w-none overflow-hidden rounded-2xl border border-white/10 bg-[#070709]/65 backdrop-blur-md shadow-inner select-none group gsap-scroll-reveal">
       {/* Top Header/Toolbar */}
       <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between border-b border-white/10 bg-white/[0.02] px-4 py-3 text-xs text-zinc-500">
         <div className="flex items-center gap-2">

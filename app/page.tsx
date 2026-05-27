@@ -1,4 +1,5 @@
 import AnimatedGrid from '@/components/AnimatedGrid';
+import TerminalWidget from '@/components/TerminalWidget';
 import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
 import Link from 'next/link';
 import { BookOpen, ChevronLeft, ChevronRight, Database, Terminal, Cpu, Sparkles } from 'lucide-react';
@@ -95,8 +96,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     <div className="relative min-h-screen overflow-hidden bg-[#09090b] text-white selection:bg-emerald-500/20 selection:text-emerald-200 antialiased">
       {/* Background Radial and Mesh Gradients */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/10 blur-[140px]" />
-        <div className="absolute top-[20%] right-[-10%] w-[45%] h-[45%] rounded-full bg-teal-500/8 blur-[120px]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/10 blur-[140px] gsap-ambient-glow-1" />
+        <div className="absolute top-[20%] right-[-10%] w-[45%] h-[45%] rounded-full bg-teal-500/8 blur-[120px] gsap-ambient-glow-2" />
         <div className="absolute bottom-[10%] left-[20%] w-[40%] h-[40%] rounded-full bg-[#10b981]/5 blur-[130px]" />
         {/* Subtle grid background */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30" />
@@ -105,7 +106,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <div className="max-w-5xl mx-auto px-6 pt-12 pb-24 relative z-10">
         {/* Navbar */}
         <nav className="flex items-center justify-between mb-16 border-b border-white/[0.06] pb-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 gsap-magnetic">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
               <BookOpen className="h-4.5 w-4.5 text-emerald-400" />
             </div>
@@ -127,25 +128,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
         {/* Hero Section */}
         <header className="max-w-4xl mb-20 space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-emerald-300 shadow-inner backdrop-blur-md">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-emerald-300 shadow-inner backdrop-blur-md gsap-hero-badge">
             <Sparkles className="h-3.5 w-3.5" />
             System Design & Engineering
           </div>
 
-          <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight leading-[1.15] text-white">
+          <h1 className="text-4xl md:text-7xl font-extrabold tracking-tight leading-[1.15] text-white gsap-hero-title">
             Advanced System <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 drop-shadow-[0_4px_20px_rgba(52,211,153,0.15)]">
               Engineering Manuals
             </span>
           </h1>
 
-          <p className="text-md sm:text-lg text-zinc-400 max-w-2xl font-light leading-relaxed">
+          <p className="text-md sm:text-lg text-zinc-400 max-w-2xl font-light leading-relaxed gsap-hero-desc">
             মেমরি ডিস্ট্রিবিউশন, প্রসেস ভার্চুয়ালাইজেশন এবং আই/ও মাল্টিপ্লেক্সিং এর মতো জটিল আর্কিটেকচারগুলোর প্রফেশনাল রিসোর্স হাব। প্রতিটি ম্যানুয়াল বাস্তবসম্মত সিস্টেম টিউনিং ও সিনিয়র-লেভেল প্রোডাকশন ইনসাইট দ্বারা সমৃদ্ধ।
           </p>
 
           {/* Stats Dashboard Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 max-w-3xl">
-            <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.01] p-4 backdrop-blur-sm">
+            <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.01] p-4 backdrop-blur-sm gsap-stat-card">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-400">
                 <Database className="h-5 w-5" />
               </div>
@@ -155,7 +156,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.01] p-4 backdrop-blur-sm">
+            <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.01] p-4 backdrop-blur-sm gsap-stat-card">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-400">
                 <Terminal className="h-5 w-5" />
               </div>
@@ -168,7 +169,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.01] p-4 backdrop-blur-sm">
+            <div className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.01] p-4 backdrop-blur-sm gsap-stat-card">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-400">
                 <Cpu className="h-5 w-5" />
               </div>
@@ -178,6 +179,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
             </div>
           </div>
+
+          {/* Dynamic Interactive Shell Terminal Simulator */}
+          <TerminalWidget />
         </header>
 
         {/* Section Heading & Category Filter */}
@@ -218,6 +222,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                     text-xs
                     font-semibold
                     transition-all
+                    gsap-filter-pill
                     ${
                       active
                         ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-lg shadow-emerald-950/20'

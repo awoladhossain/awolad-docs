@@ -1,10 +1,19 @@
+import Mermaid from '@/components/Mermaid';
 import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
+import {
+  ArrowLeft,
+  Bookmark,
+  Cpu,
+  FileText,
+  HelpCircle,
+  List,
+  Sparkles,
+  Terminal,
+} from 'lucide-react';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, FileText, List, Sparkles, Terminal, Cpu, Bookmark, HelpCircle } from 'lucide-react';
 import React, { type ComponentPropsWithoutRef } from 'react';
-import Mermaid from '@/components/Mermaid';
 import remarkGfm from 'remark-gfm';
 
 interface Props {
@@ -49,7 +58,7 @@ function getMermaidChart(children: React.ReactNode): string | null {
 
 const components = {
   Math: (props: { children: React.ReactNode }) => (
-    <div className="my-6 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-6 py-4.5 backdrop-blur-sm flex items-center justify-center font-mono text-sm md:text-base text-emerald-300 shadow-sm shadow-emerald-950/20">
+    <div className="my-6 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-6 py-4.5 backdrop-blur-sm flex items-center justify-center font-mono text-sm md:text-base text-emerald-300 shadow-sm shadow-emerald-950/20 gsap-scroll-reveal">
       <div className="text-center font-semibold tracking-wide select-all overflow-x-auto whitespace-nowrap scrollbar-none w-full">
         {props.children}
       </div>
@@ -82,11 +91,12 @@ const components = {
           flex
           items-center
           gap-2
+          gsap-scroll-reveal
         "
       >
         <span>{props.children}</span>
-        <a 
-          href={`#${id}`} 
+        <a
+          href={`#${id}`}
           className="opacity-0 group-hover:opacity-100 text-emerald-400 hover:text-emerald-300 transition-opacity text-[15px] font-mono select-none"
         >
           #
@@ -155,9 +165,7 @@ const components = {
     />
   ),
 
-  li: (props: ComponentPropsWithoutRef<'li'>) => (
-    <li className="leading-relaxed" {...props} />
-  ),
+  li: (props: ComponentPropsWithoutRef<'li'>) => <li className="leading-relaxed" {...props} />,
 
   strong: (props: ComponentPropsWithoutRef<'strong'>) => (
     <strong className="font-bold text-white bg-white/[0.06] px-1 rounded-sm" {...props} />
@@ -229,7 +237,7 @@ const components = {
   },
 
   blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => (
-    <div className="my-6 relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-r from-emerald-500/[0.03] to-teal-500/[0.01] p-5 backdrop-blur-sm">
+    <div className="my-6 relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-r from-emerald-500/[0.03] to-teal-500/[0.01] p-5 backdrop-blur-sm gsap-scroll-reveal">
       <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-gradient-to-b from-emerald-400 to-teal-400" />
       <div className="flex gap-4">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
@@ -243,7 +251,7 @@ const components = {
   ),
 
   table: (props: ComponentPropsWithoutRef<'table'>) => (
-    <div className="my-6 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c0c10]/40 backdrop-blur-md">
+    <div className="my-6 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c0c10]/40 backdrop-blur-md gsap-scroll-reveal">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-sm" {...props} />
       </div>
@@ -315,12 +323,15 @@ export default async function DocPage({ params }: Props) {
   );
 
   // Group all document nodes by their category metadata
-  const categoriesMap = allDocs.reduce((acc, item) => {
-    const cat = item.category;
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(item);
-    return acc;
-  }, {} as Record<string, typeof allDocs>);
+  const categoriesMap = allDocs.reduce(
+    (acc, item) => {
+      const cat = item.category;
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(item);
+      return acc;
+    },
+    {} as Record<string, typeof allDocs>,
+  );
 
   const toc = extractHeadings(doc.content);
 
@@ -366,6 +377,7 @@ export default async function DocPage({ params }: Props) {
                 transition-all
                 hover:bg-white/[0.06]
                 hover:text-white
+                gsap-magnetic
               "
             >
               <ArrowLeft className="h-3.5 w-3.5 text-zinc-500" />
@@ -374,7 +386,7 @@ export default async function DocPage({ params }: Props) {
           </div>
 
           {/* Categorized Sidebar Nav */}
-          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7 scrollbar-thin" data-lenis-prevent="true">
             {Object.entries(categoriesMap).map(([catName, catDocs]) => (
               <div key={catName} className="space-y-2">
                 <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
@@ -462,12 +474,14 @@ export default async function DocPage({ params }: Props) {
                 <Terminal className="h-4 w-4 text-emerald-500" />
                 Module: <span className="text-zinc-300 ml-1 font-semibold">{doc.meta.title}</span>
               </div>
-              
+
               <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-[10px] font-bold text-emerald-400 uppercase tracking-wider shadow-inner">
                 <Cpu className="h-3 w-3 text-emerald-400" />
                 Verified Reference
               </div>
             </div>
+            {/* Live GSAP reading progress bar */}
+            <div className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 gsap-reading-progress w-0" />
           </div>
 
           <div className="relative z-10 mx-auto flex max-w-7xl">
@@ -478,7 +492,9 @@ export default async function DocPage({ params }: Props) {
                 <header className="mb-14 border-b border-white/[0.06] pb-8">
                   {/* Breadcrumb Trail */}
                   <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-5 select-none">
-                    <Link href="/" className="hover:text-emerald-400 transition-colors">Home</Link>
+                    <Link href="/" className="hover:text-emerald-400 transition-colors">
+                      Home
+                    </Link>
                     <span>/</span>
                     <span>Docs</span>
                     <span>/</span>
@@ -511,7 +527,9 @@ export default async function DocPage({ params }: Props) {
                     <div className="flex items-center gap-1.5">
                       <Bookmark className="h-3.5 w-3.5 text-zinc-600" />
                       <span>Category:</span>
-                      <span className="text-emerald-400 font-bold uppercase">{doc.meta.category}</span>
+                      <span className="text-emerald-400 font-bold uppercase">
+                        {doc.meta.category}
+                      </span>
                     </div>
                     <span>•</span>
                     <div>
@@ -553,7 +571,7 @@ export default async function DocPage({ params }: Props) {
                   On this page
                 </div>
 
-                <ul className="space-y-3 max-h-[50vh] overflow-y-auto scrollbar-none pr-1">
+                <ul className="space-y-3 max-h-[50vh] overflow-y-auto scrollbar-none pr-1" data-lenis-prevent="true">
                   {toc.map((heading, index) => (
                     <li key={index}>
                       <a
@@ -571,6 +589,7 @@ export default async function DocPage({ params }: Props) {
                           hover:pl-0.5
                           block
                           truncate
+                          gsap-toc-link
                         "
                         title={heading}
                       >

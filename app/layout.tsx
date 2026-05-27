@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Hind_Siliguri } from "next/font/google";
 import "./globals.css";
+import GSAPInitializer from "@/components/GSAPInitializer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,6 +52,7 @@ export default function RootLayout({
         className="min-h-full bg-[#09090b] text-white"
         suppressHydrationWarning
       >
+        <GSAPInitializer />
         {children}
       </body>
     </html>
