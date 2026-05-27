@@ -58,7 +58,7 @@ flowchart LR
 | **02** | [YouTube & Netflix (Video Streaming)](#-chapter-02-youtube--netflix-video-streaming-platform) | 🟢 **Active** | Transcoding, CDN Edge, HLS/DASH Streaming, Blob Store |
 | **03** | [High-Concurrency E-Commerce (Amazon)](#-chapter-03-high-concurrency-e-commerce-system) | 🟢 **Active** | Flash Sales, Redis Distributed Locks, Saga Pattern, Idempotency |
 | **04** | [WhatsApp & Messenger](#-chapter-04-whatsapp--messenger-real-time-chat-engine) | 🟢 **Active** | WebSockets, Message Gateway, Cassandra Store, Connection Registry |
-| **05** | Uber & Grab (Ride-Sharing) | 🔒 *Locked* | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
+| **05** | [Uber & Grab (Ride-Sharing)](#-chapter-05-uber--grab-ride-sharing-geospatial-engine) | 🟢 **Active** | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
 | **06** | Twitter/X (News Feed & Timeline) | 🔒 *Locked* | Fanout-on-write vs Fanout-on-read, Push vs Pull |
 | **07** | Ticketmaster (Ticketing Engine) | 🔒 *Locked* | High-Concurrency Booking, Distributed Locking, Queueing System |
 | **08** | Google Drive / Dropbox | 🔒 *Locked* | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
@@ -663,14 +663,160 @@ export class MessageGatewayRegistry {
 
 ---
 
-## 🔒 Chapters 05 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 05: Uber & Grab (Ride-Sharing Geospatial Engine)
 
-বাকি ১৬টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+রাইড-শেয়ারিং সিস্টেমের মূল কারিগরি চ্যালেঞ্জ হলো প্রতি সেকেন্ডে লাখ লাখ ড্রাইভারের দ্রুত পরিবর্তনশীল ভৌগলিক অবস্থান (Geolocation) রিয়েল-টাইমে ট্র্যাক করা এবং কোনো রাইডার রিকোয়েস্ট পাঠালে ১ কিলোমিটারের মধ্যে থাকা পারফেক্ট ড্রাইভারটিকে ৫০ মিলি-সেকেন্ডের মধ্যে খুঁজে বের করা।
 
-যেমন:
-- **চ্যাপ্টার ০৫ (Uber):** বুঝবো কীভাবে Google maps-এর মতো রিয়েল-тим ড্রাইভারদের Geolocation ট্র্যাক করা যায় **H3 Geohash Grid** বা **Quadtree** ডাটা স্ট্রাকচার দিয়ে।
-- **চ্যাপ্টার ০৬ (Twitter):** জানবো কেন সেলিব্রিটিদের টুইট ফিড এবং আমাদের নরমাল ইউজারদের টুইট ফিড তৈরিতে সম্পূর্ণ আলাদা **Push vs Pull (Fanout)** আর্কিটেকচার ব্যবহার করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ড্রাইভাররা প্রতি ৪ সেকেন্ড পর পর তাদের রিয়েল-টাইম জিপিএস স্থানাঙ্ক (Latitude, Longitude) ব্যাকএন্ডে পাঠাবে।
+  - রাইডাররা তাদের চারপাশের ৩ কিলোমিটার ব্যাসার্ধের মধ্যে থাকা সব এভেইলেবল ড্রাইভার রিয়েল-টাইমে ম্যাপে দেখতে পাবে।
+  - রাইডার রাইড রিকোয়েস্ট করলে সিস্টেম সবচেয়ে কাছের ড্রাইভারকে তার সাথে ট্রিপ ম্যাচ করিয়ে দেবে।
+- **Non-Functional:**
+  - **Ultra-low Latency:** ড্রাইভার ম্যাচিং এবং সার্চ কুয়েরি অত্যন্ত ফাস্ট হতে হবে (< ৫০ মিলি-সেকেন্ড)।
+  - **High Scalability:** ১ মিলিয়ন একটিভ ড্রাইভারের সেকেন্ডে লাখ লাখ জিপিএস আপডেট এবং ১০ মিলিয়ন একটিভ রাইডারের কনকারেন্ট কুয়েরি হ্যান্ডেল করা।
+  - **Strict Consistency (Match Lock):** একই ড্রাইভার যাতে একসাথে ২ জন রাইডারের সাথে ম্যাচ না হয়ে যায় (No Double-Booking)।
+
+### ২. Back-of-the-envelope Estimation
+* `Driver Location Write QPS = 1,000,000 active drivers / 4 seconds =` **250,000 writes/sec**
+* `Rider Search Query QPS = 10,000,000 riders / 8 seconds map updates =` **1,250,000 reads/sec**
+* `Location Update Size = driver_id (16 bytes) + latitude (8 bytes) + longitude (8 bytes) = 32 bytes`
+* `Network Write Bandwidth = 250,000 * 32 bytes ≈` **8 MB/sec**
+* **Memory Requirement (Redis Cache):** 
+  * মেমরিতে ১ মিলিয়ন ড্রাইভারের জিপিএস ডেটা স্টোর করতে সাইজ হবে: `1,000,000 * 100 bytes (Redis overhead সহ) ≈` **100 MB RAM**। এটি অত্যন্ত ছোট, তাই সম্পূর্ণ লাইভ ডেটা রেডিসে সুপার-ফাস্ট স্টোর করা সম্ভব।
+
+### ৩. API & Database Schema Design
+যেহেতু জিপিএস রাইট অপারেশন প্রতি সেকেন্ডে ২৫০K বার ঘটে, প্রথাগত HTTP ওভারহেড এড়াতে ড্রাইভার ডিভাইসগুলো **WebSocket** অথবা লাইটওয়েট **UDP/TCP Stream** ব্যবহার করবে। 
+রাইডারদের জন্য এপিআই থাকবে:
+- `GET /api/v1/nearby?lat=23.7561&lng=90.3762&radius=3000` (৩ কিমি ব্যাসার্ধের ড্রাইভার সার্চ)
+
+#### Database Selection: SQL vs NoSQL Spatial Indexes
+ডিস্ক-ভিত্তিক ডাটাবেস (যেমন PostgreSQL PostGIS) ২৫০K QPS রাইট সামলাতে সম্পূর্ণ ক্র্যাশ করবে। তাই লাইভ ট্র্যাকিংয়ের জন্য আমরা **In-memory Redis Geospatial Index (GEOADD, GEORADIUS)** ব্যবহার করব।
+কমপ্লিটেড ট্রিপ ডেটা এবং বিলিং হিস্ট্রি ব্যাকআপের জন্য রিলেশনাল ডাটাবেস (PostgreSQL) ব্যবহার করা হবে।
+
+### ৪. High-Level Architecture
+ভৌগলিক ট্রাফিক ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    DriverApp["Driver Device"] -->|1. Location Stream 4s| IngestGW["Geo-Ingest Gateway"]
+    IngestGW -->|2. Fast Write| RedisGeo["Redis Geo Cluster (Live RAM Storage)"]
+    
+    RiderApp["Rider Device"] -->|3. Get Nearby Drivers| RiderAPI["Rider API Gateway"]
+    RiderAPI -->|4. GEORADIUS Search| RedisGeo
+    
+    RiderAPI -->|5. Match Ride| MatchService["Ride Match Engine"]
+    MatchService -->|6. Acquire Lock| RedisLock["Redis Distributed Lock (Redlock)"]
+    MatchService -->|7. Send Push Notification| NotifyService["Push Notification Service"]
+    NotifyService -->|8. Request Ride| DriverApp
+    
+    style DriverApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RedisGeo fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style MatchService fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Geospatial Engine Implementation
+নিচে `ioredis` ব্যবহার করে ড্রাইভারদের লোকেশন আপডেট এবং ৩ কিমি ব্যাসার্ধের এভেইলেবল ড্রাইভার খুঁজে বের করার জন্য একটি প্রোডাকশন-রেডি **Geospatial Tracking Engine** কোড দেওয়া হলো:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface Coordinate {
+  latitude: number;
+  longitude: number;
+}
+
+interface NearbyDriver {
+  driverId: string;
+  latitude: number;
+  longitude: number;
+  distanceInMeters: number;
+}
+
+export class GeoLocationEngine {
+  private static readonly GEO_KEY = "active:drivers:location";
+
+  /**
+   * ড্রাইভারের লাইভ লোকেশন রেডিস জিও-ইনডেক্সে আপডেট করে
+   * Redis internally encodes (latitude, longitude) into a 52-bit Geohash integer
+   */
+  public async updateDriverLocation(driverId: string, lat: number, lng: number): Promise<void> {
+    // GEOADD takes key, longitude, latitude, memberId
+    await redis.geoadd(GeoLocationEngine.GEO_KEY, lng, lat, driverId);
+  }
+
+  /**
+   * ড্রাইভার অফলাইনে গেলে ইনডেক্স থেকে মুছে ফেলে
+   */
+  public async removeOfflineDriver(driverId: string): Promise<void> {
+    await redis.zrem(GeoLocationEngine.GEO_KEY, driverId);
+  }
+
+  /**
+   * রাইডারের ৩ কিলোমিটারের ভেতরে থাকা এভেইলেবল ড্রাইভারদের দূরত্বসহ সর্ট করে নিয়ে আসে
+   */
+  public async findNearbyDrivers(
+    riderLat: number,
+    riderLng: number,
+    radiusInMeters: number,
+    limit = 10
+  ): Promise<NearbyDriver[]> {
+    // GEORADIUS fetches members with distance and raw coordinates sorted ascendingly
+    const results = await redis.georadius(
+      GeoLocationEngine.GEO_KEY,
+      riderLng,
+      riderLat,
+      radiusInMeters,
+      "m", // meters
+      "WITHDIST",
+      "WITHCOORD",
+      "ASC", // closest first
+      "COUNT", limit
+    ) as any[];
+
+    return results.map((item) => {
+      const [driverId, distance, [lngStr, latStr]] = item;
+      return {
+        driverId,
+        distanceInMeters: parseFloat(distance),
+        latitude: parseFloat(latStr),
+        longitude: parseFloat(lngStr),
+      };
+    });
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জীবনের মিলিয়ন-ইউজার স্কেলে রাইড ম্যাচিং ইঞ্জিনে এই ৩টি ক্রিটিক্যাল আর্কিটেকচারাল প্রবলেম আসে:
+
+#### ১. The Grid Boundary Problem (Geohash vs Hexagonal H3 Grid)
+**Geohash** পৃথিবীকে আয়তাকার (Rectangle) গ্রিডে ভাগ করে। যদি কোনো রাইডার ঠিক গ্রিডের সীমানায় (Edge/Boundary) দাঁড়িয়ে থাকে এবং কোনো ড্রাইভার তার থেকে মাত্র ৫ মিটার দূরে অন্য পাশের গ্রিডে থাকে, Geohash কুয়েরি তাকে মিস করে যাবে।
+* **মিটিগেশন (H3 Hexagonal Grid):** উবার এই সমস্যাটি দূর করতে **H3 Spatial Indexing (Hexagonal Hierarchical Spatial Index)** তৈরি করে। হেক্সাগন বা ষড়ভুজের ক্ষেত্রে কেন্দ্র থেকে তার প্রতিটি প্রতিবেশী কোণের দূরত্ব একদম সমান। এর ফলে বাউন্ডারি প্রবলেম সম্পূর্ণ দূর হয় এবং নিখুঁতভাবে চারপাশের ড্রাইভারদের ডিটেক্ট করা যায়।
+
+#### ২. Write Saturation of Redis (Hotspots on Single CPU Core)
+যেহেতু Redis সিঙ্গেল-থ্রেডেড, সেকেন্ডে ২৫০,০০০ রাইট রিকোয়েস্ট যদি একটি মাত্র Redis Key (`active:drivers:location`) এর ওপরে যায়, তবে প্রসেসরের একটিコア ১০০% বিজি হয়ে ক্র্যাশ করবে।
+* **মিটিগেশন (Geographical Sharding):** ড্রাইভারদের লোকেশন সারা বিশ্বের একটি কিতে সেভ না করে আমরা Geohash এর প্রথম ৪ ক্যারেক্টার দিয়ে কি শার্ডিং করব। যেমন, ঢাকার সব ড্রাইভারের ডেটা যাবে `location:shard:dhaka` আর চট্রগ্রামের ডেটা যাবে `location:shard:ctg` শ্যার্ডে। এতে লোড মাল্টিপল নোডে ডিস্ট্রিবিউট হয়ে যাবে এবং Redis ক্লাস্টার সেকেন্ডে মিলিয়ন রাইট অনায়াসে সামলাতে পারবে।
+
+#### ৩. The Double-Booking Race Condition (Ride Matching Lock)
+একই এলাকায় দুজন রাইডার একই মিলি-সেকেন্ডে "Request Ride" বাটনে ক্লিক করলে সিস্টেম যদি তাদের দুজনকে একই ফ্রি ড্রাইভারের কাছে পাঠায়, তবে ড্রাইভার কনফিউজড হবে এবং সিস্টেমে কনফ্লিক্ট দেখা দেবে।
+* **মিটিগেশন:** **Atomic Distributed Lock (Redlock)**। রাইড ম্যাচিং ইঞ্জিন যখনই কোনো ড্রাইভারকে কোনো রাইডারের সাথে এসোসিয়েট করার প্রসেস শুরু করবে, সে সাথে সাথে Redis-এ ওই ড্রাইভারের আইডির বিপরীতে একটি ক্ষণস্থায়ী ডিস্ট্রিবিউটেড লক নেবে:
+  `redis.set("driver:lock:" + driverId, "LOCKED", "NX", "EX", 10)`
+  লকটি সফল হলেই কেবল ড্রাইভারকে অফার পাঠানো হবে। লক ফেইল হলে ম্যাচ মেকার অন্য আরেকটি কাছাকাছি ড্রাইভারকে সাথে সাথেই সিলেক্ট করে নেবে।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 04 (WhatsApp/Messenger Chat Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের ২০টি টপিকের রোডম্যাপ এপ্রুভ করে **Chapter 05 (Uber/Grab Geolocation Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 06 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১৫টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ০৬ (Twitter):** জানবো কেন সেলিব্রিটিদের টুইট ফিড এবং আমাদের নরমাল ইউজারদের টুইট ফিড তৈরিতে সম্পূর্ণ আলাদা **Push vs Pull (Fanout)** আর্কিটেকচার ব্যবহার করতে হয়।
+- **চ্যাপ্টার ০৭ (Ticketmaster):** বুঝবো কীভাবে হাই-কনকারেন্ট বুকিং সিস্টেমে বুকিং টিকিট হোল্ড করতে হয় এবং ডাবল টিকিট সেল রোধ করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 05 (Uber & Grab Ride-Sharing Geospatial Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 06 (Twitter/X Feed & Fanout Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
