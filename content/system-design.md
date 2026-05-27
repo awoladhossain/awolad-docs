@@ -700,13 +700,13 @@ export class MessageGatewayRegistry {
 ```mermaid
 flowchart TD
     DriverApp["Driver Device"] -->|1. Location Stream 4s| IngestGW["Geo-Ingest Gateway"]
-    IngestGW -->|2. Fast Write| RedisGeo["Redis Geo Cluster (Live RAM Storage)"]
+    IngestGW -->|2. Fast Write| RedisGeo["Redis Geo Cluster Live RAM Storage"]
     
     RiderApp["Rider Device"] -->|3. Get Nearby Drivers| RiderAPI["Rider API Gateway"]
     RiderAPI -->|4. GEORADIUS Search| RedisGeo
     
     RiderAPI -->|5. Match Ride| MatchService["Ride Match Engine"]
-    MatchService -->|6. Acquire Lock| RedisLock["Redis Distributed Lock (Redlock)"]
+    MatchService -->|6. Acquire Lock| RedisLock["Redis Distributed Lock Redlock"]
     MatchService -->|7. Send Push Notification| NotifyService["Push Notification Service"]
     NotifyService -->|8. Request Ride| DriverApp
     
@@ -862,17 +862,17 @@ CREATE TABLE follows (
 
 ```mermaid
 flowchart TD
-    UserApp["User Client App"] -->|1. Post Tweet| Gateway["API Gateway / Tweet Service"]
-    Gateway -->|2. Save Raw Tweet| TweetDB["Tweets Storage (PostgreSQL / Cassandra)"]
-    Gateway -->|3. Trigger Fanout| FanoutQueue["Fanout Message Queue (Kafka)"]
+    UserApp["User Client App"] -->|1. Post Tweet| Gateway["API Gateway and Tweet Service"]
+    Gateway -->|2. Save Raw Tweet| TweetDB["Tweets Storage Postgres Cassandra"]
+    Gateway -->|3. Trigger Fanout| FanoutQueue["Fanout Message Queue Kafka"]
     
-    FanoutQueue -->|4. Push to Normal Followers| NormalFeedCache["Redis Sorted Set (Home Feed Cache)"]
+    FanoutQueue -->|4. Push to Normal Followers| NormalFeedCache["Redis Sorted Set Home Feed Cache"]
     
     Gateway -->|5. Read Home Feed| FeedService["Feed Retrieval Service"]
     FeedService -->|6. Fetch Pre-computed Feed| NormalFeedCache
-    FeedService -->|7. Dynamically Pull (Hybrid)| CelebCache["Redis Cache (Celebrity Tweets)"]
+    FeedService -->|7. Dynamically Pull Hybrid| CelebCache["Redis Cache Celebrity Tweets"]
     
-    FeedService -->|8. Sorted & Combined Feed| UserApp
+    FeedService -->|8. Sorted and Combined Feed| UserApp
     
     style UserApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
     style NormalFeedCache fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
