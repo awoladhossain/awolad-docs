@@ -60,7 +60,7 @@ flowchart LR
 | **04** | [WhatsApp & Messenger](#-chapter-04-whatsapp--messenger-real-time-chat-engine) | 🟢 **Active** | WebSockets, Message Gateway, Cassandra Store, Connection Registry |
 | **05** | [Uber & Grab (Ride-Sharing)](#-chapter-05-uber--grab-ride-sharing-geospatial-engine) | 🟢 **Active** | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
 | **06** | [Twitter/X (News Feed & Timeline)](#-chapter-06-twitterx-news-feed--timeline-fanout-engine) | 🟢 **Active** | Fanout-on-write vs Fanout-on-read, Push vs Pull |
-| **07** | Ticketmaster (Ticketing Engine) | 🔒 *Locked* | High-Concurrency Booking, Distributed Locking, Queueing System |
+| **07** | [Ticketmaster (Ticketing Engine)](#-chapter-07-ticketmaster-high-concurrency-booking-engine) | 🟢 **Active** | High-Concurrency Booking, Distributed Locking, Queueing System |
 | **08** | Google Drive / Dropbox | 🔒 *Locked* | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
 | **09** | Web Crawler (Search Engine Indexer) | 🔒 *Locked* | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
 | **10** | Distributed Notification System | 🔒 *Locked* | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
@@ -981,14 +981,204 @@ export class NewsFeedFanoutEngine {
 
 ---
 
-## 🔒 Chapters 07 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 07: Ticketmaster (High-Concurrency Ticketing Engine)
 
-বাকি ১৪টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+টিকিট বুকিং সিস্টেমের সবচেয়ে বড় কারিগরি চ্যালেঞ্জ হলো "হটস্পট ইভেন্ট" (যেমন কোনো পপুলার কনসার্টের টিকিট সেল লাইভ হওয়া)। যখন ১০,০০০ সিটের বিপরীতে ১ লাখ ইউজার ঠিক একই সেকেন্ডে সিট বুক করার ট্রাই করেন, তখন সিস্টেম ক্র্যাশ না করে শতভাগ ডাবল বুকিং ফ্রি সিট হোল্ডিং মেকানিজম গড়ে তোলাই হলো স্টাফ আর্কিটেক্টের সার্থকতা।
 
-যেমন:
-- **চ্যাপ্টার ০৭ (Ticketmaster):** বুঝবো কীভাবে হাই-কনকারেন্ট বুকিং সিস্টেমে বুকিং টিকিট হোল্ড করতে হয় এবং ডাবল টিকিট সেল রোধ করতে হয়।
-- **চ্যাপ্টার ০৮ (Google Drive):** জানবো কীভাবে চাঙ্ক-বেসড ফাইল আপলোড করতে হয় এবং ডুপ্লিকেট মিডিয়া ব্লক ড্রপ করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার কোনো নির্দিষ্ট ইভেন্ট সার্চ করে তার ফিজিক্যাল সিট ম্যাপ ও এভেইলেবল সিট দেখতে পাবেন।
+  - ইউজার সিট সিলেক্ট করে বুকিং ফ্লোতে গেলে সিটটি ১০ মিনিটের জন্য লক/হোল্ড হবে যাতে সে পেমেন্ট কমপ্লিট করতে পারে।
+  - অন্য কোনো ইউজার ওই ১০ মিনিট ওই সিটগুলো হোল্ড বা বুক করতে পারবেন না।
+  - পেমেন্ট সাকসেসফুল হলে সিটটি পার্মানেন্টলি বুক হবে। ১০ মিনিট পার হলে লক অটোমেটিক এক্সপায়ার হবে এবং সিট আবার ফ্রি হয়ে যাবে।
+- **Non-Functional:**
+  - **Zero Double-Booking:** একই টিকিট বা সিট কখনই দুজন ইউজারের কাছে বিক্রি করা যাবে না।
+  - **High Concurrency Stability:** লাখ লাখ বায়ারের রিয়েল-টাইম হিট হ্যান্ডেল করা এবং ডাটাবেস বটলনেক এড়ানো।
+  - **Orphan Lock Prevention:** কোনো সার্ভার বা প্রসেস ক্র্যাশ করলেও যাতে সিট চিরতরে লকড হয়ে না থাকে।
+
+### ২. Back-of-the-envelope Estimation
+* **সিলারিটি ইভেন্ট ডেটা:**
+  * মোট সিট সংখ্যা = ৫০,০০০
+  * টিকেট লঞ্চের ১ম মিনিটে কনকারেন্ট ট্রাফিক = ১,০০০,০০০ একটিভ ইউজার
+  * **Peak Search QPS (Read QPS):** **50,000 queries/sec**
+  * **Peak Seat Hold QPS (Write QPS):** **20,000 reservations/sec**
+* **ডেটাবেস লকিং ওভারহেড:**
+  * সেকেন্ডে ২০,০০০ রাইট রিকোয়েস্ট যদি সরাসরি SQL ডাটাবেসে `SELECT ... FOR UPDATE` কুয়েরি ট্রিগার করে, তবে লক কনটেনশনের জন্য ডাটাবেস সম্পূর্ণ জ্যাম হয়ে ক্র্যাশ করবে। তাই লাইভ ইন-মেমোরি সিট হোল্ড মেকানিজম ক্যাশ লেয়ারে সম্পন্ন করতে হবে।
+
+### ৩. API & Database Schema Design
+টিকিট বুকিং ও চেকআউট এপিআই ডিজাইন:
+- `POST /api/v1/seats/reserve` (সিট ১০ মিনিটের জন্য লক করা)
+- `POST /api/v1/payments/confirm` (পেমেন্ট সাকসেস ভ্যালিডেশন এবং ফাইনাল বুকিং)
+
+#### Database Schema (ACID Compliant Relation DB)
+সিট বুকিংয়ের ফাইনাল ট্রানজেকশনের জন্য আমরা **PostgreSQL** ডাটাবেস ব্যবহার করব:
+
+```sql
+CREATE TABLE events (
+    event_id bigint PRIMARY KEY,
+    title varchar(255),
+    start_time timestamp
+);
+
+CREATE TABLE seats (
+    seat_id bigint PRIMARY KEY,
+    event_id bigint,
+    seat_number varchar(10),
+    status varchar(20) -- 'AVAILABLE', 'HELD', 'BOOKED'
+);
+
+CREATE TABLE reservations (
+    reservation_id bigint PRIMARY KEY,
+    user_id bigint,
+    seat_id bigint,
+    status varchar(20), -- 'PENDING', 'CONFIRMED', 'EXPIRED'
+    held_until timestamp
+);
+```
+
+### ৪. High-Level Architecture
+টিকিটমাস্টার আর্কিটেকচারে আমরা **Virtual Waiting Room & Atomic Seat Hold** মেকানিজম ব্যবহার করব। নিচে ট্রাফিক ফ্লো দেওয়া হলো:
+
+```mermaid
+flowchart TD
+    UserClient["User Client App"] -->|1. Request Booking| WaitingRoom["Virtual Waiting Room Queueit CDN Edge"]
+    WaitingRoom -->|2. Throttled Traffic Flow| Gateway["API Gateway and Ticket Service"]
+    
+    Gateway -->|3. Try Seat Hold| CacheLock["Redis Seat Hold Lock Cluster"]
+    CacheLock -->|4. Lock Acquired| DB["Postgres DB Relational Transaction"]
+    
+    Gateway -->|5. Seat Held 10 min| PaymentService["Payment Processing Gateway"]
+    PaymentService -->|6. Confirm Payment| DB
+    
+    CacheLock -.->|7. Expiry Job if payment fails| ExpiryWorker["Expiry Background Worker"]
+    ExpiryWorker -.->|8. Release Lock| CacheLock
+    ExpiryWorker -.->|9. Mark Seat Available| DB
+    
+    style UserClient fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style CacheLock fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style DB fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style WaitingRoom fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Redis Lua Seat Reservation
+নিচে একটি অত্যন্ত চমৎকার প্রোডাকশন-রেডি **Atomic Ticketing Lock Manager** কোড দেওয়া হলো যা Redis Lua Script ব্যবহার করে ১ মিলি-সেকেন্ডের নিচে ডাবল বুকিং এরর ছাড়া মাল্টিপল সিট এটমিকালি হোল্ড করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface SeatHoldResult {
+  success: boolean;
+  message: string;
+  heldSeatIds?: string[];
+  heldUntil?: number;
+}
+
+export class TicketingHoldManager {
+  private static readonly HOLD_TTL_SECONDS = 600; // ১০ মিনিট
+
+  /**
+   * এটমিক সিট হোল্ড করার জন্য LUA স্ক্রিপ্ট জেনারেট করে
+   * LUA স্ক্রিপ্ট রেডিসের সিঙ্গেল-থ্রেডেড ইঞ্জিনে ওয়ান-স্টেপ এটমিক ট্রানজেকশন গ্যারান্টি দেয়
+   */
+  private getHoldLuaScript(): string {
+    return `
+      local event_id = ARGV[1]
+      local ttl = tonumber(ARGV[2])
+      local user_id = ARGV[3]
+      
+      -- ১. সব সিট এভেইলেবল আছে কি না চেক করি
+      for i = 1, #KEYS do
+        local seat_key = "seat:" .. event_id .. ":" .. KEYS[i]
+        local current_lock = redis.call("GET", seat_key)
+        if current_lock then
+          return redis.error_reply("SEAT_ALREADY_HELD_OR_BOOKED: " .. KEYS[i])
+        end
+      end
+      
+      -- ২. সব সিট খালি থাকলে এটমিকালি লক হোল্ড নিই
+      local held_until = redis.call("TIME")[1] + ttl
+      for i = 1, #KEYS do
+        local seat_key = "seat:" .. event_id .. ":" .. KEYS[i]
+        redis.call("SET", seat_key, user_id, "EX", ttl)
+      end
+      
+      return tostring(held_until)
+    `;
+  }
+
+  /**
+   * হাই-কনকারেন্ট ট্রাফিকে সিট হোল্ড নিশ্চিত করে
+   */
+  public async holdSeats(userId: string, eventId: string, seatIds: string[]): Promise<SeatHoldResult> {
+    const luaScript = this.getHoldLuaScript();
+    
+    try {
+      // KEYS represent seat IDs, ARGV contains EventID, TTL, and UserID
+      const result = await redis.eval(
+        luaScript,
+        seatIds.length,
+        ...seatIds,
+        eventId,
+        TicketingHoldManager.HOLD_TTL_SECONDS,
+        userId
+      ) as string;
+
+      return {
+        success: true,
+        message: "Seats held successfully for 10 minutes.",
+        heldSeatIds: seatIds,
+        heldUntil: parseInt(result) * 1000, // milliseconds timestamp
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || "Failed to hold seats due to high concurrency.",
+      };
+    }
+  }
+
+  /**
+   * পেমেন্ট সাকসেসফুল হলে সিটগুলো রিলিজ করে ডাটাবেসে বুকড মার্ক করে
+   */
+  public async confirmSeatBooking(eventId: string, seatIds: string[]): Promise<void> {
+    const pipeline = redis.pipeline();
+    for (const seatId of seatIds) {
+      const seatKey = `seat:${eventId}:${seatId}`;
+      pipeline.del(seatKey); // লক রিমুভ করব, ডাটাবেসে পার্মানেন্ট BOOKED আপডেট হবে
+    }
+    await pipeline.exec();
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জীবনের প্রোডাকশন সিস্টেমে টিকিট ফেয়ার ম্যাচিং স্কেলিংয়ের ৩টি গুরুত্বপূর্ণ স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Database Lock Contention & Virtual Waiting Rooms (CDN Edge)
+এমনকি Redis দিয়ে বুকিং করার পরও, বুকিং পেমেন্ট সাকসেস হওয়ার সাথে সাথে যদি প্রতি সেকেন্ডে ২০,০০০ ইউজার ডাটাবেসে ট্রানজেকশন কমপ্লিট করতে চায়, তবে ডেটাবেসের রাইট-লক কনটেনশন চরম আকার ধারণ করবে।
+* **মিটিগেশন (Virtual Waiting Room):** আমরা CDN লেভেলে **Queue-it / Cloudflare Waiting Room** ব্যবহার করে বুকিং ফানেলকে থ্রোটল করব। আমরা শুধুমাত্র প্রতি সেকেন্ডে ৫০০ জন ইউজারকে এপিআই গেটওয়েতে ঢুকতে দেব, যা আমাদের PostgreSQL ডাটাবেসের ম্যাক্সিমাম রাইট ক্যাপাসিটি। বাকি লাখ লাখ ট্রাফিক সিডিএন এজ-এ একটি ডাইনামিক কিউতে ওয়েট করবে, যা ডাটাবেসকে বটলনেক থেকে ১০০% রক্ষা করবে।
+
+#### ২. Expired Holds Handling (The Orphan Lock Problem)
+যদি কোনো ইউজার সিট হোল্ড করার পর তার ব্রাউজার ক্র্যাশ করে বা পেমেন্ট উইন্ডো ক্রস করে দেয়, তবে ১০ মিনিট পর Redis থেকে লক অটোমেটিক মুছে যাবে। কিন্তু ডাটাবেসের `reservations` টেবিলে থাকা রোটি পেন্ডিংই থেকে যাবে, যা নোংরা ডাটাবেস হিস্ট্রি তৈরি করে।
+* **মিটিগেশন (Active CDC Sync Engine):** আমরা **Redis Keyspace Notifications (`__keyevent@0__:expired`)** ইভেন্ট লিসেনার সেটআপ করব। যখনই রেডিস থেকে কোনো সিট লকের TTL এক্সপায়ার হবে, আমাদের ব্যাকগ্রাউন্ড এক্সপায়ার সার্ভিস সেই নোটিফিকেশন শুনে ডাটাবেসের পেন্ডিং ট্রানজেকশনকে এটমিকালি `EXPIRED` করে সিটের স্ট্যাটাস `AVAILABLE` মার্ক করে দেবে।
+
+#### ৩. Scalper Bots Prevention (Idempotent Cryptographic Tokens)
+বট ও স্ক্যালপাররা এপিআই কল বাইপাস করে সেকেন্ডে হাজার হাজার সিট হোল্ড করে নিতে পারে, যার ফলে সাধারণ ক্রেতারা কোনো টিকিটই পায় না।
+* **মিটিগেশন (Signed Ticket Tokens):** সিট সিলেক্ট করার সময় সিস্টেম ক্লায়েন্টকে একটি ক্রিপ্টোগ্রাফিকালি সাইনড টোকেন (JWT) দেবে যার ভেতরে ইউজার আইডি, সিট আইডি এবং টাইমস্ট্যাম্প সাইন করা থাকবে। `seats/reserve` এপিআই শুধুমাত্র সেই রিকোয়েস্টই এক্সেপ্ট করবে যেটিতে আমাদের গেটওয়ের দ্বারা সাইন করা ভ্যালিড টোকেন থাকবে। এতে বটস সরাসরি এপিআই স্প্যাম করে টিকিট বুকিং করতে পারবে না।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 06 (Twitter/X Feed & Fanout Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 07 (Ticketmaster High-Concurrency Booking Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 08 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১৩টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ০৮ (Google Drive):** জানবো কীভাবে চাঙ্ক-বেসড ফাইল আপলোড করতে হয় এবং ডুপ্লিকেট মিডিয়া ব্লক ড্রপ করতে হয়।
+- **চ্যাপ্টার ০৯ (Web Crawler):** বুঝবো কীভাবে BFS গ্রাফ ট্রাভার্সাল, ডুপ্লিকেট ইউআরএল ফিল্টারিং এবং Robots.txt মেনে হাই-স্পিড ওয়েব ক্রলিং করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 07 (Ticketmaster High-Concurrency Booking Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 08 (Google Drive & Dropbox: Distributed File Storage)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
