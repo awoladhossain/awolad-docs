@@ -61,7 +61,7 @@ flowchart LR
 | **05** | [Uber & Grab (Ride-Sharing)](#-chapter-05-uber--grab-ride-sharing-geospatial-engine) | 🟢 **Active** | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
 | **06** | [Twitter/X (News Feed & Timeline)](#-chapter-06-twitterx-news-feed--timeline-fanout-engine) | 🟢 **Active** | Fanout-on-write vs Fanout-on-read, Push vs Pull |
 | **07** | [Ticketmaster (Ticketing Engine)](#-chapter-07-ticketmaster-high-concurrency-booking-engine) | 🟢 **Active** | High-Concurrency Booking, Distributed Locking, Queueing System |
-| **08** | Google Drive / Dropbox | 🔒 *Locked* | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
+| **08** | [Google Drive / Dropbox](#-chapter-08-google-drive--dropbox-distributed-file-storage-engine) | 🟢 **Active** | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
 | **09** | Web Crawler (Search Engine Indexer) | 🔒 *Locked* | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
 | **10** | Distributed Notification System | 🔒 *Locked* | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
 | **11** | API Gateway & Distributed Rate Limiter | 🔒 *Locked* | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
@@ -1171,14 +1171,192 @@ export class TicketingHoldManager {
 
 ---
 
-## 🔒 Chapters 08 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 08: Google Drive & Dropbox (Distributed File Storage Engine)
 
-বাকি ১৩টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+ডিস্ট্রিবিউটেড ক্লাউড ড্রাইভের মূল ইঞ্জিনিয়ারিং চ্যালেঞ্জ হলো পেটাবাইট স্কেলের ফাইল স্টোরেজ ম্যানেজমেন্ট, ব্যান্ডউইথ অপ্টিমাইজেশন এবং রিয়েল-টাইম ডিস্ট্রিবিউটেড মেটাডাটা সিঙ্ক মেকানিজম গড়ে তোলা। একটি ১ গিগাবাইটের ফাইলের সামান্য ১ কিলোবাইট পরিবর্তন হলে পুরো ফাইল পুনরায় আপলোড না করে কীভাবে নেটওয়ার্ক এবং ক্লাউড কস্ট সাশ্রয় করা যায়, তা নিচে বিশদভাবে বর্ণনা করা হলো।
 
-যেমন:
-- **চ্যাপ্টার ০৮ (Google Drive):** জানবো কীভাবে চাঙ্ক-বেসড ফাইল আপলোড করতে হয় এবং ডুপ্লিকেট মিডিয়া ব্লক ড্রপ করতে হয়।
-- **চ্যাপ্টার ০৯ (Web Crawler):** বুঝবো কীভাবে BFS গ্রাফ ট্রাভার্সাল, ডুপ্লিকেট ইউআরএল ফিল্টারিং এবং Robots.txt মেনে হাই-স্পিড ওয়েব ক্রলিং করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার যেকোনো সাইজের ফাইল (সর্বোচ্চ ১০ জিবি) আপলোড, ডাউনলোড ও ডিলিট করতে পারবেন।
+  - ডিভাইস সিঙ্ক্রোনাইজেশন: ডিভাইস A-তে কোনো ফাইল আপলোড বা ইডিট হলে তা সাথে সাথে ডিভাইস B-তে ব্যাকগ্রাউন্ডে রিয়েল-টাইমে সিঙ্ক হবে।
+  - ফাইল হিস্ট্রি ও ভার্সন কন্ট্রোল: ইউজার আগের ভার্সনগুলো ট্র্যাক করতে এবং রিস্টোর করতে পারবেন।
+- **Non-Functional:**
+  - **Bandwidth Optimization:** ফাইলের সামান্য ইডিট হলে পুরো ফাইল পুনরায় আপলোড না করে কেবল পরিবর্তিত অংশটুকু আপলোড করা (Chunking)।
+  - **Storage Cost Optimization:** মাল্টিপল ইউজারের আপলোড করা হুবহু একই ফাইল রিমুভ করে ডুপ্লিকেশন এড়ানো (Deduplication)।
+  - **Consistency:** ফাইল এডিট নিয়ে কনফ্লিক্ট হলে ডেটা লস এড়ানো (Sync Conflict Resolution)।
+
+### ২. Back-of-the-envelope Estimation
+* **স্টোরেজ রিকোয়ারমেন্টস (Capacity Estimation):**
+  * ডেইলি একটিভ ইউজার (DAU) = ১০ মিলিয়ন
+  * এভারেজ আপলোড স্পেস প্রতি ইউজার = ১০ মেগাবাইট / দিন
+  * **টোটাল ইনজেস্ট ডেটা/দিন = ১০,০০০,০০০ * ১০ MB =** **100 Terabytes / day**
+  * **ডি-ডুপ্লিকেশন সেভ ফ্যাক্টর (Deduplication Saving):** আমাদের ইনজেস্ট করা ডেটার ২০% ফাইল ডুপ্লিকেট থাকে (একই ফটো, ভিডিও বা ফাইল মাল্টিপল ইউজার আপলোড করে)।
+  * **নেট প্রয়োজনীয় স্টোরেজ/দিন = ১০০ TB * ০.৮ =** **80 Terabytes / day**
+  * **১০ বছরের মোট প্রয়োজনীয় ক্লাউড স্পেস ≈** **292 Petabytes**
+* **ব্যান্ডউইথ সাশ্রয়ের হিসাব (Chunk-based Upload):**
+  * আমরা ফাইলকে ছোট ছোট **৪ মেগাবাইটের চাঙ্কে (Chunks)** ভাগ করব। যদি কোনো ইউজার তার ১ গিগাবাইটের একটি ফাইলের মাত্র ১টি চাঙ্ক পরিবর্তন করে, তবে চাঙ্কিং করার ফলে পুরো ১ জিবি আপলোডের জায়গায় মাত্র **৪ মেগাবাইট** আপলোড হবে, যা ব্যান্ডউইথ ব্যবহার **৯৯.৬%** কমিয়ে দেয়!
+
+### ৩. API & Database Schema Design
+চাঙ্ক ম্যানেজমেন্ট ও মেটাডাটা আপলোডের জন্য ডিজাইন:
+- `POST /api/v1/chunks/upload` (৪ মেগাবাইটের চাঙ্ক আপলোড, যেখানে চাঙ্ক আইডি হবে চাঙ্কের SHA-256 হ্যাশ)
+- `POST /api/v1/files/commit` (ফাইলের সব চাঙ্ক লিস্ট এবং ফাইল স্ট্রাকচার ডাটাবেসে সেভ করা)
+
+#### Database Schema Design
+ফাইলের মেটাডাটা ও চাঙ্কের রিলেশনশিপ ম্যাপ করার জন্য **PostgreSQL** স্কিমা:
+
+```sql
+CREATE TABLE files (
+    file_id varchar(64) PRIMARY KEY,
+    user_id bigint,
+    name varchar(255),
+    is_directory boolean,
+    version int,
+    parent_id varchar(64)
+);
+
+CREATE TABLE file_chunks (
+    file_id varchar(64),
+    chunk_hash varchar(64), -- SHA-256
+    chunk_order int,
+    PRIMARY KEY (file_id, chunk_hash, chunk_order)
+);
+
+CREATE TABLE chunk_registry (
+    chunk_hash varchar(64) PRIMARY KEY,
+    size_bytes int,
+    storage_path varchar(512),
+    reference_count int -- ডি-ডুপ্লিকেশন ট্র্যাক করার জন্য
+);
+```
+
+### ৪. High-Level Architecture
+ক্লাউড ড্রাইভের মেটাডাটা ট্র্যাকিং ও ক্লাউড স্টোরেজ ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    ClientApp["Client Device"] -->|1. Check Duplicate Chunks| MetadataServer["Metadata Service"]
+    MetadataServer -->|2. Query Hash Registry| HashIndexDB["Postgres Hash Index DB"]
+    
+    ClientApp -->|3. Upload Unique Chunks| BlockServer["Block Storage Service"]
+    BlockServer -->|4. Save Raw Chunks| CloudS3["Cloud Object Storage S3"]
+    
+    ClientApp -->|5. Commit File Metadata| MetadataServer
+    MetadataServer -->|6. Propagate Sync Event| SyncService["Sync Notification Service"]
+    SyncService -->|7. Push Live Sync Notification| ClientDeviceB["Target Sync Device B"]
+    
+    style ClientApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style MetadataServer fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style CloudS3 fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style ClientDeviceB fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Chunk Upload & Deduplication Engine
+নিচে একটি প্রোডাকশন-রেডি **Chunk Deduplication Manager** কোড দেওয়া হলো যা আপলোড করা বাফারের SHA-256 হ্যাশ বের করে এবং ইউনিক চাঙ্কগুলো অবজেক্ট স্টোরেজে (AWS S3) পাঠায় ও ডুপ্লিকেট চাঙ্ক আপলোড স্কিপ করে:
+
+```typescript
+import * as crypto from "crypto";
+
+interface ChunkUploadResponse {
+  chunkHash: string;
+  isDuplicate: boolean;
+  uploadedPath?: string;
+}
+
+export class ChunkDeduplicationManager {
+  // মেমোরি রেজিস্ট্রি ইনডেক্স (বাস্তব প্রোডাকশনে PostgreSQL chunk_registry টেবিলে যাবে)
+  private chunkRegistry = new Map<string, { storagePath: string; refCount: number }>();
+
+  /**
+   * ফাইল বাফারের SHA-256 হ্যাশ বের করে চাঙ্ক আইডি হিসেবে ব্যবহারের জন্য
+   */
+  public computeSHA256(buffer: Buffer): string {
+    return crypto.createHash("sha256").update(buffer).digest("hex");
+  }
+
+  /**
+   * ৪ মেগাবাইটের ফাইল চাঙ্ক প্রসেস করে
+   * হ্যাশ ডুপ্লিকেট হলে আপলোড স্কিপ করে ব্যান্ডউইথ ও মেমোরি সেভ করে
+   */
+  public async uploadChunk(chunkBuffer: Buffer, userId: string): Promise<ChunkUploadResponse> {
+    const hash = this.computeSHA256(chunkBuffer);
+    const existingChunk = this.chunkRegistry.get(hash);
+
+    if (existingChunk) {
+      // 🟢 Deduplication Hit: ফাইল ব্লকটি সার্ভারে অলরেডি আপলোড হয়ে গেছে!
+      // আমরা নতুন করে আপলোড না করে কেবল রেফারেন্স কাউন্ট ১ বাড়িয়ে দেব
+      existingChunk.refCount += 1;
+      this.chunkRegistry.set(hash, existingChunk);
+      
+      return {
+        chunkHash: hash,
+        isDuplicate: true,
+        uploadedPath: existingChunk.storagePath,
+      };
+    }
+
+    // 🔴 Deduplication Miss: ফাইল ব্লকটি একদম নতুন ও ইউনিক!
+    // আমরা ফাইল ব্লকটি ক্লাউড অবজেক্ট স্টোরেজে (AWS S3) সেভ করব
+    const dummyStoragePath = `s3://cloud-drive-bucket/chunks/${hash.slice(0, 2)}/${hash}.bin`;
+    
+    // ফাইল ইনডেক্সে সেভ করি
+    this.chunkRegistry.set(hash, {
+      storagePath: dummyStoragePath,
+      refCount: 1,
+    });
+
+    return {
+      chunkHash: hash,
+      isDuplicate: false,
+      uploadedPath: dummyStoragePath,
+    };
+  }
+
+  /**
+   * ফাইলের চাঙ্কের রেফারেন্স রিলিজ করে
+   * রেফারেন্স কাউন্ট ০ হলে চাঙ্কটি অবজেক্ট স্টোরেজ থেকে ডিলিট করা হবে (Garbage Collector)
+   */
+  public async releaseChunk(hash: string): Promise<void> {
+    const chunk = this.chunkRegistry.get(hash);
+    if (!chunk) return;
+
+    chunk.refCount -= 1;
+    if (chunk.refCount <= 0) {
+      // S3 স্টোরেজ থেকে ফাইল মুছে ফেলার ব্যাকগ্রাউন্ড ইভেন্ট জেনারেট হবে
+      this.chunkRegistry.delete(hash);
+      console.log(`Garbage Collector: Deleted chunk ${hash} from S3 storage.`);
+    } else {
+      this.chunkRegistry.set(hash, chunk);
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+পেটাবাইট স্কেলের ডিস্ট্রিবিউটেড ফাইল সিস্টেমে প্রোডাকশনের ৩টি জটিল প্রবলেম ও স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Dynamic Sync Conflicts (Optimistic Concurrency Control)
+যখন দুজন কোলাবোরেটর অফলাইন অবস্থায় একই এক্সেল শিট মডিফাই করেন এবং পরবর্তীতে অনলাইনে ফিরে আসেন, তখন ডিভাইস B ডিভাইস A-এর ফাইল ওভাররাইট করে ডেটা লস ঘটাতে পারে।
+* **মিটিগেশন (Optimistic Concurrency Control - OCC):** মেটাডাটা সার্ভারে আমরা প্রতিটি ফাইলের সাথে একটি `version` নাম্বার ট্র্যাক করব। যখন ডিভাইস B ফাইল সিঙ্ক করার রিকোয়েস্ট পাঠাবে, তাকে তার লাস্ট ডাউনলোড করা ভার্সন নাম্বারটি দিতে হবে। যদি ডাটাবেসের কারেন্ট ভার্সন অলরেডি আপডেট হয়ে থাকে (যেমন ডিভাইস A আগে কমপ্লিট করেছে), তবে সার্ভার `409 Conflict` রেসপন্স দেবে। ক্লায়েন্ট ডিভাইস তখন ইউজারের কাছে কনফ্লিক্ট দেখাবে এবং ২ ফাইল মার্জ বা আলাদা দুটি কপি সেভ করার ডিসিশন নেবে।
+
+#### ২. Petabyte Scale Cost Optimization (Cold vs Hot Storage Lifecycle)
+ইনজেস্ট করা ফাইলগুলোর ৯০% আপলোডের ৩০ দিন পার হয়ে যাওয়ার পর আর কখনই কোনো ইউজার রিড বা অ্যাক্সেস করে না। পেটাবাইট স্কেলের ডেটা হাই-পারফরম্যান্স SSD তে বছরের পর বছর রেখে দেওয়া লাখ লাখ টাকার ক্লাউড লস।
+* **মিটিগেশন (Storage Class Lifecycle Policies):** আমরা একটি অটোমেটেড পলিসি জেনারেট করব যা প্রতি ৩০ দিন পর পর আন-অ্যাক্সেসড চাঙ্কগুলোকে **S3 Standard (Hot)** থেকে **S3 Standard-IA (Infrequent Access)** এ পাঠাবে। এবং ৯০ দিন পর ফাইলগুলোকে **AWS S3 Glacier Deep Archive (Cold Storage)** ক্লাসে ট্রান্সফার করবে। এতে আমাদের মান্থলি ক্লাউড বিল **৮০% পর্যন্ত হ্রাস** পাবে।
+
+#### ৩. Deduplication Cross-User Side-Channel Exploit (Security Leak)
+কোনো ইউজার একটি সিক্রেট ফাইল আপলোড করার সময় সিস্টেম যদি সাথে সাথে বলে "File already exists (Upload skipped)", তবে ওই ইউজার সাথে সাথে টের পেয়ে গেল যে আমাদের ড্রাইভ সার্ভারে অন্য কেউ ঠিক একই ফাইলটি অলরেডি স্টোর করে রেখেছে! এটি একটি মারাত্মক ইনফরমেশন লিক সিকিউরিটি হোল।
+* **মিটিগেশন (Proof of Custody - PoC):** ক্লায়েন্ট কেবল ফাইলের SHA-256 হ্যাশ পাঠাবে না। সার্ভার ক্লায়েন্টকে একটি চ্যালেঞ্জ পাঠাবে (যেমন: "ফাইলের ১০ম বাইট থেকে ১০০তম বাইটের র্যান্ডম হ্যাশ ক্যালকুলেট করে দেখাও")। এটি প্রমাণ করে যে ফাইলটি আসলেই ক্লায়েন্ট ডিভাইসে ফিজিক্যালি উপস্থিত আছে এবং কেবল ডোপ অনুমান করে হ্যাশ পাঠানো হচ্ছে না। একেই বলে **Proof of Custody (PoC)**।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 07 (Ticketmaster High-Concurrency Booking Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 08 (Google Drive & Dropbox: Distributed File Storage)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 09 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১২টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ০৯ (Web Crawler):** বুঝবো কীভাবে BFS গ্রাফ ট্রাভার্সাল, ডুপ্লিকেট ইউআরএল ফিল্টারিং এবং Robots.txt মেনে হাই-স্পিড ওয়েব ক্রলিং করতে হয়।
+- **চ্যাপ্টার ১০ (Distributed Notification System):** জানবো কীভাবে প্রায়োরিটি কিউ ব্যবহার করে পুশ নোটিফিকেশন মিলি-সেকেন্ডে পাঠাতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 08 (Google Drive & Dropbox Distributed File Storage Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 09 (Web Crawler: Search Engine Indexer)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
