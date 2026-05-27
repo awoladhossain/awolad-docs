@@ -41,8 +41,8 @@ flowchart TD
         HW[Physical CPU, RAM, HDD/SSD, NIC]
     end
     
-    App -->|1. System Call| Syscall
-    Drivers -->|2. Direct Control| HW
+    App -->|"1. System Call"| Syscall
+    Drivers -->|"2. Direct Control"| HW
     
     style App fill:#1e3a8a,stroke:#3b82f6,color:#fff
     style Syscall fill:#7c2d12,stroke:#f97316,color:#fff
@@ -133,16 +133,16 @@ flowchart LR
 ```mermaid
 flowchart TD
     subgraph SelectPoll ["১. select / poll - O(N) Scanning"]
-        S_App[User App] -->|Passes List of 10,000 FDs| S_Kernel[Kernel Space]
-        S_Kernel -->|Scans all FDs one by one| S_Result[Returns all FDs]
-        S_App -->|Loops through all 10,000 FDs to find active| S_Done[Process Active FD]
+        S_App[User App] -->|"Passes List of 10,000 FDs"| S_Kernel[Kernel Space]
+        S_Kernel -->|"Scans all FDs one by one"| S_Result[Returns all FDs]
+        S_App -->|"Loops through all 10,000 FDs to find active"| S_Done[Process Active FD]
     end
     
     subgraph Epoll ["২. epoll (Linux Specific) - O(1) Event-driven"]
-        E_App[User App] -->|Register FDs to epoll instance| E_RBTree["Red-Black Tree in Kernel"]
-        Network[Network Activity] -->|Interrupt Handler| E_ReadyList["Ready List (Queue)"]
-        E_App -->|epoll_wait()| E_ReadyList
-        E_ReadyList -->|Only returns active FDs instantly| E_App
+        E_App[User App] -->|"Register FDs to epoll instance"| E_RBTree["Red-Black Tree in Kernel"]
+        Network[Network Activity] -->|"Interrupt Handler"| E_ReadyList["Ready List (Queue)"]
+        E_App -->|"epoll_wait()"| E_ReadyList
+        E_ReadyList -->|"Only returns active FDs instantly"| E_App
     end
 ```
 
@@ -205,9 +205,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    NormalCode[মেইন অ্যাপ্লিকেশন রান হচ্ছে] -->|1. SIGINT / Ctrl+C Received| Interrupted[মাঝপথে কোড ইন্টারাপ্ট!]
-    Interrupted -->|2. Jumps to| SignalHandler[কাস্টম সিগন্যাল হ্যান্ডলার]
-    SignalHandler -->|3. Calls non-reentrant malloc()| Deadlock["Deadlock / Memory Corruption!"]
+    NormalCode[মেইন অ্যাপ্লিকেশন রান হচ্ছে] -->|"1. SIGINT / Ctrl+C Received"| Interrupted[মাঝপথে কোড ইন্টারাপ্ট!]
+    Interrupted -->|"2. Jumps to"| SignalHandler[কাস্টম সিগন্যাল হ্যান্ডলার]
+    SignalHandler -->|"3. Calls non-reentrant malloc()"| Deadlock["Deadlock / Memory Corruption!"]
     style Deadlock fill:#7f1d1d,stroke:#ef4444,color:#fff
 ```
 
