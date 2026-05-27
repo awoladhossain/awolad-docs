@@ -48,6 +48,14 @@ function getMermaidChart(children: React.ReactNode): string | null {
 }
 
 const components = {
+  Math: (props: { children: React.ReactNode }) => (
+    <div className="my-6 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-6 py-4.5 backdrop-blur-sm flex items-center justify-center font-mono text-sm md:text-base text-emerald-300 shadow-sm shadow-emerald-950/20">
+      <div className="text-center font-semibold tracking-wide select-all overflow-x-auto whitespace-nowrap scrollbar-none w-full">
+        {props.children}
+      </div>
+    </div>
+  ),
+
   h2: (props: ComponentPropsWithoutRef<'h2'>) => {
     const text = props.children?.toString() || '';
     const id = text
