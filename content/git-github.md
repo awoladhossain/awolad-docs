@@ -415,9 +415,9 @@ flowchart TD
         RemoteRepo["Remote Repository <br> (origin)"]
     end
     
-    LocalRepo -->|1. git push| RemoteRepo
-    RemoteRepo -->|2. git fetch <br> (Updates origin/main pointer)| LocalRepo
-    RemoteRepo -->|3. git pull <br> (Fetch + Automatic Merge)| LocalRepo
+    LocalRepo -- "1. git push" --> RemoteRepo
+    RemoteRepo -- "2. git fetch <br> (Updates origin/main pointer)" --> LocalRepo
+    RemoteRepo -- "3. git pull <br> (Fetch + Automatic Merge)" --> LocalRepo
 ```
 
 ### ক. Remote Commands:
