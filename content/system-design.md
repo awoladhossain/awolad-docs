@@ -62,7 +62,7 @@ flowchart LR
 | **06** | [Twitter/X (News Feed & Timeline)](#-chapter-06-twitterx-news-feed--timeline-fanout-engine) | 🟢 **Active** | Fanout-on-write vs Fanout-on-read, Push vs Pull |
 | **07** | [Ticketmaster (Ticketing Engine)](#-chapter-07-ticketmaster-high-concurrency-booking-engine) | 🟢 **Active** | High-Concurrency Booking, Distributed Locking, Queueing System |
 | **08** | [Google Drive / Dropbox](#-chapter-08-google-drive--dropbox-distributed-file-storage-engine) | 🟢 **Active** | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
-| **09** | Web Crawler (Search Engine Indexer) | 🔒 *Locked* | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
+| **09** | [Web Crawler (Search Engine Indexer)](#-chapter-09-web-crawler-search-engine-indexer) | 🟢 **Active** | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
 | **10** | Distributed Notification System | 🔒 *Locked* | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
 | **11** | API Gateway & Distributed Rate Limiter | 🔒 *Locked* | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
 | **12** | Airbnb (Hotel/Home Booking) | 🔒 *Locked* | Double Booking Prevention, Temporal Querying, Geo-search |
@@ -1349,14 +1349,182 @@ export class ChunkDeduplicationManager {
 
 ---
 
-## 🔒 Chapters 09 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 09: Web Crawler (Search Engine Indexer)
 
-বাকি ১২টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+গুগল বা বিং-এর মতো সার্চ ইঞ্জিনের জন্য কোটি কোটি ওয়েব পেজ অটোমেটিকভাবে ক্রল করা এবং ইনডেক্সিং পাইপলাইনে পাঠানো অত্যন্ত জটিল একটি কাজ। বিলিয়ন স্কেলে ওয়েব ক্রলিংয়ের মূল কারিগরি চ্যালেঞ্জ হলো গ্রাফ ট্রাভার্সাল (BFS), ডোমেইন পোলাইটনেস (Politeness), Robots.txt সম্মান করা এবং ইনফিনিট স্পাইডার ট্র্যাপ বা রিডাইরেকশন লুপ প্রিভেন্ট করা।
 
-যেমন:
-- **চ্যাপ্টার ০৯ (Web Crawler):** বুঝবো কীভাবে BFS গ্রাফ ট্রাভার্সাল, ডুপ্লিকেট ইউআরএল ফিল্টারিং এবং Robots.txt মেনে হাই-স্পিড ওয়েব ক্রলিং করতে হয়।
-- **চ্যাপ্টার ১০ (Distributed Notification System):** জানবো কীভাবে প্রায়োরিটি কিউ ব্যবহার করে পুশ নোটিফিকেশন মিলি-সেকেন্ডে পাঠাতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ওয়েব পেজ থেকে কন্টেন্ট ডাউনলোড এবং তার ভেতরের সব হাইপারলিঙ্ক (`<a href="...">`) এটমিকালি এক্সট্র্যাক্ট করা।
+  - ডাউনলোড করা কন্টেন্ট ক্লাউড অবজেক্ট স্টোরেজে (S3) সেভ করা এবং টেক্সট ডেটা সার্চ ইনডেক্সারে পুশ করা।
+  - প্রতিটি ডোমেইনের **Robots.txt** রুলস পড়া ও কঠোরভাবে মেনে চলা।
+- **Non-Functional:**
+  - **Massive Scalability:** প্রতি মাসে ১৫ বিলিয়ন (15 Billion) পেজ ক্রল করার ক্ষমতা থাকতে হবে।
+  - **Strict Domain Politeness:** কোনো ওয়েবসাইটকে অতিরিক্ত রিকোয়েস্ট পাঠিয়ে যাতে ডাউন না করা হয় (DoS Attack প্রিভেনশন)।
+  - **High Fault Tolerance:** ডেড লিংক, স্লো রেসপন্স, ৪MB পেজ সাইজ এবং মাল্টিপল রিডাইরেকশন এরর সুন্দরভাবে হ্যান্ডেল করা।
+
+### ২. Back-of-the-envelope Estimation
+* **ক্রলার থ্রুপুট (Page Crawl QPS):**
+  * মাসিক ক্রল টার্গেট = ১৫ বিলিয়ন পেজ
+  * দৈনিক ক্রল রেট = ১৫,০০০,০০০,০০০ / ৩০ দিন = ৫০০,০০০,০০০ পেজ / দিন
+  * **Crawl Download QPS = ৫০০,০০০,০০০ / ৮৬,৪০০ সেকেন্ড ≈** **5,800 pages/sec (Average)**
+* **স্টোরেজ রিকোয়ারমেন্টস (Raw HTML Cache - 1 Year):**
+  * এভারেজ পেজ সাইজ = ১০০ কিলোবাইট
+  * দৈনিক ইনজেস্ট স্পেস = ৫০০,০০০,০০০ * ১০০ KB = **50 Terabytes / day**
+  * **১ বছরের টোটাল প্রয়োজনীয় মেমোরি ≈** **18 Petabytes** (তাই S3 Glacier বা অবজেক্ট স্টোরেজ ব্যবহার মাস্ট)।
+* **DNS রিজলভার ওভারহেড:**
+  * সেকেন্ডে ৫,৮০০ পেজ ক্রল করার অর্থ হলো প্রতি সেকেন্ডে ৫,৮০০ টি DNS রিজলভিং কুয়েরি জেনারেট হওয়া। এটি গ্লোবাল পাবলিক DNS-এ পাঠালে সাথে সাথে আমাদের ব্লক করে দেবে। তাই একটি লোকাল ডিস্ট্রিবিউটেড DNS ক্যাশিং সার্ভার ম্যান্ডেটরি।
+
+### ৩. API & Database Schema Design
+ডিস্ট্রিবিউটেড ক্রলাররা ব্যাকগ্রাউন্ড ডেমো ওয়ার্কার হিসেবে কাজ করে, তাই তাদের কোনো ডিরেক্ট ইউজার ফেসড API থাকে না। তারা **Frontier Queue** থেকে ইনপুট নেয় ও প্রসেসিং আউটপুট দেয়।
+
+#### Database Tables Schema (Crawl Frontier Storage)
+ডিজিটাল ইউআরএল-এর স্টেট এবং প্রায়োরিটি ট্র্যাক করার জন্য ডিস্ট্রিবিউটেড **PostgreSQL/Cassandra** নোএসকিউএল ইনডেক্স:
+
+```sql
+CREATE TABLE crawl_frontier (
+    url_hash varchar(64) PRIMARY KEY,
+    url varchar(2048),
+    domain varchar(255),
+    status varchar(20), -- 'DISCOVERED', 'IN_PROGRESS', 'CRAWLED', 'FAILED'
+    last_crawled_at timestamp,
+    priority int
+);
+
+CREATE TABLE robots_cache (
+    domain varchar(255) PRIMARY KEY,
+    rules_text text,
+    expires_at timestamp
+);
+```
+
+### ৪. High-Level Architecture
+ডিস্ট্রিবিউটেড ক্রলিং ফ্লো ও ডি-ডুপ্লিকেশন পাইপলাইন নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Frontier["Crawl Frontier URL Queue"] -->|1. Fetch Next URL| PolitenessQueue["Politeness Queue Manager Redis Domain Queues"]
+    PolitenessQueue -->|2. Get Safe Host URL| CrawlWorker["Distributed Crawl Workers"]
+    
+    CrawlWorker -->|3. DNS Resolve Check| DNSCache["Local Caching DNS Server"]
+    CrawlWorker -->|4. Request robots.txt| TargetServer["Target Web Server"]
+    
+    CrawlWorker -->|5. Download HTML| HTMLParser["HTML Parser and Link Extractor"]
+    
+    HTMLParser -->|6. Save Raw Page| RawStore["Cloud Object Storage S3"]
+    HTMLParser -->|7. Discovered Links| DedupeService["URL Deduplication Filter SHA256"]
+    
+    DedupeService -->|8. New Unique URLs| Frontier
+    
+    style Frontier fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style DNSCache fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style HTMLParser fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style RawStore fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Politeness and Robots.txt Manager
+নিচে একটি প্রোডাকশন-রেডি **Crawl Politeness Manager** কোড দেওয়া হলো যা Redis ক্যাশ ব্যবহার করে Robots.txt-এর রুলস ভ্যালিডেট করে এবং ডোমেইন প্রতি ২ সেকেন্ডের লকিং পোলাইটনেস এনফোর্স করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface CrawlTask {
+  url: string;
+  domain: string;
+}
+
+export class CrawlPolitenessManager {
+  private static readonly POLITENESS_DELAY_MS = 2000; // একই ডোমেইনে সর্বোচ্চ ১টি রিকোয়েস্ট প্রতি ২ সেকেন্ডে
+  private static readonly DISALLOWED_ROBOTS_KEY = "robots:disallowed:";
+
+  /**
+   * ইউআরএল থেকে ডোমেইন এক্সট্র্যাক্ট করে
+   */
+  public extractDomain(urlStr: string): string {
+    try {
+      const url = new URL(urlStr);
+      return url.hostname;
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * Robots.txt ভ্যালিডেট করে পাথ অ্যালাউড কি না নিশ্চিত করে
+   */
+  public async isUrlAllowed(urlStr: string): Promise<boolean> {
+    const domain = this.extractDomain(urlStr);
+    if (!domain) return false;
+
+    // Robots disallow list loaded from Redis cache
+    const disallowRules = await redis.smembers(`${CrawlPolitenessManager.DISALLOWED_ROBOTS_KEY}${domain}`);
+    
+    const url = new URL(urlStr);
+    for (const rule of disallowRules) {
+      if (url.pathname.startsWith(rule)) {
+        console.log(`Crawl Blocked: Robots.txt disallows path ${url.pathname} on ${domain}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * পোলাইটনেস লক অ্যাকোয়ার করে
+   * নির্দিষ্ট ডোমেইনে ২ সেকেন্ডের মধ্যে অন্য কোনো ক্রলার রিকোয়েস্ট পাঠাতে পারবে না
+   */
+  public async acquireCrawlPermission(domain: string): Promise<boolean> {
+    const lockKey = `crawl:lock:domain:${domain}`;
+    
+    // NX: key না থাকলে সেট হবে, EX: ২ সেকেন্ডের জন্য লক থাকবে
+    const lock = await redis.set(lockKey, "ACTIVE", "NX", "PX", CrawlPolitenessManager.POLITENESS_DELAY_MS);
+    
+    if (lock === "OK") {
+      return true; // লক সাকসেস!
+    }
+    
+    return false; // লক ফেইল! পোলাইটনেস ভায়োলেশন এড়াতে হোল্ড করা হবে
+  }
+
+  /**
+   * ডোমেইনে অফলাইন রুল রেজিস্টার করে
+   */
+  public async registerDisallowedPath(domain: string, path: string): Promise<void> {
+    await redis.sadd(`${CrawlPolitenessManager.DISALLOWED_ROBOTS_KEY}${domain}`, path);
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বিলিয়ন-স্কেল ক্রলিং ইঞ্জিনে প্রোডাকশনে ফেস করা ৩টি চরম প্রবলেম ও তাদের সল্যুশন:
+
+#### ১. DNS Resolution Bottleneck (Network Blockages)
+সেকেন্ডে ৫,৮০০ রিকোয়েস্ট প্রসেস করতে গেলে সমপরিমাণ DNS Lookup করতে হয়। যেহেতু DNS Resolution একটি সিঙ্ক্রোনাস এবং ব্লকিং অপারেশন, এটি বাইরের পাবলিক DNS এ পাঠালে লেটেন্সি ৫ সেকেন্ড পার হয়ে যাবে এবং আইপি ব্লক খাবে।
+* **মিটিগেশন (DNS Caching & Asynchronous Resolvers):** আমরা আমাদের ডিস্ট্রিবিউটেড নেটওয়ার্ক পডগুলোতে লোকাল ক্যাশিং DNS সার্ভার (যেমন **Unbound / CoreDNS**) ডেপ্লয় করব। আমাদের ক্রলিং ইঞ্জিন ডিরেক্টলি লোকাল ক্যাশ থেকে IP রিজলভ করবে। এছাড়া অ্যাসিঙ্ক্রোনাস এবং নন-ব্লকিং DNS কুয়েরি মেকানিজম ব্যবহার করা হবে যাতে একটি থ্রেড DNS রিজলভিং-এর জন্য ঝুলে না থাকে।
+
+#### ২. Spider Traps & Dynamic Path Loops
+কিছু ওয়েবসাইট ডাইনামিকালি ইনফিনিট ক্যালেন্ডার বা রিডাইরেকশন লুপ তৈরি করে (যেমন: `/calendar/2026/next-day` যা অফুরন্ত লিংক জেনারেট করে)। ক্রলার এর ভেতরে ঢুকে পড়লে একই সাইটের মিলিয়ন লিংকে ঘুরে রিসোর্স নষ্ট করবে।
+* **মিটিগেশন (Depth Limiting & Bloom Filter Hash Check):** আমরা দুটি ফিল্টার বসাব:
+  * **Max Depth Guard:** যেকোনো ওয়েবসাইটের জন্য BFS ডেপথ সর্বোচ্চ ১৫ লেয়ারে লক করে দেওয়া হবে।
+  * **Bloom Filter Document Duplication:** একটি পেজ ডাউনলোডের পর তার HTML কন্টেন্টকে হ্যাশ করব। ব্লুম ফিল্টার দিয়ে যদি দেখি একই ডোমেইনের কন্টেন্ট হ্যাশ ৫ বারের বেশি ডুপ্লিকেট হচ্ছে (ভিন্ন ইউআরএল-এর অধীনে), তবে বুঝবো এটি একটি স্পাইডার ট্র্যাপ এবং সেই ডোমেইন ক্রলিং করা সাথে সাথে ব্ল্যাকলিস্ট করব।
+
+#### ৩. Crawl Politeness Queue Skewing (Host-based Queues)
+একটি সিঙ্গেল প্রসেসিং কিউ ব্যবহার করলে মাল্টিপল ক্রলার থ্রেড একই সময়ে একই ডোমেইনের (যেমন `wikipedia.org`) মাল্টিপল লিংক তুলে আনতে পারে, যার ফলে পোলাইটনেস রুল ব্রেক হবে এবং আইপি ব্যান খাবে।
+* **মিটিগেশন (Host-based Sub-Queues):** আমরা Crawl Frontier-কে Domain Name অনুযায়ী শার্ডিং করব। প্রতিটি ডোমেইনের জন্য আলাদা ডেডিকেটেড FIFO সাব-কিউ থাকবে। একটি সেন্ট্রাল **Queue Coordinator** প্রতি সাব-কিউ-এর বিপরীতে **ঠিক একটি মাত্র ক্রলিং থ্রেড** অ্যাসাইন করবে। এর ফলে একটি ডোমেইনে কখনো প্যারালাল রিকোয়েস্ট যাবে না, যা নিখুঁত পোলাইটনেস এনশিওর করবে।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 08 (Google Drive & Dropbox Distributed File Storage Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 09 (Web Crawler: Search Engine Indexer)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 10 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১১টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১০ (Distributed Notification System):** জানবো কীভাবে প্রায়োরিটি কিউ ব্যবহার করে পুশ নোটিফিকেশন মিলি-সেকেন্ডে পাঠাতে হয়।
+- **চ্যাপ্টার ১১ (API Gateway):** বুঝবো কীভাবে Redis Lua দিয়ে হাই-স্পিড ডিস্ট্রিবিউটেড রেট লিমিটিং করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 09 (Web Crawler Search Engine Indexer)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 10 (Distributed Notification System)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
