@@ -66,12 +66,12 @@ flowchart TD
 
 ### 🌟 মডিউল ১: কম্পিউটেশনের মৌলিক ভিত্তি (The Foundations of Computation)
 * **চ্যাপ্টার ১: টাইম ও স্পেস কমপ্লেক্সিটি এনালাইসিস (Time & Space Complexity)**
-  * $O(1)$, $O(\log N)$, $O(N)$, $O(N \log N)$, $O(N^2)$ এর বাস্তব অনুভূতি ও ওএস প্রোফাইল।
+  * `O(1)`, `O(log N)`, `O(N)`, `O(N log N)`, `O(N^2)` এর বাস্তব অনুভূতি ও ওএস প্রোফাইল।
   * কীভাবে কোড না রান করেই কার্নেল ও সিপিইউর স্পিড প্রিডিক্ট করা যায়।
 * **চ্যাপ্টার ২: অ্যালগরিদমীয় গণিত ও সংখ্যার খেলা (Algorithmic Number Theory)**
   * Sieve of Eratosthenes (মৌলিক সংখ্যা খোঁজার স্বর্গীয় মেথড)।
   * GCD/LCM (ইউক্লিডীয় সূত্র) এবং Modular Arithmetic (বড় সংখ্যার ওভারফ্লো ঠেকানো)।
-  * Fast Exponentiation (দ্বিগুণ গতিতে পাওয়ার $A^B$ হিসাব করা)।
+  * Fast Exponentiation (দ্বিগুণ গতিতে পাওয়ার `A^B` হিসাব করা)।
 * **চ্যাপ্টার ৩: লুপ কন্ট্রোল ও নেস্টেড প্যাটার্ন আর্ট (Loops & Nested Analysis)**
   * লুপের ইনভেরিয়েন্ট মেকানিজম এবং নেস্টেড লুপের রানিং টাইম হিসেব।
 * **চ্যাপ্টার ৪: ফাংশন ও মেমরি কল স্ট্যাক (Functions & Call Stack Mechanics)**
@@ -86,7 +86,7 @@ flowchart TD
   * ব্যাকট্র্যাকিংয়ের মাধ্যমে N-Queens এবং সুডোকু সলভার (Sudoku Solver) তৈরি।
 * **চ্যাপ্টার ৭: বিট ম্যানিপুলেশন ম্যাজিক (Bit Manipulation Internals)**
   * Bitwise XOR এর অতিপ্রাকৃতিক ব্যবহার এবং বিট মাস্কিং (Bit Masking)।
-  * Subset Generation এবং $O(1)$ সময়ে Power of 2 চেক করা।
+  * Subset Generation এবং `O(1)` সময়ে Power of 2 চেক করা।
 
 ### ⚡ মডিউল ৩: রৈখিক ডাটাস্ট্রাকচার (Linear Data Structures)
 * **চ্যাপ্টার ৮: অ্যারে, ডাইনামিক ভেক্টর ও উইন্ডো মেথড (Arrays & Vectors)**
@@ -99,7 +99,7 @@ flowchart TD
   * Single, Double, এবং Circular Linked List।
   * Cycle Detection (Floyd's Tortoise & Hare) এবং Reverse in K-Groups।
 * **চ্যাপ্টার ১১: স্ট্যাক, কিউ ও মনোটোনিক ডাটাস্ট্রাকচার (Stacks & Queues)**
-  * Monotonic Stack (পরবর্তী বড় এলিমেন্ট $O(N)$ এ খোঁজা)।
+  * Monotonic Stack (পরবর্তী বড় এলিমেন্ট `O(N)` এ খোঁজা)।
   * Deque (Double Ended Queue) এবং Sliding Window Maximum সলিউশন।
 
 ### 🌲 মডিউল ৪: অরৈখিক ডাটাস্ট্রাকচার (Non-Linear Data Structures)
@@ -116,7 +116,7 @@ flowchart TD
   * Book Allocation, Aggressive Cows এবং Rotated Array-তে সার্চ করা।
 * **চ্যাপ্টার ১৫: সর্টিং অ্যালগরিদম ও ডিভাইড অ্যান্ড কনকার (Advanced Sorting)**
   * Merge Sort এবং Quick Sort এর ওএস-লেভেল অ্যানালাইসিস।
-  * Counting Sort ও Radix Sort (নন-কম্পারিজন $O(N)$ সর্টিং)।
+  * Counting Sort ও Radix Sort (নন-কম্পারিজন `O(N)` সর্টিং)।
 
 ### 🎨 মডিউল ৬: লোভী নীতি ও গতিশীল প্রোগ্রামিং (Greedy & Dynamic Programming)
 * **চ্যাপ্টার ১৬: লোভী নীতি বা গ্রীডি মেথড (Greedy Algorithms)**
@@ -135,7 +135,7 @@ flowchart TD
   * Bellman-Ford (নেগেটিভ সাইকেল ডিটেকশন) এবং Floyd-Warshall (অল-পেয়ার্স শর্টেস্ট পাথ)।
 * **চ্যাপ্টার ২০: স্প্যানিং ট্রি ও কানেক্টিভিটি (MST & Disjoint Set Union)**
   * Kruskal's & Prim's Algorithm (ন্যূনতম খরচে সম্পূর্ণ নেটওয়ার্ক কানেক্ট করা)।
-  * Disjoint Set Union (DSU) এবং Path Compression (গতি যখন প্রায় ধ্রুবক $O(\alpha(N))$)।
+  * Disjoint Set Union (DSU) এবং Path Compression (গতি যখন প্রায় ধ্রুবক `O(α(N))`)।
 
 ### 💎 মডিউল ৮: আল্টিমেট প্রতিযোগিতামূলক প্রোগ্রামিং রত্ন (Ultimate Advanced CP Gems)
 * **চ্যাপ্টার ২১: রেঞ্জ কোয়েরি ও সেগমেন্ট ট্রি (Segment Trees & Fenwick Trees)**
@@ -152,6 +152,6 @@ flowchart TD
 
 প্রিয় পাঠক, আমাদের এই সূচীপত্রটি কেবল কিছু বিষয়ের তালিকা নয়—এটি হলো আপনার একজন সাধারণ প্রোগ্রামার থেকে **সিস্টেম আর্কিটেক্ট ও প্রবলেম সলভিং মাস্টার** হয়ে ওঠার পবিত্র রুটম্যাপ। 
 
-পরবর্তী পর্বগুলোতে আমরা একে একে এই সূচীপত্রের প্রতিটা বিষয় গভীর থেকে ধরব, C++ কোড নিজে হাতে লাইভ ইমপ্লিমেন্ট করব, তার বিগ-ও ($O$) মেমরি ল্যাগ এনালাইসিস করব এবং অবশেষে সেটির ওপর LeetCode/Codeforces-এর চমৎকার প্রবলেমগুলো সলভ করে দক্ষতা ঝালিয়ে নেব।
+পরবর্তী পর্বগুলোতে আমরা একে একে এই সূচীপত্রের প্রতিটা বিষয় গভীর থেকে ধরব, C++ কোড নিজে হাতে লাইভ ইমপ্লিমেন্ট করব, তার বিগ-ও (`O`) মেমরি ল্যাগ এনালাইসিস করব এবং অবশেষে সেটির ওপর LeetCode/Codeforces-এর চমৎকার প্রবলেমগুলো সলভ করে দক্ষতা ঝালিয়ে নেব।
 
 **আপনার বেল্ট বেঁধে নিন, কীবোর্ড প্রস্তুত করুন। আমরা পরবর্তী চ্যাপ্টারেই শুরু করছি চ্যাপ্টার ১: টাইম ও স্পেস কমপ্লেক্সিটির রোমাঞ্চকর গভীর বিশ্লেষণ!**
