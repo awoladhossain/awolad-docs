@@ -67,7 +67,7 @@ flowchart LR
 | **11** | [API Gateway & Distributed Rate Limiter](#-chapter-11-api-gateway--distributed-rate-limiter) | 🟢 **Active** | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
 | **12** | [Airbnb (Hotel/Home Booking)](#-chapter-12-airbnb-hotelhome-booking) | 🟢 **Active** | Double Booking Prevention, Temporal Querying, Geo-search |
 | **13** | [Robinhood / Stock Trading Engine](#-chapter-13-robinhood--stock-trading-engine) | 🟢 **Active** | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
-| **14** | Distributed Cache (Redis Internals) | 🔒 *Locked* | Replication, Sentinel, Clustering & Partitioning, Eviction (LRU) |
+| **14** | [Distributed Cache (Redis Internals)](#-chapter-14-distributed-cache-redis-internals) | 🟢 **Active** | Replication, Sentinel, Clustering & Partitioning, Eviction (LRU) |
 | **15** | Metrics & Monitoring System (Prometheus) | 🔒 *Locked* | Time Series DB (TSDB), Pull vs Push, Metrics Aggregation |
 | **16** | Ad Click Aggregator | 🔒 *Locked* | Real-time Streaming, Apache Flink, Kafka, MapReduce |
 | **17** | Auto-complete / Typeahead Search | 🔒 *Locked* | Trie Data Structure, Frequency Aggregation, Cache Optimization |
@@ -2309,14 +2309,202 @@ export class StockMatchingEngine {
 
 ---
 
-## 🔒 Chapters 14 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 14: Distributed Cache (Redis Internals)
 
-বাকি ৭টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+উচ্চ ক্ষমতার ডিস্ট্রিবিউটেড ক্যাশ ডিজাইন করা আধুনিক আর্কিটেকচারের ব্যাকবোন। একটি ডিস্ট্রিবিউটেড ইন-মেমোরি ক্যাশ (যেমন: Redis) কীভাবে সেকেন্ডে মিলিয়ন কি-ভ্যালু রিকোয়েস্ট আল্ট্রা-লো ল্যাটেন্সিতে প্রসেস করে, কীভাবে মেমোরি ফুরিয়ে গেলে **LRU (Least Recently Used)** অ্যালগরিদম দিয়ে ক্যাশ ডাটা ইভিক্ট করে এবং মাল্টি-নোড ক্লাস্টারিং সিঙ্ক কীভাবে মেইনটেইন করা হয়, তা এই চ্যাপ্টারে বিশদভাবে ব্যাখ্যা করা হলো।
 
-যেমন:
-- **চ্যাপ্টার ১৪ (Distributed Cache - Redis Internals):** জানবো কীভাবে রেডিসের ইন্টারনাল ক্লাস্টারিং, সেন্টিনেল রেপ্লিকেশন এবং LRU ইভিকশন মেকানিজম কাজ করে।
-- **চ্যাপ্টার ১৫ (Metrics & Monitoring System - Prometheus):** বুঝবো কীভাবে TSDB (Time Series DB) ব্যবহার করে পিক আওয়ারে রিয়েল-টাইম মেট্রিক্স স্ক্র্যাপ ও মনিটর করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ফাস্ট কি-ভ্যালু রিড/রাইট অপারেশন (`get`, `put`) সম্পূর্ণ O(1) টাইম কমপ্লেক্সিটিতে সম্পন্ন করা।
+  - প্রতিটি কি-এর জন্য নির্দিষ্ট এক্সপায়ার টাইম (TTL) সাপোর্ট করা।
+  - মেমোরি লিমিট রিচ করলে স্বয়ংক্রিয়ভাবে ক্যাশ থেকে ওল্ডেস্ট বা অব্যবহৃত ডাটা ডিলিট করা (LRU Eviction)।
+- **Non-Functional:**
+  - **Sub-millisecond Latency:** রিড ও রাইট কুয়েরির রেসপন্স টাইম অবশ্যই **< ১ মিলি-সেকেন্ড** হতে হবে।
+  - **Elastic Clustering:** নোড যোগ বা বিয়োগ করলেও হ্যাশ স্লট বন্টন রি-ব্যালেন্সিং করা (Consistent Hashing)।
+  - **Sentinel Master Failover Recovery:** প্রাইমারি নোড ক্র্যাশ করলে সাথে সাথে রেপ্লিকাকে মাস্টারে প্রমোট করা।
+
+### ২. Back-of-the-envelope Estimation
+* **মেমোরি ক্যাপাসিটি লেআউট:**
+  * ধরি, ক্যাশ মেমোরির মোট লিমিট সাইজ = ১০০ মিলিয়ন কী (100M Keys)
+  * প্রতিটি কী-এর এভারেজ সাইজ = ৩২ বাইট স্ট্রিং।
+  * প্রতিটি ভ্যালুর এভারেজ সাইজ = ৫০০ বাইট JSON স্ট্রিং।
+  * **LRU Node Pointer overhead (Doubly Linked List):** ১টি নোডে Key (32B) + Value pointer (8B) + Prev pointer (8B) + Next pointer (8B) = ৫৬ বাইট।
+  * **Hashmap entry metadata:** ৩২ বাইট কী + ৮ বাইট নোড পয়েন্টার = ৪০ বাইট।
+  * **প্রতিটি কি-ভ্যালু জোড়ার মোট মেমোরি সাইজ = ৩২ + ৫০০ + ৫৬ + ৪০ ≈ ৬২৮ বাইট।**
+  * **১০০ মিলিয়ন ইউজারের জন্য প্রয়োজনীয় মেমোরি = ১০০,০০০,০০০ * ৬২৮ বাইট ≈** **62.8 Gigabytes of RAM**। এটি ক্যাশিংয়ের জন্য অত্যন্ত লাইটওয়েট এবং বাজেট-বান্ধব।
+
+### ৩. API & Database Schema Design
+ক্যাশ পলিসি মেমরির ভেতরের ডাটা স্ট্রাকচারে রান করায় এর জন্য কোনো ডাটাবেস টেবিল থাকে না। এর মেইন API ও ইন্টারনাল ডেটা স্ট্রাকচার মেথড নিম্নরূপ:
+- `get(key)`: ক্যাশ থেকে ভ্যালু নিয়ে আসে এবং নোডটিকে লিস্টের প্রথমে আপডেট করে (O(1))।
+- `put(key, value)`: নতুন কি-ভ্যালু ইনসার্ট করে। লিমিট ক্রস করলে ওল্ডেস্ট নোড ইভিক্ট করে (O(1))।
+
+### ৪. High-Level Architecture
+ডিস্ট্রিবিউটেড ক্লাস্টার হ্যাশ রাউটিং, সেন্টিনেল রেপ্লিকেশন এবং ইন্টারনাল LRU ক্যাশ ইভিকশন ইঞ্জিন আর্কিটেকচার নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Cache Client"] -->|1. Hash Key to Slot 0-16383| Router["Consistent Hashing Slot Router"]
+    
+    Router -->|2. Route to Primary Node| RedisPrimary["Redis Primary Node Active Writes"]
+    RedisPrimary -->|3. Sync AOF/RDB| RedisReplica["Redis Replica Node Read-Only"]
+    
+    Sentinel["Redis Sentinel Cluster quorum=2"] -->|4. Heartbeat Monitor| RedisPrimary
+    Sentinel -->|5. Failover Master Promotion| RedisReplica
+    
+    RedisPrimary -->|6. Memory Limit Reached| LRU["LRU Eviction Engine Hashmap Doubly-Linked List"]
+    LRU -->|7. Evict least recently used| EvictNode["Free Up Memory Space"]
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RedisPrimary fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style Sentinel fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style LRU fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Custom LRU Cache Eviction Policy
+নিচে একটি প্রোডাকশন-রেডি **Distributed LRU Cache** ক্লাস দেওয়া হলো যা ওয়ান-স্টেপ O(1) এভিয়েশন গ্যারান্টি দিতে একটি **Hash Map** এবং একটি **Doubly Linked List** এর কম্বিনেশনে তৈরি করা হয়েছে:
+
+```typescript
+class LRUNode<K, V> {
+  public key: K;
+  public value: V;
+  public prev: LRUNode<K, V> | null = null;
+  public next: LRUNode<K, V> | null = null;
+
+  constructor(key: K, value: V) {
+    this.key = key;
+    this.value = value;
+  }
+}
+
+export class DistributedLRUCache<K, V> {
+  private capacity: number;
+  private cacheMap: Map<K, LRUNode<K, V>>;
+  private head: LRUNode<K, V> | null = null;
+  private tail: LRUNode<K, V> | null = null;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.cacheMap = new Map();
+  }
+
+  /**
+   * ক্যাশ থেকে কী রিড করে এবং নোডটিকে লিস্টের মাথায় (Most Recently Used) শিফট করে
+   */
+  public get(key: K): V | null {
+    const node = this.cacheMap.get(key);
+    if (!node) {
+      return null;
+    }
+
+    // ওয়ান-স্টেপ O(1) মেমরিতে নোডটিকে একদম মাথায় পুশ করি
+    this.moveToHead(node);
+    return node.value;
+  }
+
+  /**
+   * নতুন কী-ভ্যালু জোড়া ক্যাশে পুশ করে। ক্যাপাসিটি ক্রস করলে ওল্ডেস্ট Tail নোড ইভিক্ট করে
+   */
+  public put(key: K, value: V): void {
+    const existingNode = this.cacheMap.get(key);
+
+    if (existingNode) {
+      existingNode.value = value;
+      this.moveToHead(existingNode);
+    } else {
+      const newNode = new LRUNode(key, value);
+      
+      // লিমিট ক্রস করলে Tail ইভিক্ট করে মেমোরি রিলিজ করি
+      if (this.cacheMap.size >= this.capacity) {
+        this.evictLeastRecentlyUsed();
+      }
+
+      this.addToHead(newNode);
+      this.cacheMap.set(key, newNode);
+    }
+  }
+
+  private moveToHead(node: LRUNode<K, V>): void {
+    if (node === this.head) {
+      return;
+    }
+
+    this.removeNode(node);
+    this.addToHead(node);
+  }
+
+  private removeNode(node: LRUNode<K, V>): void {
+    if (node.prev) {
+      node.prev.next = node.next;
+    } else {
+      this.head = node.next;
+    }
+
+    if (node.next) {
+      node.next.prev = node.prev;
+    } else {
+      this.tail = node.prev;
+    }
+
+    node.prev = null;
+    node.next = null;
+  }
+
+  private addToHead(node: LRUNode<K, V>): void {
+    if (!this.head) {
+      this.head = node;
+      this.tail = node;
+    } else {
+      node.next = this.head;
+      this.head.prev = node;
+      this.head = node;
+    }
+  }
+
+  private evictLeastRecentlyUsed(): void {
+    if (!this.tail) {
+      return;
+    }
+
+    const tailKey = this.tail.key;
+    this.removeNode(this.tail);
+    this.cacheMap.delete(tailKey);
+  }
+
+  // ক্যাশের কারেন্ট সাইজ রিটার্ন করে
+  public size(): number {
+    return this.cacheMap.size;
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব ডিস্ট্রিবিউটেড ক্যাশিং সিস্টেমে প্রোডাকশনের ৩টি গুরুতর প্রবলেম ও স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Cache Stampede (Thundering Herd / Dogpile Effect)
+উচ্চ মাত্রার ট্রাফিকের সময় কোনো বহুল ব্যবহৃত বা হট কী (যেমন: ট্রেন্ডিং নিউজ বা হোমপেজ কন্টেন্ট) হুট করে এক্সপায়ার হলে, একই মিলি-সেকেন্ডে আসা হাজার হাজার প্যারালাল রিকোয়েস্ট ক্যাশ রিড করতে না পেরে (Cache Miss) একই সাথে আমাদের রিয়েল ডাটাবেসে কুয়েরি পাঠাবে। এতে মূল ডাটাবেসের CPU ১০০% হিট করে সাইট ডাউন হয়ে যাবে।
+* **মিটিগেশন (Singleflight Locks & Probabilistic Early Expiration):** 
+  - **Singleflight Pattern:** আমাদের গেটওয়ে লেয়ারে আমরা একটি `Singleflight Mutex` বসাব। যখন ক্যাশ মিস হবে, তখন শুধুমাত্র প্রথম আসা থ্রেডটিকে ডাটাবেসে রিকোয়েস্ট পাঠিয়ে ডেটা আনার পারমিশন দেওয়া হবে, বাকি সমসাময়িক হাজারো রিকোয়েস্ট সেই থ্রেডের প্রোমিজের জন্য ওয়েট করবে এবং ওয়ান-কুয়েরি ডেটা আসার পর সবাই র্যাম ক্যাশ থেকেই সার্ভিস পাবে।
+  - **XFetch Algorithm:** আমরা **Probabilistic Early Expiration** অ্যালগরিদম ব্যবহার করব। কী-টি একেবারে এক্সপায়ার হওয়ার কিছুক্ষণ আগে (পিক ট্রাফিকের লজিক দিয়ে হিসাব করে) ক্যাশ লেয়ার ব্যাকগ্রাউন্ডে একা একাই ডাটাবেস থেকে রিফ্রেশ করে নেবে, যা লাইভ ইউজারের রেসপন্স টাইম অত্যন্ত সুরক্ষিত রাখে।
+
+#### ২. Redis Asynchronous Replication write-loss during Sentinel Failover
+রেডিসে মাস্টার নোড থেকে স্লেভ নোডে ডেটা রেপ্লিকেশন হয় অ্যাসিক্রোনাসলি (Asynchronously)। যদি একজন ক্লায়েন্ট একটি নতুন কী রাইট করার পরপরই মাস্টার নোডটি ক্র্যাশ করে এবং ডেটা স্লেভ নোডে পৌঁছার আগেই সেন্টিনেল স্লেভ নোডকে নতুন মাস্টার প্রমোট করে, তবে উক্ত ডেটা চিরতরে হারিয়ে যাবে (Write-loss)।
+* **মিটিগেশন (WAIT Synchronous Writes):** যদি আমাদের অ্যাপে কিছু ডেটা ক্যাশেই ফাস্ট পারসিস্ট করা জরুরি হয় (যেমন ওটিপি লকিং কাউন্টার), তবে আমরা সাধারণ `SET` না করে Redis-এর `WAIT numreplicas timeout` মেকানিজম ব্যবহার করব। এই কমান্ডটি সাকসেসফুল রিটার্ন করার আগে অন্তত নির্দিষ্ট সংখ্যক রেপ্লিকাতে ডেটা সিঙ্ক হওয়া শতভাগ নিশ্চিত করবে, যা সেন্টিনেল ফেইলওভারের সময় ওয়ান-পার্সেন্ট রাইট লস বা ডেটা ড্রপ প্রতিরোধ করে।
+
+#### ৩. Elastic Resharding & Slot Redirections during Cluster Scaling
+রেডিস ক্লাস্টার মোট **১৬,৩৮৪ হ্যাশ স্লট** ব্যবহার করে। যখন ক্লাস্টারে নতুন ডাটা ক্যাশ নোড অ্যাড করা হয়, হ্যাশ স্লটগুলো নতুন নোডে ডিস্ট্রিবিউট বা মাইগ্রেট হতে থাকে। মাইগ্রেশন চলাকালীন সময়ে ক্লায়েন্ট যদি কোনো কী-এর জন্য রিকোয়েস্ট পাঠায়, তবে সে ভুল নোডে রিকোয়েস্ট নিয়ে চলে যেতে পারে যা ক্যাশ মিস বাড়াবে।
+* **মিটিগেশন (ASK/MOVED Routing Redirections):** রেডিস ক্লাস্টারের নেティブ ক্লায়েন্ট প্রোটোকল এই সমস্যার সমাধান করে। কোনো কী যদি অলরেডি নতুন নোডে মাইগ্রেট হয়ে যায়, নোডটি রিটার্ন করবে `MOVED` এরর যার সাথে নতুন নোডের আইপি এড্রেস থাকবে। আর কী-টি যদি মাইগ্রেশনের মাঝপথে থাকে, নোডটি রিটার্ন করবে `ASK` এরর। ক্লায়েন্ট তখন সাইলেন্টলি সঠিক ডেডিকেটেড নোডে রুট হয়ে যাবে, যার ফলে শতভাগ ইলাস্টিক স্কেলিং বা লাইভ নোড অ্যাড/রিমুভ করার সময়ও কোনো রিকোয়েস্ট বা ক্যাশ ডেটা ইন্টারাপ্ট হয় না।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 13 (Robinhood / Stock Trading Engine: Matching Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 14 (Distributed Cache - Redis Internals)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 15 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ৬টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১৫ (Metrics & Monitoring System - Prometheus):** বুঝবো কীভাবে TSDB (Time Series DB) ব্যবহার করে পিক আওয়ারে রিয়েল-টাইম মেট্রিক্স স্ক্র্যাপ ও মনিটর করতে হয়।
+- **চ্যাপ্টার ১৬ (Ad Click Aggregator):** জানবো কীভাবে Apache Flink, Kafka এবং MapReduce ব্যবহার করে প্রতি সেকেন্ডে মিলিয়ন ক্লিকে অ্যাড রেভিনিউ ক্যালকুলেট করা যায়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 14 (Distributed Cache - Redis Internals)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 15 (Metrics & Monitoring System - Prometheus)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
