@@ -66,7 +66,7 @@ flowchart LR
 | **10** | [Distributed Notification System](#-chapter-10-distributed-notification-system) | 🟢 **Active** | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
 | **11** | [API Gateway & Distributed Rate Limiter](#-chapter-11-api-gateway--distributed-rate-limiter) | 🟢 **Active** | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
 | **12** | [Airbnb (Hotel/Home Booking)](#-chapter-12-airbnb-hotelhome-booking) | 🟢 **Active** | Double Booking Prevention, Temporal Querying, Geo-search |
-| **13** | Robinhood / Stock Trading Engine | 🔒 *Locked* | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
+| **13** | [Robinhood / Stock Trading Engine](#-chapter-13-robinhood--stock-trading-engine) | 🟢 **Active** | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
 | **14** | Distributed Cache (Redis Internals) | 🔒 *Locked* | Replication, Sentinel, Clustering & Partitioning, Eviction (LRU) |
 | **15** | Metrics & Monitoring System (Prometheus) | 🔒 *Locked* | Time Series DB (TSDB), Pull vs Push, Metrics Aggregation |
 | **16** | Ad Click Aggregator | 🔒 *Locked* | Real-time Streaming, Apache Flink, Kafka, MapReduce |
@@ -2079,14 +2079,244 @@ export class TemporalBookingManager {
 
 ---
 
-## 🔒 Chapters 13 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 13: Robinhood / Stock Trading Engine
 
-বাকি ৮টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+রবিনহুড, কয়েনবেস বা নাসডাকের মতো ফাইন্যান্সিয়াল ট্রেডিং প্ল্যাটফর্মের হার্ট বা প্রান হলো এর **Matching Engine (অর্ডার ম্যাচিং ইঞ্জিন)**। এর কাজ হলো প্রতি সেকেন্ডে লাখ লাখ বাই (Buy) এবং সেল (Sell) অর্ডার রিসিভ করে মিলি-সেকেন্ডের শতভাগ কম ল্যাটেন্সিতে সেগুলোকে **Price-Time Priority (FIFO)** অনুযায়ী ম্যাচ করা। ট্রেডিং সিস্টেমে ডাটাবেসের ACID লক ব্যবহার করা অসম্ভব, তাই কীভাবে ইন-মেমোরি আর্কিটেকচার দিয়ে নাসডাক স্কেলের অর্ডার বুক ডিজাইন করা যায়, তা নিচে বিস্তারিত আলোচনা করা হলো।
 
-যেমন:
-- **চ্যাপ্টার ১৩ (Robinhood / Stock Trading Engine):** বুঝবো কীভাবে LMAX Disruptor ব্যবহার করে মিলিয়ন মিলিয়ন ফাইনান্সিয়াল অর্ডার ম্যাচ করতে হয়।
-- **চ্যাপ্টার ১৪ (Distributed Cache - Redis Internals):** জানবো কীভাবে রেডিসের ইন্টারনাল ক্লাস্টারিং, সেন্টিনেল রেপ্লিকেশন এবং LRU ইভিকশন মেকানিজম কাজ করে।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - দুই ধরনের অর্ডার সাপোর্ট করা: Limit Order (নির্দিষ্ট প্রাইজ বা তার ভালো প্রাইজে বাই/সেল) ও Market Order (মার্কেটের কারেন্ট বেস্ট প্রাইজে সাথে সাথে এক্সিকিউশন)।
+  - প্রতিটি স্টকের বাই অর্ডার (Bids) ও সেল অর্ডার (Asks) প্রাইজ-টাইম প্রায়োরিটি (FIFO) মেইনটেইন করে ইনস্ট্যান্ট ম্যাচ করা।
+  - সফল ম্যাচিংয়ের পর ইনস্ট্যান্ট ট্রেড এক্সিকিউশন রিপোর্ট জেনারেট করা।
+- **Non-Functional:**
+  - **Ultra-low Latency (Microsecond scale):** প্রতিটি অর্ডার ম্যাচ করতে প্রসেসিং ওভারহেড অবশ্যই **< ৫০ মাইক্রো-সেকেন্ড (50 microseconds)** হতে হবে।
+  - **Zero Data Loss & High Durability:** সিস্টেম ক্র্যাশ বা পাওয়ার অফ হলেও একটিও অর্ডার ডেটা বা ট্রেড রেকর্ড হারানো যাবে না।
+  - **Strict Deterministic Sequencing:** সমস্ত অর্ডার একদম নিখুঁত সিকোয়েন্সে প্রসেস হতে হবে, কোনো রেস কন্ডিশন থাকা চলবে না।
+
+### ২. Back-of-the-envelope Estimation
+* **থ্রুপুট ও ল্যাটেন্সি ক্যালকুলেশন:**
+  * পিক আওয়ারে মোট অর্ডার ভলিউম = ৫০০,০০০ অর্ডার / সেকেন্ড (500k QPS)
+  * টার্গেট ম্যাচিং ল্যাটেন্সি = ৫০ মাইক্রো-সেকেন্ড (০.০৫ মিলি-সেকেন্ড) প্রতি অর্ডার।
+  * **সিঙ্গেল-থ্রেড প্রসেসিং ক্যাপাসিটি:**
+    * একটি স্ট্যান্ডার্ড CPU কোড যদি ৫০ মাইক্রো-সেকেন্ডে ১টি অর্ডার ম্যাচ করে, তবে প্রতি সেকেন্ডে সেই কোড সর্বোচ্চ ১,০০০,০০০ / ৫০ = ২০,০০০ অর্ডার প্রসেস করতে পারবে।
+    * তাহলে ৫০০,০০০ QPS হ্যান্ডেল করতে আমাদের এপিআই ট্রানজেকশনে ডাটাবেস লক (যা করতে ৫ মিলি-সেকেন্ডের বেশি সময় লাগে) ব্যবহার করা সম্পূর্ণ অসম্ভব।
+    * এই স্কেল পাওয়ার জন্য আমাদের **স্টক সিম্বল শার্ডিং (Stock Sharding)** এবং মেমরিতে ওয়ান-থ্রেড **LMAX Disruptor Ring Buffer** আর্কিটেকচার ব্যবহার করতে হবে।
+
+### ৩. API & Database Schema Design
+ট্রেড রিকোয়েস্ট এপিআই ও অ্যাসিঙ্ক্রোনাস ট্রানজেকশন রাইট স্কিমা:
+- `POST /api/v1/orders`
+  - Body: `{ symbol: "AAPL", side: "BUY", type: "LIMIT", price: 175.50, quantity: 100, userId: 1205 }` -> Returns `{ orderId: "ord_99a8x", status: "QUEUED" }`
+
+#### Database Schema Design (For Post-Trade Ledger Audit)
+অর্ডার ম্যাচিং সম্পূর্ণ ইন-মেমোরিতে মেমরির ভেতরের ডাটা স্ট্রাকচারে রান করে। সফল ম্যাচ সম্পন্ন হওয়ার পর ট্রেড হিস্ট্রি এবং অডিট রেকর্ড ডাটাবেসে অ্যাসিঙ্ক্রোনাসলি পুশ করা হয়:
+
+```sql
+-- PostgreSQL: পোস্ট-ট্রেড সেটেলমেন্ট ও অডিট লেজার
+CREATE TABLE trade_executions (
+    trade_id varchar(64) PRIMARY KEY,
+    stock_symbol varchar(10),
+    buyer_id bigint,
+    seller_id bigint,
+    price decimal(10,4),
+    quantity bigint,
+    executed_at timestamp
+);
+```
+
+### ৪. High-Level Architecture
+ইন-মেমোরি স্টক শার্ডিং ম্যাচিং ইঞ্জিন, LMAX Disruptor রিং বাফার এবং Write-Ahead Log (WAL) আর্কিটেকচার নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Client Trading App"] -->|1. Submit Order| Gateway["API Gateway Trading Routing"]
+    
+    Gateway -->|2. Route by Symbol Shard| StockShards["Stock Partition Shard AAPL TSLA"]
+    StockShards -->|3. Append to Ring Buffer| RingBuffer["LMAX Disruptor Ring Buffer Seq"]
+    
+    RingBuffer -->|4. Pull Sequenced Job| Matcher["Single-Threaded In-Memory Matching Engine"]
+    Matcher -->|5. Match Bids and Asks| OrderBook["In-Memory Limit Order Book Red-Black Trees"]
+    
+    Matcher -->|6a. Write-Ahead Log WAL| WAL["Physical SSD Write-Ahead Log WAL"]
+    Matcher -->|6b. Executed Trades| ExecQueue["Trade Execution Event Queue Kafka"]
+    
+    ExecQueue -->|7. Persist Async| LedgerDB["PostgreSQL Trade Ledger DB"]
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style RingBuffer fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style OrderBook fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style WAL fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript In-Memory Limit Order Book Matcher
+নিচে একটি প্রোডাকশন-রেডি **Stock Matching Engine** কোড দেওয়া হলো যা সম্পূর্ণ ইন-মেমোরি মেথডলজিতে Bids (Buy) এবং Asks (Sell) ডাবল-লিস্ট মেইনটেইন করে Price-Time Priority (FIFO) মেনে অর্ডার ম্যাচিং করে:
+
+```typescript
+interface Order {
+  id: string;
+  userId: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  price: number;
+  quantity: number;
+  timestamp: number;
+}
+
+interface Trade {
+  tradeId: string;
+  symbol: string;
+  buyerId: string;
+  sellerId: string;
+  price: number;
+  quantity: number;
+  timestamp: number;
+}
+
+export class StockMatchingEngine {
+  private symbol: string;
+  // Bids: Buy orders sorted by price (Descending), then timestamp (Ascending)
+  private bids: Order[] = [];
+  // Asks: Sell orders sorted by price (Ascending), then timestamp (Ascending)
+  private asks: Order[] = [];
+
+  constructor(symbol: string) {
+    this.symbol = symbol;
+  }
+
+  /**
+   * লিমিট অর্ডার বুকে নতুন অর্ডার প্লেস করে এবং ইনস্ট্যান্ট ম্যাচ মেকানিজম রান করে
+   */
+  public processLimitOrder(order: Order): Trade[] {
+    const trades: Trade[] = [];
+
+    if (order.side === "BUY") {
+      // বাই অর্ডারের জন্য: সেল সাইডের (Asks) সর্বনিম্ন প্রাইজ ম্যাচের ট্রাই করি
+      this.matchBuyOrder(order, trades);
+      if (order.quantity > 0) {
+        // রিমেইনিং কোয়ান্টিটি অর্ডার বুকে Z-Sorted Bids এ যুক্ত করি
+        this.bids.push(order);
+        this.sortBids();
+      }
+    } else {
+      // সেল অর্ডারের জন্য: বাই সাইডের (Bids) সর্বোচ্চ প্রাইজ ম্যাচের ট্রাই করি
+      this.matchSellOrder(order, trades);
+      if (order.quantity > 0) {
+        // রিমেইনিং কোয়ান্টিটি অর্ডার বুকে Z-Sorted Asks এ যুক্ত করি
+        this.asks.push(order);
+        this.sortAsks();
+      }
+    }
+
+    return trades;
+  }
+
+  private matchBuyOrder(buyOrder: Order, trades: Trade[]): void {
+    while (this.asks.length > 0 && buyOrder.quantity > 0) {
+      const bestAsk = this.asks[0];
+      
+      // লিমিট প্রাইজ কন্ডিশন চেক: বাই প্রাইজ অবশ্যই সেল প্রাইজের সমান বা বেশি হতে হবে
+      if (buyOrder.price >= bestAsk.price) {
+        const matchQuantity = Math.min(buyOrder.quantity, bestAsk.quantity);
+        
+        trades.push({
+          tradeId: `t_${Math.random().toString(36).substr(2, 9)}`,
+          symbol: this.symbol,
+          buyerId: buyOrder.userId,
+          sellerId: bestAsk.userId,
+          price: bestAsk.price, // ট্রেড প্রাইস সর্বদা ফাস্ট প্লেসড মেকারের প্রাইস হবে
+          quantity: matchQuantity,
+          timestamp: Date.now()
+        });
+
+        buyOrder.quantity -= matchQuantity;
+        bestAsk.quantity -= matchQuantity;
+
+        if (bestAsk.quantity === 0) {
+          this.asks.shift(); // সম্পূর্ণ ফিল্ড সেল অর্ডার রিমুভ করি
+        }
+      } else {
+        break; // কোনো উপযুক্ত সেল অফার আর নেই
+      }
+    }
+  }
+
+  private matchSellOrder(sellOrder: Order, trades: Trade[]): void {
+    while (this.bids.length > 0 && sellOrder.quantity > 0) {
+      const bestBid = this.bids[0];
+
+      // লিমিট প্রাইজ কন্ডিশন চেক: সেল প্রাইজ অবশ্যই বাই প্রাইজের সমান বা কম হতে হবে
+      if (sellOrder.price <= bestBid.price) {
+        const matchQuantity = Math.min(sellOrder.quantity, bestBid.quantity);
+
+        trades.push({
+          tradeId: `t_${Math.random().toString(36).substr(2, 9)}`,
+          symbol: this.symbol,
+          buyerId: bestBid.userId,
+          sellerId: sellOrder.userId,
+          price: bestBid.price,
+          quantity: matchQuantity,
+          timestamp: Date.now()
+        });
+
+        sellOrder.quantity -= matchQuantity;
+        bestBid.quantity -= matchQuantity;
+
+        if (bestBid.quantity === 0) {
+          this.bids.shift(); // সম্পূর্ণ ফিল্ড বাই অর্ডার রিমুভ করি
+        }
+      } else {
+        break; // কোনো উপযুক্ত বাই অফার আর নেই
+      }
+    }
+  }
+
+  private sortBids(): void {
+    // প্রাইজ অনুযায়ী বড় থেকে ছোট (descending), সমপ্রাইজের ক্ষেত্রে আগেরটি আগে (ascending timestamp)
+    this.bids.sort((a, b) => b.price - a.price || a.timestamp - b.timestamp);
+  }
+
+  private sortAsks(): void {
+    // প্রাইজ অনুযায়ী ছোট থেকে বড় (ascending), সমপ্রাইজের ক্ষেত্রে আগেরটি আগে (ascending timestamp)
+    this.asks.sort((a, b) => a.price - b.price || a.timestamp - b.timestamp);
+  }
+
+  // Get current book state for assertions
+  public getOrderBookState() {
+    return {
+      bids: this.bids.map(b => ({ price: b.price, quantity: b.quantity })),
+      asks: this.asks.map(a => ({ price: a.price, quantity: a.quantity }))
+    };
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+আল্ট্রা-লো ল্যাটেন্সি ফাইন্যান্সিয়াল সিস্টেমে প্রোডাকশনের ৩টি গুরুতর প্রবলেম ও স্টাফ-লেভেল আর্কিটেকচারাল সল্যুশন:
+
+#### ১. Core Thread Latency Spikes (The Java/Node Garbage Collection Freeze)
+ম্যাচিং ইঞ্জিন রান করার সময় যদি রিয়েল-টাইমে শত শত মেমোরি অবজেক্ট (যেমন অর্ডার বা ট্রেড অবজেক্ট) জেনারেট হতে থাকে, তবে রানিং ইঞ্জিনে হঠাৎ **Garbage Collection (GC) Pause** বা স্টপ-দ্য-ওয়ার্ল্ড পজ ঘটবে। এই ৫০ মিলি-সেকেন্ডের ফ্রিজ পিরিয়ডে ম্যাচিং ইঞ্জিন ঝুলে থাকলে মার্কেট প্রাইস উল্টাপাল্টা হয়ে যাবে এবং মিলিয়ন্স অফ ডলার লস হবে।
+* **মিটিগেশন (Pre-allocated Memory & Object Reuse Pools):** স্টাফ আর্কিটেকচার অনুযায়ী ম্যাচিং ইঞ্জিনগুলো মূলত C++ বা Rust-এ লেখা হয় এবং রানটাইম মেমোরিতে কোনো অবজেক্ট তৈরি বা ডিলিট করা হয় না। প্রজেক্ট স্টার্ট করার সময় **Pre-allocated Flat Memory Array** বা মেমোরি অ্যারেনা রিজার্ভ করা হয়। নতুন অর্ডার ঢুকলে সেই ফ্রি অ্যারেনার ব্লকে ফিক্সড ডাটা রাইট করা হয় এবং অর্ডার ফিল হলে জাস্ট ইনডেক্স ক্লিয়ার করা হয়। এটি শতভাগ নিশ্চিত করে যে কোনো ডাইনামিক হিপ মেমোরি এলোকেশন হবে না, ফলে সম্পূর্ণ জিরো-গারবেজ পজ deterministic থ্রুপুট পাওয়া যাবে।
+
+#### ২. Deterministic Crash Recovery (Write-Ahead Logging SSD Engine)
+যেহেতু হাই-স্পিডের স্বার্থে পুরো অর্ডার বুক মেমরিতে থাকে, তাই যদি ডাটাবেস রানিং নোডে হঠাৎ পাওয়ার চলে যায় বা অপারেটিং সিস্টেম ক্র্যাশ করে, তবে সেকেন্ডের মধ্যে কোটি কোটি টাকার কারেন্ট অর্ডার বুক মেমোরি থেকে সম্পূর্ণ উধাও হয়ে যাবে যা একটি বিরাট বিপর্যয়।
+* **মিটিগেশন (Sequential Write-Ahead Log - WAL & Snapshot Checkpoints):** অর্ডার ম্যাচিং করার ঠিক আগের মিলি-সেকেন্ডে ইনকামিং অর্ডারটিকে আমরা ডিস্কের একটি সিকোয়েনশিয়াল **Write-Ahead Log (WAL)** ফাইলে রাইট করি। যেহেতু সিকোয়েনশিয়াল রাইট অপারেশন SSD ডিস্কে অত্যন্ত ফাস্ট (< ৫ মাইক্রো-সেকেন্ড), এটি ল্যাটেন্সিতে বাধা দেয় না। দিনে একবার আমরা পুরো অর্ডার বুকের একটি চেকপয়েন্ট স্ন্যাপশট মেমরি থেকে হার্ডডিস্কে সেভ করি। যদি সার্ভার ক্র্যাশ করে, ইঞ্জিন রিবুট হয়ে লাস্ট ব্যাকআপ স্ন্যাপশটটি র্যামে লোড করবে এবং তারপর WAL ফাইলে থাকা ট্রেইল সিকোয়েনশিয়াল প্লে করে সেকেন্ডের মধ্যে ক্র্যাশের ঠিক আগের মাইক্রো-সেকেন্ডের অর্ডার বুকে ফিরে যাবে।
+
+#### ৩. Multi-threaded Synchronization Bottle-necks (LMAX Disruptor Pattern)
+একটি ট্রেডিং নোডে যদি মাল্টিপল থ্রেড একই সময়ে বাই ও সেল বুক মডিফাই করতে লক ব্যবহার করে, তবে CPU থ্রেড কনটেক্সট সুইচের লক-কনটেনশনের কারণে অর্ডার ম্যাচিং স্পিড ৫০ মাইক্রো-সেকেন্ড থেকে লাফ দিয়ে ২০ মিলি-সেকেন্ডে চলে যাবে যা নাসডাক স্কেলে হাস্যকর।
+* **মিটিগেশন (Stock Symbol Sharding & Ring Buffer):** 
+  - **Stock Sharding:** আমরা ট্রেডিং ইঞ্জিনকে স্টক সিম্বল দিয়ে শার্ডিং করব (যেমন: AAPL Shard, TSLA Shard)। প্রতিটি Shard থাকবে সম্পূর্ণ আলাদা সার্ভার পডে।
+  - **Single Threaded Execution (Ring Buffer):** প্রতিটি Shard সার্ভারে থাকবে ঠিক **১টি একক প্রসেসর থ্রেড** যা অর্ডার ম্যাচ করবে। কোনো মাল্টি-থ্রেডিং থাকবে না। ইনকামিং রিকোয়েস্ট গেটওয়ে থেকে এসে একটি লক-ফ্রি **LMAX Disruptor Ring Buffer** এ সিকোয়েনশিয়াল লাইন আপ হবে। আমাদের সিঙ্গেল ম্যাচিং থ্রেডটি বাফার থেকে রিকোয়েস্ট তুলে ওয়ান-বাই-ওয়ান প্রসেস করবে। যেহেতু কোনো লকিং মেকানিজম বা প্যারালাল থ্রেড মেমোরি অ্যাক্সেস নেই, তাই র্যামে কোনো থ্রেড কনটেনশন ছাড়াই প্রতি সেকেন্ডে **৫০০,০০০+ ম্যাচিং** সম্পন্ন করা সম্ভব!
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 12 (Airbnb Hotel/Home Booking: Inventory Management)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 13 (Robinhood / Stock Trading Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 14 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ৭টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১৪ (Distributed Cache - Redis Internals):** জানবো কীভাবে রেডিসের ইন্টারনাল ক্লাস্টারিং, সেন্টিনেল রেপ্লিকেশন এবং LRU ইভিকশন মেকানিজম কাজ করে।
+- **চ্যাপ্টার ১৫ (Metrics & Monitoring System - Prometheus):** বুঝবো কীভাবে TSDB (Time Series DB) ব্যবহার করে পিক আওয়ারে রিয়েল-টাইম মেট্রিক্স স্ক্র্যাপ ও মনিটর করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 13 (Robinhood / Stock Trading Engine: Matching Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 14 (Distributed Cache - Redis Internals)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
