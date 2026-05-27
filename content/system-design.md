@@ -63,7 +63,7 @@ flowchart LR
 | **07** | [Ticketmaster (Ticketing Engine)](#-chapter-07-ticketmaster-high-concurrency-booking-engine) | 🟢 **Active** | High-Concurrency Booking, Distributed Locking, Queueing System |
 | **08** | [Google Drive / Dropbox](#-chapter-08-google-drive--dropbox-distributed-file-storage-engine) | 🟢 **Active** | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
 | **09** | [Web Crawler (Search Engine Indexer)](#-chapter-09-web-crawler-search-engine-indexer) | 🟢 **Active** | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
-| **10** | Distributed Notification System | 🔒 *Locked* | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
+| **10** | [Distributed Notification System](#-chapter-10-distributed-notification-system) | 🟢 **Active** | Priority Queues (RabbitMQ/Kafka), Rate Limiting, Idempotency |
 | **11** | API Gateway & Distributed Rate Limiter | 🔒 *Locked* | Token Bucket Alg, Redis Lua Scripting, Edge Auth Integration |
 | **12** | Airbnb (Hotel/Home Booking) | 🔒 *Locked* | Double Booking Prevention, Temporal Querying, Geo-search |
 | **13** | Robinhood / Stock Trading Engine | 🔒 *Locked* | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
@@ -1517,14 +1517,192 @@ export class CrawlPolitenessManager {
 
 ---
 
-## 🔒 Chapters 10 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 10: Distributed Notification System
 
-বাকি ১১টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+একটি ডিস্ট্রিবিউটেড নোটিফিকেশন সিস্টেমের মূল ইঞ্জিনিয়ারিং চ্যালেঞ্জ হলো মিলিয়ন মিলিয়ন মোবাইল ও ওয়েব ক্লায়েন্টে চোখের পলকে পুশ নোটিফিকেশন (FCM/APNS), ইমেইল (SendGrid) এবং এসএমএস (Twilio) পাঠানো। ক্রনিকাল মার্কেটিং ক্যাম্পেইনের বাল্ক মেসেজ যেন ট্রানজেকশনাল ওটিপি (OTP) ও সিকিউরিটি এলার্টকে স্লো না করে দেয় এবং কোনো অবস্থায় যেন একজন ইউজার ডুপ্লিকেট মেসেজ না পান, তা স্টাফ আর্কিটেক্ট লেভেলে ডিজাইন করা নিচে চমৎকারভাবে আলোচনা করা হলো।
 
-যেমন:
-- **চ্যাপ্টার ১০ (Distributed Notification System):** জানবো কীভাবে প্রায়োরিটি কিউ ব্যবহার করে পুশ নোটিফিকেশন মিলি-সেকেন্ডে পাঠাতে হয়।
-- **চ্যাপ্টার ১১ (API Gateway):** বুঝবো কীভাবে Redis Lua দিয়ে হাই-স্পিড ডিস্ট্রিবিউটেড রেট লিমিটিং করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজারদের বিভিন্ন চ্যানেলে (Push, SMS, Email) নোটিফিকেশন ডেলিভারি দেওয়া।
+  - ওটিপি (OTP) ও সিকিউরিটি অ্যালার্টের মতো গুরুত্বপূর্ণ নোটিফিকেশন অত্যন্ত হাই-স্পিডে পাঠানো।
+  - ইউজার প্রিফারেন্স ম্যানেজমেন্ট (যেমন: ইউজার মার্কেটিং নোটিফিকেশন অফ রাখতে পারলেও ট্রানজেকশনাল ওটিপি ম্যান্ডেটরি রিসিভ করবেন)।
+- **Non-Functional:**
+  - **Ultra Scalability:** প্রতি দিনে ১ বিলিয়ন (1 Billion) নোটিফিকেশন ডেলিভারি হ্যান্ডেল করা।
+  - **Strict Idempotency:** নেটওয়ার্ক বা সার্ভার ফেইলিওরের কারণে একই মেসেজ যেন ইউজার ২ বার না পান (Deduplication)।
+  - **Fault Tolerance:** কোনো গেটওয়ে (যেমন Twilio) ডাউন থাকলে অটোমেটিক অন্য অল্টারনেটিভ গেটওয়েতে রুট হওয়া।
+
+### ২. Back-of-the-envelope Estimation
+* **থ্রুপুট ক্যালকুলেশন (Notification QPS):**
+  * দৈনিক নোটিফিকেশন টার্গেট = ১,০০০,০০০,০০০ নোটিফিকেশন / দিন
+  * **Average Notification QPS = ১,০০০,০০০,০০০ / ৮৬,৪০০ সেকেন্ড ≈** **11,500 notifications/sec**
+  * **Peak Surge QPS (যেমন নববর্ষের ফ্ল্যাশ অ্যালার্ট):** **100,000 notifications/sec**
+* **ব্যান্ডউইথ ক্যাপাসিটি:**
+  * একটি স্ট্যান্ডার্ড নোটিফিকেশন পেলোডের এভারেজ সাইজ = ১ কিলোবাইট (ডিভাইস টোকেন, টাইটেল, বডি)।
+  * **Peak Network Ingest Rate = ১০০,০০০ QPS * ১ KB =** **100 Megabytes / sec**। নোটিফিকেশনগুলোর ব্যাকলগ এড়াতে মেসেজ ব্রোকারকে (Kafka) অত্যন্ত অপ্টিমাইজডভাবে শার্ড বা পার্টিশন করতে হবে।
+
+### ৩. API & Database Schema Design
+নোটিফিকেশন রিকোয়েস্ট এপিআই ও রিলেশনাল ডেটা মডেল:
+- `POST /api/v1/notifications/send`
+  - Body: `{ userId, message, priority: "HIGH" | "LOW", channels: ["PUSH", "SMS"], idempotencyKey: "uuid-12345" }`
+
+#### Database Schema Design
+ইউজারের নোটিফিকেশন পারমিশন ও ডেলিভারি হিস্ট্রি ম্যাপ করার জন্য **PostgreSQL** ও নোএসকিউএল স্কিমা:
+
+```sql
+-- PostgreSQL: ইউজার প্রিফারেন্স টেবিল
+CREATE TABLE notification_preferences (
+    user_id bigint PRIMARY KEY,
+    allow_push boolean DEFAULT true,
+    allow_email boolean DEFAULT true,
+    allow_sms boolean DEFAULT false
+);
+
+-- Cassandra/DynamoDB: হাই-রাইট স্পিডের নোটিফিকেশন ডেলিভারি লগ
+CREATE TABLE notification_logs (
+    notification_id varchar(64) PRIMARY KEY,
+    user_id bigint,
+    channel varchar(20),
+    status varchar(20), -- 'PENDING', 'SENT', 'FAILED'
+    created_at timestamp
+);
+```
+
+### ৪. High-Level Architecture
+ডিস্ট্রিবিউটেড নোটিফিকেশন সিস্টেমের ইডেমপোটেন্সি চেক, প্রায়োরিটি শার্ডিং ও মাল্টি-চ্যানেল ডেলিভারি ট্রাফিক ফ্লো নিচে চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    Client["Application Client Service"] -->|1. Trigger API| Gateway["API Gateway Notification Service"]
+    Gateway -->|2. Check Deduplication| DedupeStore["Redis Idempotency Store Cache"]
+    
+    Gateway -->|3. Route by Priority| QueueRouter["Kafka Queue Router"]
+    QueueRouter -->|4a. Urgent OTP| HighPriorityQueue["Kafka High Priority Queue"]
+    QueueRouter -->|4b. Bulk Promo| LowPriorityQueue["Kafka Low Priority Queue"]
+    
+    HighPriorityQueue -->|5a. Fetch Job| HighWorker["OTP and Push Workers"]
+    LowPriorityQueue -->|5b. Fetch Job| LowWorker["Marketing Bulk Workers"]
+    
+    HighWorker -->|6a. Send Push| PushGW["FCM and APNS Push Gateways"]
+    LowWorker -->|6b. Send Email SMS| EmailGW["SendGrid and Twilio Gateways"]
+    
+    PushGW & EmailGW -->|7. Callback Update| LogService["Log Update Service"]
+    LogService -->|8. Save Delivery Log| DB["DynamoDB Log Database"]
+    
+    style Client fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style DedupeStore fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style HighPriorityQueue fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style DB fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Idempotent Priority Queue Dispatcher
+নিচে একটি প্রোডাকশন-রেডি **Idempotent Notification Dispatcher** কোড দেওয়া হলো যা Redis ব্যবহার করে ডুপ্লিকেট রিকোয়েস্ট ব্লক করে এবং মেসেজ প্রায়োরিটি মেইনটেইন করে সঠিক কিউতে পুশ করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface NotificationRequest {
+  idempotencyKey: string;
+  userId: string;
+  message: string;
+  priority: "HIGH" | "LOW";
+  channels: Array<"PUSH" | "EMAIL" | "SMS">;
+}
+
+interface DispatchResult {
+  success: boolean;
+  message: string;
+  notificationId?: string;
+}
+
+export class IdempotentNotificationDispatcher {
+  private static readonly IDEMPOTENCY_TTL_SECONDS = 86400; // ২৪ ঘণ্টা
+  private static readonly HIGH_PRIORITY_QUEUE = "queue:notification:high";
+  private static readonly LOW_PRIORITY_QUEUE = "queue:notification:low";
+
+  /**
+   * মিলি-সেকেন্ডে নোটিফিকেশন ডিসপ্যাচ করে এবং ডুপ্লিকেট মেসেজ ডেলিভারি সম্পূর্ণ রুখে দেয়
+   */
+  public async dispatchNotification(req: NotificationRequest): Promise<DispatchResult> {
+    const dedupeKey = `idempotency:notification:${req.idempotencyKey}`;
+    
+    // ১. ওয়ান-স্টেপ এটমিক ইডেমপোটেন্সি চেক (Redis SET with NX)
+    // এটি নিশ্চিত করে যে দুটি সমসাময়িক রিকোয়েস্ট একই মেসেজ ২ বার পাঠাতে পারবে না
+    const isUnique = await redis.set(dedupeKey, "PROCESSING", "NX", "EX", IdempotentNotificationDispatcher.IDEMPOTENCY_TTL_SECONDS);
+    
+    if (!isUnique) {
+      console.log(`Deduplication Hit: Request with key ${req.idempotencyKey} is already being processed.`);
+      return {
+        success: false,
+        message: "Duplicate notification request blocked successfully.",
+      };
+    }
+
+    try {
+      const notificationId = `notif_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // ২. প্রায়োরিটি নির্ধারণ করে সঠিক কিউতে পুশ করা
+      const targetQueue = req.priority === "HIGH" 
+        ? IdempotentNotificationDispatcher.HIGH_PRIORITY_QUEUE 
+        : IdempotentNotificationDispatcher.LOW_PRIORITY_QUEUE;
+      
+      const payload = JSON.stringify({
+        notificationId,
+        userId: req.userId,
+        message: req.message,
+        channels: req.channels,
+        createdAt: Date.now()
+      });
+
+      // ৩. রেডিস লিস্ট (বাস্তব প্রোডাকশনে কাфকা পার্টিশনে যাবে) ব্যবহার করে কিউয়িং
+      await redis.lpush(targetQueue, payload);
+
+      // ৪. স্ট্যাটাস আপডেট করে PROCESSED মার্ক করি
+      await redis.set(dedupeKey, "PROCESSED", "EX", IdempotentNotificationDispatcher.IDEMPOTENCY_TTL_SECONDS);
+
+      console.log(`Notification ${notificationId} successfully queued into ${req.priority} priority queue.`);
+      
+      return {
+        success: true,
+        message: "Notification successfully processed and queued.",
+        notificationId,
+      };
+    } catch (error) {
+      // ফেইল হলে ইডেমপোটেন্সি রিলিজ করি যাতে রিট্রাই সম্ভব হয়
+      await redis.del(dedupeKey);
+      throw error;
+    }
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জগতের বিলিয়ন-স্কেল নোটিফিকেশন সিস্টেমে প্রোডাকশনের ৩টি গুরুতর প্রবলেম ও স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Downstream Gateway Rate Limits & Backpressure
+FCM, APNS, Twilio এবং SendGrid-এর মতো ডাউনস্ট্রিম থার্ড-পার্টি সার্ভিসগুলোর কঠোর এপিআই রেট লিমিট থাকে। সেকেন্ডে ১ লাখ রিকোয়েস্ট দিয়ে তাদের হ্যামার করলে আমাদের এপিআই আইপি পার্মানেন্টলি ব্যান খাবে।
+* **মিটিগেশন (Distributed Token Bucket & Outbox Rate Limiters):** প্রতিটি গেটওয়ের বিপরীতে আমরা **Redis Token Bucket Rate Limiter** বসাব। আমাদের ওয়ার্কাররা কাফকা থেকে মেসেজ পুল করে সরাসরি ডাউনস্ট্রিমে না পাঠিয়ে গেটওয়ের রেট লিমিট প্রসেসিং ক্যাপাসিটি অনুযায়ী থ্রোটল করে পাঠাবে (যেমন: Twilio-তে সেকেন্ডে সর্বোচ্চ ৫,০০০ এসএমএস)। যদি কোনো গেটওয়ে ৪২৯ এরর বা সার্ভিস ক্র্যাশ রিটার্ন করে, আমরা ব্যাকগ্রাউন্ডে **Exponential Backoff with Jitter** অ্যালগরিদম ব্যবহার করে রিকোয়েস্ট রিট্রাই করব এবং প্রয়োজনে রুট অন্য ব্যাকআপ পার্টনারে শিফট করব।
+
+#### ২. Visibility Double Notifications under Network Crashes
+একটি ওয়ার্কার কাফকা থেকে ওটিপি টাস্ক তুলে FCM গেটওয়েতে পাঠালো। FCM সাকসেসফুলি ইউজার ডিভাইসে পুশ পাঠিয়ে দিল, কিন্তু ওয়ার্কার ডেটাবেসে নোটিফিকেশনের স্ট্যাটাস `SENT` আপডেট করার ঠিক আগের মুহূর্তে সার্ভার ক্র্যাশ করল। কাফকা মনে করবে রিকোয়েস্টটি প্রসেস হয়নি এবং রি-ডেলিভারি ট্রিগার করবে, যার ফলে ইউজারের কাছে একই ওটিপি বা এলার্ট ২ বার চলে যাবে যা ইউজারের এক্সপেরিয়েন্স নষ্ট করে।
+* **মিটিগেশন (Client-side Notification Deduplication):** আমরা প্রতিটি নোটিফিকেশনের সাথে একটি ক্রিপ্টোগ্রাফিক ইউনিক `NotificationID` এমবেড করে দেব। ইউজার অ্যাপে নোটিফিকেশনটি ডিসপ্লে করার আগে ক্লায়েন্ট কোড (iOS/Android) লোকাল ডিভাইসের SQLite ডাটাবেসে লাস্ট ২ ঘণ্টার রিসিভড মেসেজ আইডি ট্র্যাক করবে। যদি দেখে এই `NotificationID` অলরেডি প্রসেসড, ক্লায়েন্ট অ্যাপ মেসেজটি রেন্ডার না করে সাইলেন্টলি ড্রপ করে দেবে। এটি সম্পূর্ণ জিরো ডুপ্লিকেট রেন্ডারিং গ্যারান্টি দেয়।
+
+#### ৩. Resource Starvation of Transactional OTPs (Queue Segregation)
+মার্কেটিং টিম যদি হঠাৎ করে ৫০ মিলিয়ন ডিস্ট্রিবিউটেড প্রমোশনাল নোটিফিকেশন কিউতে পাঠায়, তবে প্রমোশনাল মেসেজগুলোর বিশাল জ্যামের কারণে ক্রিটিক্যাল সিকিউরিটি ওটিপি (OTP) ডেলিভারি হতে কয়েক ঘণ্টা দেরি হতে পারে, যা গ্রাহকদের লগইন করতে দেবে না।
+* **মিটিগেশন (Physical Queue Segregation & Dedicated Thread Pools):** আমরা হাই-প্রায়োরিটি ট্রানজেকশনাল নোটিফিকেশন ও লো-প্রায়োরিটি মার্কেটিং নোটিফিকেশন সম্পূর্ণ আইসোলেটেড ক্যাটাগরিতে ভাগ করব। ওটিপি নোটিফিকেশনগুলো সম্পূর্ণ আলাদা ডেডিকেটেড কাফকা পার্টিশন, আলাদা Kubernetes রানটাইম পড এবং আলাদা ডেডিকেটেড কানেকশন পুল ব্যবহার করবে। মার্কেটিং ওয়ার্কাররা কোনোভাবেই ওটিপি প্রসেসিং রিজন অবস্ট্রাক্ট করতে পারবে না, ফলে প্রমোশন সার্ভারের বিশাল ট্রাফিক জ্যামেও ওটিপি ডেলিভারি লেটেন্সি **সর্বদা < ১ সেকেন্ড** থাকবে।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 09 (Web Crawler Search Engine Indexer)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 10 (Distributed Notification System)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 11 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১০টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১১ (API Gateway & Distributed Rate Limiter):** বুঝবো কীভাবে Redis Lua দিয়ে হাই-স্পিড ডিস্ট্রিবিউটেড রেট লিমিটিং করতে হয়।
+- **চ্যাপ্টার ১২ (Airbnb Hotel/Home Booking):** জানবো কীভাবে টেম্পোরাল কুয়েরি ও ডবল বুকিং প্রতিরোধ করে বুকিং ইঞ্জিন স্কেল করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 10 (Distributed Notification System)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 11 (API Gateway & Distributed Rate Limiter)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
