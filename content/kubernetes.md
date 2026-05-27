@@ -332,17 +332,27 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    subgraph ControllerLoop ["কন্ট্রোল লুপ লাইফসাইকেল (Informer Architecture)"]
+    subgraph ControllerLoop ["কন্ট্রোল লুপ লাইফসাইকেল Informer Architecture"]
         APIServer["kube-apiserver"] -->|"1. HTTP/2 watch connection"| Reflector["Reflector"]
         Reflector -->|"2. Pushes delta events"| FIFO["DeltaFIFO Queue"]
-        FIFO -->|"3. Pop event"| Informer["Informer (Indexer)"]
+        FIFO -->|"3. Pop event"| Informer["Informer Indexer"]
         Informer -->|"4. Update Local Cache"| Cache["Local Cache Store"]
         Informer -->|"5. Trigger Event Handler"| Handler["Resource Event Handler"]
         Handler -->|"6. Enqueue Key"| WorkQueue["Rate Limiting WorkQueue"]
-        WorkQueue -->|"7. Process & Reconcile"| Worker["Worker / Controller Logic"]
+        WorkQueue -->|"7. Process & Reconcile"| Worker["Worker or Controller Logic"]
     end
     
----
+    style APIServer fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style Cache fill:#065f46,stroke:#10b981,color:#fff
+    style WorkQueue fill:#7c2d12,stroke:#f97316,color:#fff
+```
+
+১. **Reflector:** এটি এপিআই সার্ভারের সাথে একটি দীর্ঘমেয়াদী **HTTP/2 Watch Connection** বজায় রাখে। নতুন কোনো পড বা কাস্টম ফাইল তৈরি বা আপডেট হলে এপিআই সার্ভার রিফ্লেক্টরকে ইনস্ট্যান্ট ইভেন্ট পুশ করে।
+২. **DeltaFIFO:** রিফ্লেক্টর ইভেন্টগুলো নিয়ে একটি ফাস্ট-ইন-ফার্স্ট-আউট কিউতে জমা করে।
+৩. **Informer Indexer:** এটি ডেল্টা-ফিফো থেকে ইভেন্ট পপ করে তার অভ্যন্তরীণ মেমরি ক্যাশ (Local Cache Store) আপডেট করে। এর ফলে কন্ট্রোলারকে প্রতিবার এপিআই সার্ভার কুয়েরি করতে হয় না, সে লোকাল ক্যাশ থেকেই সুপারফাস্ট ডাটা রিড করতে পারে।
+৪. **Resource Event Handler:** এটি ডেভেলপারের লেখা ইভেন্ট হ্যান্ডলারকে (Add, Update, Delete) কল করে।
+৫. **WorkQueue:** হ্যান্ডলার সরাসরি অ্যাকশন না নিয়ে ইভেন্টের ইউনিক চাবি বা কী (যেমন `namespace/pod-name`) একটি রেট-লিমিটিং **WorkQueue**-তে পুশ করে।
+৬. **Worker (Reconcile Loop):** ওয়ার্কার থ্রেড অনবরত WorkQueue থেকে কী রিড করে Desired ও Actual স্টেটের অমিল দূর করে অবশেষে সফলভাবে এপিআই সার্ভারে ফাইনাল স্টেট রাইট করে।
 
 ## ১৪. পড ডিসরাপশন বাজেট ও নোড ড্রেন পলিসি (PDB & Voluntary vs Involuntary Disruptions)
 
