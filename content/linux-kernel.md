@@ -293,9 +293,9 @@ gdb ./my_server core
 
 ```mermaid
 flowchart LR
-    File["'access.log' File"] -->|1. grep 'ERROR'| Grep["Filtered ERROR lines"]
-    Grep -->|2. awk '{print $7}'| Awk["Extract 7th column (URL)"]
-    Awk -->|3. uniq -c| Uniq["Count Unique URLs"]
+    File["'access.log' File"] -->|"1. grep 'ERROR'"| Grep["Filtered ERROR lines"]
+    Grep -->|"2. awk '{print $7}'"| Awk["Extract 7th column (URL)"]
+    Awk -->|"3. uniq -c"| Uniq["Count Unique URLs"]
 ```
 
 #### ১. `grep` (Global Regular Expression Print):
