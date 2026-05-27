@@ -59,7 +59,7 @@ flowchart LR
 | **03** | [High-Concurrency E-Commerce (Amazon)](#-chapter-03-high-concurrency-e-commerce-system) | 🟢 **Active** | Flash Sales, Redis Distributed Locks, Saga Pattern, Idempotency |
 | **04** | [WhatsApp & Messenger](#-chapter-04-whatsapp--messenger-real-time-chat-engine) | 🟢 **Active** | WebSockets, Message Gateway, Cassandra Store, Connection Registry |
 | **05** | [Uber & Grab (Ride-Sharing)](#-chapter-05-uber--grab-ride-sharing-geospatial-engine) | 🟢 **Active** | Geospatial Indexing (Geohash/H3), Quadtree, Pub/Sub Engine |
-| **06** | Twitter/X (News Feed & Timeline) | 🔒 *Locked* | Fanout-on-write vs Fanout-on-read, Push vs Pull |
+| **06** | [Twitter/X (News Feed & Timeline)](#-chapter-06-twitterx-news-feed--timeline-fanout-engine) | 🟢 **Active** | Fanout-on-write vs Fanout-on-read, Push vs Pull |
 | **07** | Ticketmaster (Ticketing Engine) | 🔒 *Locked* | High-Concurrency Booking, Distributed Locking, Queueing System |
 | **08** | Google Drive / Dropbox | 🔒 *Locked* | Chunk-based uploads, Metadata Sync, Keep-Alive/Long Polling |
 | **09** | Web Crawler (Search Engine Indexer) | 🔒 *Locked* | BFS Graph Traversal, Robots.txt Parser, Deduplication Pipeline |
@@ -809,14 +809,186 @@ export class GeoLocationEngine {
 
 ---
 
-## 🔒 Chapters 06 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📖 Chapter 06: Twitter/X (News Feed & Timeline Fanout Engine)
 
-বাকি ১৫টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+সোশ্যাল মিডিয়া ফিড জেনারেট করার মূল কারিগরি চ্যালেঞ্জ হলো চরম রিড-রাইট অসমতা এবং ফ্যানআউট (Fanout)। যখন লাখ লাখ ইউজার প্রতি সেকেন্ডে টুইট করছেন এবং কোটি কোটি ইউজার তাদের হোম টাইমলাইন রিফ্রেশ করছেন, তখন লেটেন্সি ১০০ মিলি-সেকেন্ডের নিচে রাখাই আসল ইঞ্জিনিয়ারিং।
 
-যেমন:
-- **চ্যাপ্টার ০৬ (Twitter):** জানবো কেন সেলিব্রিটিদের টুইট ফিড এবং আমাদের নরমাল ইউজারদের টুইট ফিড তৈরিতে সম্পূর্ণ আলাদা **Push vs Pull (Fanout)** আর্কিটেকচার ব্যবহার করতে হয়।
-- **চ্যাপ্টার ০৭ (Ticketmaster):** বুঝবো কীভাবে হাই-কনকারেন্ট বুকিং সিস্টেমে বুকিং টিকিট হোল্ড করতে হয় এবং ডাবল টিকিট সেল রোধ করতে হয়।
+### ১. রিকোয়ারমেন্টস (Scope)
+- **Functional:**
+  - ইউজার টুইট পোস্ট করতে পারবেন (টেক্সট এবং মিডিয়া)।
+  - ইউজার অন্য ইউজারদের ফলো করতে পারবেন।
+  - ইউজার তার হোম টাইমলাইন (News Feed) দেখতে পাবেন, যেখানে তার ফলো করা সব মানুষের লেটেস্ট টুইটগুলো ক্রনোলজিক্যালি সাজানো থাকবে।
+  - ইউজার তার নিজস্ব ইউজার টাইমলাইন (টুইট হিস্ট্রি) দেখতে পাবেন।
+- **Non-Functional:**
+  - **Ultra-fast Feed Generation:** হোম ফিড রিকোয়েস্ট করতে ১০০ মিলি-সেকেন্ডের কম সময় লাগতে হবে।
+  - **High Scalability:** ৩০০ মিলিয়ন একটিভ ইউজার এবং প্রতিদিন ৫০০ মিলিয়ন টুইট পোস্ট সামলানো।
+  - **Celebrity Handle (High Fanout):** কোনো সেলিব্রিটি টুইট করলে তা যাতে মুহূর্তের মধ্যে কোটি কোটি ফলোয়ারের ওয়ালে পৌঁছায় আবার সিস্টেমও ক্র্যাশ না করে।
+
+### ২. Back-of-the-envelope Estimation
+* `Tweet Write QPS = 500,000,000 tweets / 86,400 seconds ≈` **5,800 writes/sec average QPS**
+* `Peak Write QPS ≈` **12,000 writes/sec**
+* `Feed Read QPS = 100M DAU * 10 views/day = 1B views / 86400 ≈` **11,500 reads/sec average QPS**
+* `Peak Read QPS ≈` **35,000 reads/sec**
+* **Fanout Multiplying Effect:**
+  * প্রতিটি ইউজারের এভারেজ ফলোয়ার সংখ্যা ১০০ হলে: `5,800 writes/sec * 100 followers =` **580,000 writes/sec** ডিস্ট্রিবিউটেড ফিড ক্যাশে রাইট করতে হবে।
+  * কিন্তু কোনো সেলিব্রিটির (যেমন ক্রিস্টিয়ানো রোনালদো, ১০০M ফলোয়ার) ১টি টুইট ফ্যানআউট করতে গেলে এক মিলি-সেকেন্ডে **১০০,০০০,০০০ টি ক্যাশ রাইট** ট্রাই করবে, যা পুরো সিস্টেম ক্র্যাশ করে দেবে! একেই বলে **Celebrity Write Explosion**।
+
+### ৩. API & Database Schema Design
+ফিড ও টুইট প্রসেসিংয়ের জন্য স্ট্যান্ডার্ড এপিআই ডিজাইন:
+- `POST /api/v1/tweet` (টুইট তৈরি)
+- `GET /api/v1/feed?limit=20` (হোম ফিড ফেচ)
+
+#### Database Tables Structure
+টুইট ডেটা এবং রিলেশনশিপ ম্যাপ করার জন্য রিলেশনাল বা হাই-পারফরম্যান্স নোএসকিউএল ডিবি:
+
+```sql
+CREATE TABLE tweets (
+    tweet_id bigint PRIMARY KEY,
+    user_id bigint,
+    content varchar(280),
+    created_at timestamp
+);
+
+CREATE TABLE follows (
+    follower_id bigint,
+    followee_id bigint,
+    created_at timestamp,
+    PRIMARY KEY (follower_id, followee_id)
+);
+```
+
+### ৪. High-Level Architecture
+টুইটার ফিড জেনারেশনে আমরা **Hybrid Push/Pull Architecture** ব্যবহার করব। নিচে ট্রাফিক ফ্লো দেওয়া হলো:
+
+```mermaid
+flowchart TD
+    UserApp["User Client App"] -->|1. Post Tweet| Gateway["API Gateway / Tweet Service"]
+    Gateway -->|2. Save Raw Tweet| TweetDB["Tweets Storage (PostgreSQL / Cassandra)"]
+    Gateway -->|3. Trigger Fanout| FanoutQueue["Fanout Message Queue (Kafka)"]
+    
+    FanoutQueue -->|4. Push to Normal Followers| NormalFeedCache["Redis Sorted Set (Home Feed Cache)"]
+    
+    Gateway -->|5. Read Home Feed| FeedService["Feed Retrieval Service"]
+    FeedService -->|6. Fetch Pre-computed Feed| NormalFeedCache
+    FeedService -->|7. Dynamically Pull (Hybrid)| CelebCache["Redis Cache (Celebrity Tweets)"]
+    
+    FeedService -->|8. Sorted & Combined Feed| UserApp
+    
+    style UserApp fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff
+    style NormalFeedCache fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style CelebCache fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#fff
+    style FanoutQueue fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+```
+
+### 💻 Practical TypeScript Hybrid Fanout Engine Implementation
+নিচে একটি প্রোডাকশন-রেডি **Hybrid Fanout Engine** কোড দেওয়া হলো যা সেলিব্রিটি এবং সাধারণ ইউজারদের টুইট সম্পূর্ণ আলাদা পাইপলাইনে প্রসেস ও মার্জ করে:
+
+```typescript
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+interface Tweet {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: number;
+}
+
+export class NewsFeedFanoutEngine {
+  private static readonly TIMELINE_PREFIX = "timeline:user:";
+  private static readonly CELEB_POSTS_PREFIX = "celeb:tweets:";
+  private static readonly CELEBRITY_THRESHOLD = 10000; // ১০,০০০ ফলোয়ারের বেশি হলে সেলিব্রিটি
+
+  /**
+   * ডেমো ফলোয়ার ডাটা ফেচিং (প্রোডাকশনে ডাটাবেস থেকে আসবে)
+   */
+  private async getFollowers(userId: string): Promise<{ followerIds: string[]; count: number }> {
+    return {
+      followerIds: ["follower_1", "follower_2", "follower_3"],
+      count: 3
+    };
+  }
+
+  /**
+   * নতুন টুইট পোস্ট হওয়ার পর ফ্যানআউট ডিসিশন নেয়
+   */
+  public async processNewTweet(tweet: Tweet): Promise<void> {
+    const { followerIds, count } = await this.getFollowers(tweet.userId);
+
+    if (count > NewsFeedFanoutEngine.CELEBRITY_THRESHOLD) {
+      // 🟢 অপশন A: Fanout-on-read (Pull Model for Celebrities)
+      // সেলিব্রিটির টুইটগুলো তার নিজস্ব ডেডিকেটেড ক্যাশে সেভ থাকবে, কোটি কোটি ওয়ালে পুশ হবে না
+      const celebKey = `${NewsFeedFanoutEngine.CELEB_POSTS_PREFIX}${tweet.userId}`;
+      await redis.zadd(celebKey, tweet.createdAt, JSON.stringify(tweet));
+      await redis.zremrangebyrank(celebKey, 0, -100); // শুধুমাত্র লেটেস্ট ১০০টি টুইট রাখবো
+      console.log(`Celebrity tweet saved to pull cache for user ${tweet.userId}`);
+    } else {
+      // 🟢 অপশন B: Fanout-on-write (Push Model for Normal Users)
+      // নরমাল ইউজারের টুইট সাথে সাথে সব ফলোয়ারের ইন-মেমোরি টাইমলাইনে পুশ করা হবে
+      const pipeline = redis.pipeline();
+      for (const followerId of followerIds) {
+        const timelineKey = `${NewsFeedFanoutEngine.TIMELINE_PREFIX}${followerId}`;
+        pipeline.zadd(timelineKey, tweet.createdAt, JSON.stringify(tweet));
+        pipeline.zremrangebyrank(timelineKey, 0, -500); // হোম ফিডে ম্যাক্স ৫০০টি টুইট ক্যাশ থাকবে
+      }
+      await pipeline.exec();
+      console.log(`Pushed tweet from ${tweet.userId} to ${followerIds.length} followers.`);
+    }
+  }
+
+  /**
+   * ইউজারের জন্য হোম টাইমলাইন বা ফিড জেনারেট করে (Hybrid Merge)
+   */
+  public async getHomeTimeline(userId: string, followedCelebrities: string[], limit = 20): Promise<Tweet[]> {
+    const timelineKey = `${NewsFeedFanoutEngine.TIMELINE_PREFIX}${userId}`;
+    
+    // ১. প্রি-কম্পিউটেড নরমাল ফলোয়ারদের টুইট ক্যাশ থেকে ফেচ করি
+    const normalTweetsRaw = await redis.zrevrange(timelineKey, 0, limit - 1);
+    const tweets: Tweet[] = normalTweetsRaw.map((t) => JSON.parse(t));
+
+    // ২. ফলো করা সেলিব্রিটিদের টুইট রানটাইমে পুল (Pull) করে নিয়ে আসি
+    for (const celebId of followedCelebrities) {
+      const celebKey = `${NewsFeedFanoutEngine.CELEB_POSTS_PREFIX}${celebId}`;
+      const celebTweetsRaw = await redis.zrevrange(celebKey, 0, limit - 1);
+      const celebTweets: Tweet[] = celebTweetsRaw.map((t) => JSON.parse(t));
+      tweets.push(...celebTweets);
+    }
+
+    // ৩. কম্বাইন্ড টুইটগুলোকে ক্রনোলজিক্যালি সর্ট করে মার্জ করি
+    return tweets.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+  }
+}
+```
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব জীবনের সোশ্যাল নেটওয়ার্কিং স্কেলে এই ৩টি অতি জটিল চ্যালেঞ্জ ও তাদের সল্যুশন:
+
+#### ১. The Celebrity Problem & Write Explosion Mitigation
+যদি শুধু **Push Model** ব্যবহার করা হতো, তবে সেলিব্রিটির একটি টুইট কোটি কোটি ইউজারের ক্যাশ আপডেট করতে কয়েক মিনিট লাগিয়ে দিত, যার ফলে লেটেন্সি স্পাইক করত। আবার শুধু **Pull Model** ব্যবহার করলে প্রতি রিডে শত শত ফলোয়ারের টুইট রিড করে সর্ট করা লাগত যা রিড লেটেন্সি বাড়িয়ে দিত।
+* **মিটিগেশন (Hybrid Engine):** আমাদের এই হাইব্রিড ইমপ্লিমেন্টেশনই এর সমাধান। সেলিব্রিটিদের আমরা **Pull** মডেলে রাখি আর সাধারণ বন্ধুদের আমরা **Push** মডেলে রাখি। এতে রাইট বিস্ফোরণও ঘটে না, আবার ফিড লোডিং স্পিডও সুপার-ফাস্ট (< ১০০ms) থাকে।
+
+#### ২. Algorithmic Feed Ranking & Scoring Pipeline
+আজকের দিনের এক্স (Twitter) বা ফেসবুক কেবল সময় অনুযায়ী পোস্ট দেখায় না, বরং ইউজার কোন পোস্টে লাইক/রিয়্যাক্ট করতে পারে তার ওপর ভিত্তি করে এলগরিদমিক ফিড দেখায়। প্রতিবার ফিড রিকোয়েস্টের সাথে সাথে কোটি কোটি পোস্টের স্কোরিং করা অসম্ভব।
+* **মিটিগেশন (Two-Stage Scoring):**
+  * **Stage 1 (Candidate Generation):** প্রথমে ক্যাশ থেকে লেটেস্ট ৫০০টি টুইট (নরমাল + সেলিব্রিটি) তুলে আনা হয়।
+  * **Stage 2 (Scoring & Ranking):** এই ৫০০টি টুইটকে একটি ডেডিকেটেড **Ranking Service**-এ পাঠানো হয়, যা লাইটওয়েট মেমোরি ফিচার স্টোর (Redis) থেকে ইউজারের ইন্টারেস্ট ডেটা নিয়ে টুইটগুলোর স্কোর ক্যালকুলেট করে। স্কোর অনুযায়ী সর্ট করে টপ ৫০টি টুইট ইউজারকে ম্যাপে রেন্ডার করা হয়।
+
+#### ৩. Cache Stampede & Redis Cold Start Pre-warming
+যেহেতু ফিড ফাস্ট দেখানোর জন্য আমরা সম্পুর্ণ ফিড মেমরিতে (Redis) জেনারেট করে রাখি, কোনো কারণে একটি Redis ক্লাস্টার নোড ক্র্যাশ করলে কোটি কোটি ইউজারের ওয়ালেট ডেটা হারিয়ে যাবে। ক্র্যাশের পর যদি সবাই একসাথে ডাটাবেসে রিকোয়েস্ট পাঠায় ফিড রিবিল্ড করার জন্য, তবে মূল ডাটাবেস ক্র্যাশ করবে।
+* **মিটিগেশন (Pre-warming Active Users Only):** রেডিস ক্র্যাশ করলে বা নতুন ক্লাস্টার সেটআপ করলে, ব্যাকগ্রাউন্ড ক্রন জব শুধুমাত্র **Active Users** (যারা গত ৩ দিনে লগইন করেছেন) তাদের ফিড ডাটাবেস থেকে রিবিল্ড করে ক্যাশে আগে থেকেই রেডি রাখবে (Pre-warming)। ইন-একটিভ ইউজাররা যখন পরবর্তী সময়ে লগইন করবে, তখন তাদের ফিড অ্যাসিনক্রোনাসলি এবং অলসভাবে (Lazy Load) রিবিল্ড করা হবে।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 05 (Uber & Grab Ride-Sharing Geospatial Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 06 (Twitter/X Feed & Fanout Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+## 🔒 Chapters 07 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ১৪টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ০৭ (Ticketmaster):** বুঝবো কীভাবে হাই-কনকারেন্ট বুকিং সিস্টেমে বুকিং টিকিট হোল্ড করতে হয় এবং ডাবল টিকিট সেল রোধ করতে হয়।
+- **চ্যাপ্টার ০৮ (Google Drive):** জানবো কীভাবে চাঙ্ক-বেসড ফাইল আপলোড করতে হয় এবং ডুপ্লিকেট মিডিয়া ব্লক ড্রপ করতে হয়।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 06 (Twitter/X Feed & Fanout Engine)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 07 (Ticketmaster High-Concurrency Booking Engine)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
