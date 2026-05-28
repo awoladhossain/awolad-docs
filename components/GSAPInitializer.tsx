@@ -6,6 +6,10 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 
+interface CustomWindow {
+  lenis?: Lenis;
+}
+
 export default function GSAPInitializer() {
   const cursorRef = useRef<HTMLDivElement>(null);
   const cursorGlowRef = useRef<HTMLDivElement>(null);
@@ -39,7 +43,7 @@ export default function GSAPInitializer() {
     gsap.ticker.lagSmoothing(0);
 
     // Make lenis globally accessible for click events
-    (window as any).lenis = lenis;
+    ((window as unknown) as CustomWindow).lenis = lenis;
 
     let moveCursorHandler: ((e: MouseEvent) => void) | null = null;
 
@@ -389,12 +393,17 @@ export default function GSAPInitializer() {
         link.addEventListener('click', (e) => {
           e.preventDefault();
           const targetId = link.getAttribute('href');
-          if (targetId && (window as any).lenis) {
-            (window as any).lenis.scrollTo(targetId, {
-              offset: -100,
-              duration: 1.2,
-              easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-            });
+          const globalWindow = (window as unknown) as CustomWindow;
+          if (targetId && globalWindow.lenis) {
+            // Safe resolution using getElementById to avoid querySelector CSS restrictions
+            const targetElement = document.getElementById(targetId.replace('#', ''));
+            if (targetElement) {
+              globalWindow.lenis.scrollTo(targetElement, {
+                offset: -100,
+                duration: 1.2,
+                easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+              });
+            }
           }
         });
       });
@@ -414,7 +423,7 @@ export default function GSAPInitializer() {
         window.removeEventListener('mousemove', moveCursorHandler);
       }
       clearTimeout(refreshTimer);
-      delete (window as any).lenis;
+      delete ((window as unknown) as CustomWindow).lenis;
       gsap.ticker.remove(tickerUpdate);
       lenis.destroy();
       ctx.revert();

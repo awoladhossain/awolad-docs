@@ -1,0 +1,852 @@
+---
+title: "Security & Cryptography Internals (Web Security) Handbook"
+description: "ওয়েব সিকিউরিটি, ক্রিপ্টোগ্রাফি, আইডেন্টিটি ম্যানেজমেন্ট, ওডব্লিউএএসপি অ্যাটাক এবং ক্লাউড-নেটিভ ইনফ্রাস্ট্রাকচার সিকিউরিটির স্টাফ-আর্কিটেক্ট লেভেল মাস্টারক্লাস"
+category: "Security"
+---
+
+# 🛡️ Security & Cryptography Internals (Web Security) Handbook
+
+স্বাগতম! আধুনিক সফটওয়্যার ইঞ্জিনিয়ারিং এবং সিস্টেম ডিজাইনে **নিরাপত্তা বা সিকিউরিটি** কোনো আফটার-থট (After-thought) নয়; এটি আর্কিটেকচারের অন্যতম প্রধান ভিত্তি। একটি অ্যাপ্লিকেশন কত দ্রুত রেসপন্স করছে তা যেমন গুরুত্বপূর্ণ, তেমনি হ্যাকারের হাত থেকে ইউজারের গোপনীয় ডেটা সুরক্ষিত রাখা এবং ইনফ্রাস্ট্রাকচারের প্রতিটি স্তরে শূন্য-বিশ্বাস (Zero-Trust) মডেল বজায় রাখা সমানভাবে জরুরি।
+
+ক্রিপ্টোগ্রাফিক অ্যালগরিদমের ভেতরের গাণিতিক সমীকরণ, ব্রাউজার সিকিউরিটি ইঞ্জিনের জটিল মেকানিজম, আইডেন্টিটি প্রোটোকলের টোকেন এক্সচেঞ্জ ফ্লো এবং ক্লাউড ও কন্টেইনারাইজেশনের ফিজিক্যাল সিকিউরিটি বাউন্ডারি নিয়ে তৈরি এই বিশেষায়িত এন্টারপ্রাইজ হ্যান্ডবুক।
+
+---
+
+## 🗺️ ১২টি চ্যাপ্টারের সিকিউরিটি রোডম্যাপ (Web Security Learning Path)
+
+নিচে আমাদের সিকিউরিটি হ্যান্ডবুকে থাকা ১২টি অ্যাডভান্সড চ্যাপ্টারের একটি ভিজ্যুয়াল লার্নিং পাথ চিত্রায়িত করা হলো:
+
+```mermaid
+flowchart TD
+    subgraph SecurityRoadmap ["Web Security & Cryptography Internals Roadmap"]
+        direction TB
+        M1["Module 1: Cryptography Core <br> (Symmetric, Asymmetric, TLS 1.3 & Argon2)"]
+        M2["Module 2: IAM & Token Security <br> (OAuth 2.0, OIDC & JWT Securing)"]
+        M3["Module 3: Browser & OWASP Defense <br> (Security Headers, XSS, CSRF & SSRF)"]
+        M4["Module 4: Infrastructure & Key Ops <br> (WAF/DDoS, mTLS, Sandbox & KMS/Vault)"]
+        
+        M1 --> M2
+        M2 --> M3
+        M3 --> M4
+    end
+```
+
+---
+
+## 📚 ১২টি চ্যাপ্টারের বিস্তারিত সূচিপত্র ও সিলেবাস (Syllabus)
+
+### 🔑 Module 1: Cryptography & Network Security (ক্রিপ্টোগ্রাফি ও নেটওয়ার্ক সিকিউরিটি)
+*ডিজিটাল ডেটার সুরক্ষা নিশ্চিত করতে ক্রিপ্টোগ্রাফিক অ্যালগরিদম এবং ট্রান্সপোর্ট লেয়ার সিকিউরিটির অভ্যন্তরীণ মেমরি মেকানিজম।*
+
+*   **১. Symmetric Cryptography ও Block Ciphers (AES-GCM Internals):**
+    *   Symmetric encryption-এর মৌলিক ধারণা।
+    *   Stream Ciphers বনাম Block Ciphers।
+    *   Cipher Modes: CBC (vulnerable to Padding Oracle) বনাম GCM (Galois/Counter Mode as AEAD - Authenticated Encryption with Associated Data)।
+    *   AES-GCM কীভাবে একই সাথে কনফিডেন্সিয়ালিটি এবং integrity (Message Authentication Tag - MAC) গ্যারান্টি দেয়।
+
+*   **২. Asymmetric Cryptography ও ECC (Elliptic Curve Cryptography) গণিত:**
+    *   Public-key cryptography-এর গাণিতিক ভিত্তি।
+    *   Discrete Logarithm Problem (RSA বনাম Diffie-Hellman)।
+    *   Elliptic Curve Cryptography: Curve25519, secp256k1 (Bitcoin/Ethereum Curve) এর গাণিতিক কাজ করার পদ্ধতি।
+    *   ECC-এর ফিজিক্যাল অ্যাডভান্টেজ: ২৫৬-বিট ECC কীভাবে ৩০৭২-বিট RSA-এর সমান সিকিউরিটি দিয়ে সিপিইউ এবং র‍্যামের ওভারহেড হ্রাস করে।
+
+*   **৩. HTTPS, SSL/TLS 1.3 Handshake ও Session Resumption:**
+    *   TLS 1.3-এর বৈপ্লবিক ১-RTT হ্যান্ডশেক ফ্লো (Client Hello, Key Exchange - ECDHE, Server Certificate validation, Finished)।
+    *   Zero-RTT (0-RTT) হ্যান্ডশেক ইউজিং Pre-Shared Keys (PSK) এবং এর রিপ্লে অ্যাটাক (Replay Attack) ঝুঁকি।
+    *   Diffie-Hellman Ephemeral (DHE) এবং Perfect Forward Seccy (PFS) গ্যারান্টি।
+
+*   **৪. Modern Hash Functions, Salting ও Memory-Hard KDFs (Argon2):**
+    *   One-way hashing criteria (Pre-image & Collision Resistance)।
+    *   SHA-256 বনাম SHA-3 (Keccak) এর অভ্যন্তরীণ কার্নেল লেআউট।
+    *   পাসওয়ার্ড হ্যাশিংয়ের বিবর্তন: MD5/SHA1 (too fast, vulnerable to GPU cracking), Bcrypt, PBKDF2।
+    *   Memory-hard Key Derivation Functions (KDF): **Argon2** (Argon2id, Argon2i, Argon2d) অ্যালগরিদম কীভাবে ASIC ও GPU অ্যাটাক প্রতিরোধ করে।
+
+---
+
+### 🛡️ Module 2: Identity & Token Security (আইডেন্টিটি ও টোকেন সিকিউরিটি)
+*আধুনিক ক্লাউড ও ডিস্ট্রিবিউটেড মাইক্রোসার্ভিসে প্রমাণীকরণ (Authentication) এবং টোকেন ব্যবস্থাপনার এন্টারপ্রাইজ স্ট্যান্ডার্ড।*
+
+*   **৫. Web Identity & Access Management (IAM): OAuth 2.0 ও OIDC (OpenID Connect) ফ্লো:**
+    *   OAuth 2.0 এর ৪টি কোর রোলস: Client, Resource Owner, Authorization Server, Resource Server।
+    *   Authentication বনাম Authorization।
+    *   Authorization Code Flow with PKCE (Proof Key for Code Exchange) - সিঙ্গেল-পেজ অ্যাপ (SPA) ও মোবাইলের জন্য এটি কেন বাধ্যতামূলক।
+    *   Client Credentials Flow এবং Implicit Flow-এর অবসান।
+    *   OpenID Connect (OIDC) লেয়ার: OAuth 2.0-এর ওপর ID Tokens (Identity metadata) ম্যাপিং।
+
+*   **৬. JWT (JSON Web Tokens) Security, Hijacking ও Token Revocation:**
+    *   JWT স্ট্রাকচার: Header, Payload, Signature।
+    *   ক্রিপ্টোগ্রাফিক সাইনিং: HMAC (HS256) Symmetric বনাম RSA/ECDSA (RS256/ES256) Asymmetric সাইনিং।
+    *   Key rotation using JWKS (JSON Web Key Sets)।
+    *   JWT নিরাপত্তা দুর্বলতা: `none` algorithm exploit, signature validation failure, token hijacking।
+    *   স্টেটলেস আর্কিটেকচারে টোকেন রিভোকেশন (Token Revocation) স্ট্র্যাটেজি: Redis Bloom Filters দিয়ে ব্ল্যাকলিস্টিং ও স্লাইডিং সেশন।
+
+---
+
+### 🌐 Module 3: Browser & OWASP Attack Defense (ব্রাউজার ও ওডব্লিউএএসপি ডিফেন্স)
+*ওয়েব ব্রাউজার স্তরের সিকিউরিটি পলিসি এবং আধুনিক এন্টারপ্রাইজ অ্যাপ্লিকেশনের শীর্ষস্থানীয় নিরাপত্তা ঝুঁকি ও তাদের প্রতিরোধ।*
+
+*   **৭. HTTP Security Headers (CSP, HSTS, CORS & Cookie Security):**
+    *   Content Security Policy (CSP): স্ক্রিপ্ট সোর্সিং রেস্ট্রিক্ট করা এবং XSS এভয়ডেন্স।
+    *   HTTP Strict Transport Security (HSTS): ব্রাউজারকে HTTPS এনফোর্স করতে বাধ্য করা ও HSTS Preloading।
+    *   Cross-Origin Resource Sharing (CORS): OPTIONS প্রিপ্লাইট রিকোয়েস্ট এবং অরিজিন ভ্যালিডেশন মেকানিজম।
+    *   Cookie Security: `HttpOnly` (XSS-রোধী), `Secure` (HTTPS-only), `SameSite` (`Strict`, `Lax`, `None` - CSRF-রোধী)।
+
+*   **৮. Top OWASP Attacks & Mitigations (SQLi, XSS, CSRF, SSRF & IDOR):**
+    *   Cross-Site Scripting (XSS): Stored, Reflected, DOM-based XSS এবং স্যানিটাইজেশন বনাম এসকেপিং।
+    *   Cross-Site Request Forgery (CSRF): Synchronizer Token Pattern ও Double Submit Cookie।
+    *   Server-Side Request Forgery (SSRF): ক্লাউড মেটাডেটা এন্ডপয়েন্ট (AWS IMDSv2) এক্সপ্লয়েট করার মেকানিজম ও ডোমেইন হোয়াইটলিস্টিং।
+    *   Insecure Direct Object Reference (IDOR) ডিফেন্স।
+
+---
+
+### ⚙️ Module 4: Infrastructure & Cloud Security (অবকাঠামো ও ক্লাউড সিকিউরিটি)
+*নেটওয়ার্ক লেভেল, ক্লাউড পরিবেশ, কন্টেইনার এবং ক্রিপ্টোগ্রাফিক কি-ম্যানেজমেন্ট সার্ভিসের ভেতরের স্টাফ-আর্কিটেক্ট গাইডলাইন।*
+
+*   **৯. API Gateway Security: Rate Limiting, WAF (Web Application Firewall) ও DDoS Defenses:**
+    *   ডিস্ট্রিবিউটেড রেট লিমিটিং অ্যালগরিদম (Token Bucket, Leaky Bucket) স্কেলিং।
+    *   WAF ইন্সপেকশন: SQLi/XSS সিগনেচার ম্যাচিং ও আচরণগত বিশ্লেষণ (Anomaly Detection)।
+    *   Layer 3/4 DDoS বনাম Layer 7 (Application) DDoS প্রতিরোধ, Anycast Routing ও ক্লাউডফ্লেয়ার সিডিএন এডজেস।
+
+*   **১০. Zero-Trust Architecture ও Microservices Security (mTLS ও Service Mesh):**
+    *   পেরিমিটার সিকিউরিটির অবসান (Firewalls are not enough)।
+    *   Mutual TLS (mTLS): মাইক্রোসার্ভিসগুলোর মধ্যে দ্বিমুখী ক্রিপ্টোগ্রাফিক অথেন্টিকেশন ও সিমেট্রিক এনক্রিপশন।
+    *   Service Mesh (Istio/Envoy): SPIFFE/SPIRE স্ট্যান্ডার্ডের মাধ্যমে ডাইনামিক সার্টিফিকেট রোটেশন ও সিঙ্ক।
+
+*   **১১. Container Security & Sandbox Isolation (Namespaces, cgroups, Seccomp ও AppArmor):**
+    *   লিনাক্স কার্নেলের আইসোলেশন বাউন্ডারি: Namespaces (PID, Net, Mount) এবং Control Groups (cgroups)।
+    *   Seccomp (Secure Computing Mode): বিপজ্জনক কার্নেল সিস্টেম কল (Syscalls like `ptrace`, `reboot`) কন্টেইনারে ফিল্টার করা।
+    *   AppArmor/SELinux: প্রসেস ও ফাইল অ্যাক্সেসের ওপর ম্যান্ডেটরি অ্যাক্সেস কন্ট্রোল (MAC) পলিসি।
+    *   Rootless Containers ও User Namespaces।
+
+*   **১২. Cryptographic Key Management & Envelope Encryption (KMS, HSM & Vault):**
+    *   সিক্রেট ম্যানেজমেন্টের সেরা অনুশীলন (Avoiding hardcoded API Keys & Env Variables)।
+    *   Key Management Services (KMS) এবং Hardware Security Modules (HSM) - FIPS 140-2 ফিজিক্যাল চিপ সিকিউরিটি।
+    *   Envelope Encryption: Data Encryption Keys (DEK) বনাম Key Encryption Keys (KEK)।
+    *   HashiCorp Vault ইন্টারনালস: **Shamir's Secret Sharing Scheme** দিয়ে ভল্ট আনসিলিং ও মেমরি সিলিং প্রসেস।
+
+---
+
+---
+
+## Module 1: Cryptography & Network Security (ক্রিপ্টোগ্রাফি ও নেটওয়ার্ক সিকিউরিটি)
+
+ডিজিটাল নিরাপত্তার ভিত্তি হলো ক্রিপ্টোগ্রাফি। ডেটা যখন ডিস্কে অলস পড়ে থাকে (Data-at-Rest) অথবা নেটওয়ার্ক দিয়ে এক সার্ভার থেকে অন্য সার্ভারে স্থানান্তরিত হয় (Data-in-Transit), তখন তার গোপনীয়তা (Confidentiality) ও অখণ্ডতা (Integrity) নিশ্চিত করতে ক্রিপ্টোগ্রাফিক অ্যালগরিদম ও ট্রান্সপোর্ট প্রোটোকল কার্নেল লেভেলে কীভাবে কাজ করে তা আমাদের এই মডিউলের মূল আলোচ্য বিষয়।
+
+---
+
+## ১. Symmetric Cryptography ও Block Ciphers (AES-GCM Internals)
+
+সিমেট্রিক এনক্রিপশন (Symmetric Encryption) হলো এমন একটি পদ্ধতি যেখানে ডেটা এনক্রিপ্ট এবং ডিক্রিপ্ট করার জন্য একই সিক্রেট কী (Shared Secret Key) ব্যবহার করা হয়। এটি অত্যন্ত দ্রুতগতির হওয়ায় কোটি কোটি ট্রাফিকের রিয়েল-টাইম পে-লোড এনক্রিপ্ট করতে সিমেট্রিক ক্রিপ্টোগ্রাফি ব্যবহৃত হয়।
+
+### ক. Stream Ciphers বনাম Block Ciphers
+১. **Stream Ciphers (উদা: ChaCha20):**
+   * এটি ডেটাকে ১-বিট বা ১-বাইট করে একটি ছদ্ম-এলোমেলো কী-স্ট্রিমের (Pseudo-random Keystream) সাথে XOR অপারেটর ব্যবহার করে সরাসরি এনক্রিপ্ট করে।
+   * এটি অত্যন্ত ফাস্ট কিন্তু কী-ইউজ করার ক্ষেত্রে কোনো ভুল হলে (Key Reuse/Nonce Reuse) সম্পূর্ণ ডেটা ডিক্রিপ্ট করা সহজ হয়ে যায়।
+২. **Block Ciphers (উদা: AES):**
+   * এটি র-ডেটাকে নির্দিষ্ট ফিক্সড ব্লকে (যেমন AES-এর ক্ষেত্রে ১২৮-বিট বা ১৬ বাইট) ভাগ করে প্রতিটি ব্লককে একসাথে এনক্রিপ্ট করে।
+
+### খ. Block Cipher Modes: CBC বনাম GCM (AEAD)
+
+#### ১. Cipher Block Chaining (CBC) Mode:
+CBC মোডে প্রতিটি ডেটা ব্লককে এনক্রিপ্ট করার আগে তার আগের ব্লকের সাইফার টেক্সটের সাথে **XOR** করা হয়। প্রথম ব্লকের জন্য একটি এলোমেলো **Initialization Vector (IV)** ব্যবহার করা হয়।
+
+$$C_i = E_K(P_i \oplus C_{i-1})$$
+
+```
+CBC Encryption Flow:
+Plaintext Block ---> XOR ---> Block Cipher Encryption ---> Ciphertext Block
+                      ^ (IV or Prev Ciphertext)
+```
+
+* **প্যাডিং এবং নিরাপত্তা ঝুঁকি (Padding Oracle Attack):**
+  যেহেতু ডেটা ব্লকগুলো ১৬ বাইটের ফিক্সড হতে হয়, তাই ডেটা যদি ১৬ বাইটের চেয়ে ছোট হয় তবে **PKCS#7** প্যাডিং ব্যবহার করে ব্লক পূর্ণ করা হয়।
+  * **Padding Oracle Vulnerability:** ডিক্রিপশন করার সময় যদি ডাটাবেস বা সার্ভার ভুল প্যাডিংয়ের কারণে আলাদা এরর দেয় (উদা: `Bad Padding` বনাম `Generic Decryption Fail`), তবে হ্যাকার টাইমিং অ্যানালাইসিস এবং কুয়েরি সাবমিশনের মাধ্যমে প্রতিটি সাইফারটেক্সট বাইট-বাই-বাইট র-টেক্সটে রূপান্তর করে ফেলতে পারে। এই ঝুঁকি এড়াতে প্রোডাকশনে CBC পরিহার করা হয়।
+
+#### ②. Galois/Counter Mode (AES-GCM) - আধুনিক গোল্ড স্ট্যান্ডার্ড:
+AES-GCM হলো একটি **AEAD (Authenticated Encryption with Associated Data)** মোড। এটি ব্লকের ওপর সরাসরি চেইনিং না করে একটি ক্রমবর্ধমান কাউন্টার ব্যবহার করে ব্লক সাইফারকে স্ট্রিম সাইফারে রূপান্তরিত করে:
+
+$$C_i = P_i \oplus E_K(Y_i)$$
+
+```
+AES-GCM Pipeline:
+Counter ---> AES Encryption ---> Keystream ---> XOR ---> Ciphertext
+                                                 ^
+                                             Plaintext
+```
+
+* **AEAD এবং অখণ্ডতা গ্যারান্টি (Integrity Tag):**
+  জিসিএম মোড কেবল ডেটা এনক্রিপ্ট করে ক্ষান্ত হয় না, এটি ডিস্কের অন্যান্য আন-এনক্রিপ্টেড মেটাডেটা (যেমন: হেডার, ইউজার আইডি - AAD) এবং সাইফারটেক্সটের ওপর একটি গাণিতিক **Galois Field Multiplication** চালিয়ে ১২৮-বিটের **Authentication Tag (MAC)** তৈরি করে।
+* **Bit-Flipping Attack প্রতিরোধ:**
+  সিবিসি মোডে হ্যাকার যদি সাইফারটেক্সটের মাঝখান থেকে কোনো বিট পরিবর্তন করে (Bit Flip), তবে ডিক্রিপশনের পর র-টেক্সটে হ্যাকারের কাঙ্ক্ষিত পরিবর্তন ঘটে যেতে পারে (উদা: `role=guest` পরিবর্তন করে `role=admin` করা)। কিন্তু AES-GCM মোডে ডেটার ১টি বিটও পরিবর্তিত হলে ডিক্রিপশনের সময় **Authentication Tag mismatch** ঘটবে এবং ওএস কার্নেল সম্পূর্ণ পে-লোডটি বাতিল করে দেবে!
+
+### গ. Node.js প্রোডাকশন-রেডি AES-GCM ইমপ্লিমেন্টেশন
+নিচে একটি অত্যন্ত সুরক্ষিত ও প্রোডাকশন-গ্রেড AES-256-GCM এনক্রিপশন ও ডিক্রিপশনের বাস্তব কোড দেওয়া হলো:
+
+```javascript
+const crypto = require('crypto');
+
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // GCM এর জন্য ১২-বাইট IV স্ট্যান্ডার্ড
+const KEY_LENGTH = 32; // AES-256 এর জন্য ৩২-বাইট কী
+
+// ১. পে-লোড এনক্রিপ্ট করার ফাংশন (IV এবং Auth Tag সহ)
+function encrypt(plaintext, masterKey, aadText = '') {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ALGORITHM, masterKey, iv);
+    
+    // AAD (Additional Authenticated Data) সেট করা
+    if (aadText) {
+        cipher.setAAD(Buffer.from(aadText, 'utf-8'));
+    }
+    
+    let ciphertext = cipher.update(plaintext, 'utf8', 'hex');
+    ciphertext += cipher.final('hex');
+    
+    const tag = cipher.getAuthTag(); // ১২৮-বিট অখণ্ডতা ট্যাগ
+    
+    // IV, Tag এবং Ciphertext একসাথে কম্বাইন করে পাঠানো
+    return {
+        iv: iv.toString('hex'),
+        tag: tag.toString('hex'),
+        ciphertext: ciphertext
+    };
+}
+
+// ২. পে-লোড ডিক্রিপ্ট করার ফাংশন
+function decrypt(ciphertextHex, masterKey, ivHex, tagHex, aadText = '') {
+    const iv = Buffer.from(ivHex, 'hex');
+    const tag = Buffer.from(tagHex, 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, masterKey, iv);
+    
+    decipher.setAuthTag(tag);
+    if (aadText) {
+        decipher.setAAD(Buffer.from(aadText, 'utf-8'));
+    }
+    
+    let decrypted = decipher.update(ciphertextHex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+}
+
+// বাস্তব ব্যবহার:
+const secretKey = crypto.randomBytes(KEY_LENGTH); // মাস্টার কী
+const payload = "Top-Secret-Database-Password-2026";
+const aad = "user_id:42"; // এই মেটাডাটার ওপর কেউ টেম্পার করতে পারবে না
+
+const encryptedData = encrypt(payload, secretKey, aad);
+console.log("Encrypted Payload:", encryptedData);
+
+const decryptedText = decrypt(encryptedData.ciphertext, secretKey, encryptedData.iv, encryptedData.tag, aad);
+console.log("Decrypted Text:", decryptedText); // "Top-Secret-Database-Password-2026"
+```
+
+---
+
+## ২. Asymmetric Cryptography ও ECC (Elliptic Curve Cryptography) গণিত
+
+অ্যাসিম্যাট্রিক ক্রিপ্টোগ্রাফি বা পাবলিক-কী ক্রিপ্টোগ্রাফি (Asymmetric Cryptography) এমন একটি বৈপ্লবিক ধারণা যেখানে ডেটা এনক্রিপ্ট করার জন্য একটি পাবলিক কী (Public Key) এবং ডিক্রিপ্ট করার জন্য একটি সম্পূর্ণ ভিন্ন প্রাইভেট কী (Private Key) ব্যবহার করা হয়।
+
+### ক. RSA বনাম Diffie-Hellman (DH)
+১. **RSA (Rivest–Shamir–Adleman):**
+   * এর গাণিতিক ভিত্তি হলো দুটি বিশাল মৌলিক সংখ্যার (Prime Numbers) গুণফল বের করা সহজ, কিন্তু সেই গুণফল থেকে মূল প্রাইভেট উৎপাদক দুটি খুঁজে বের করা অত্যন্ত কঠিন (Integer Factorization Problem):
+     $$N = p \cdot q$$
+   * **কেন এটি ওবসোলেট (Obsolete) হচ্ছে?**
+     কম্পিউটারের শক্তি বৃদ্ধির কারণে পর্যাপ্ত নিরাপত্তার জন্য RSA কী-সাইজ বাড়িয়ে ৩০৭২-বিট বা ৪০৯৬-বিট করতে হচ্ছে। এই বিশাল সাইজের গাণিতিক মডুলার এক্সপোনেনশিয়েশন চেক করতে সিপিইউ-এর ওপর চরম লোড পড়ে, যা এপিআই ল্যাটেন্সি বহুগুণ বাড়িয়ে দেয়।
+২. **Diffie-Hellman Key Exchange:**
+   * এর ভিত্তি হলো **Discrete Logarithm Problem**:
+     $$g^a \pmod p$$
+   * এটি নেটওয়ার্কের প্রকাশ্য চ্যানেল দিয়ে কোনো সিক্রেট পাস না করেই ক্লায়েন্ট ও সার্ভারের মধ্যে নিরাপদShared Secret কী তৈরি করতে সাহায্য করে।
+
+### খ. Elliptic Curve Cryptography (ECC) জ্যামিতিক গণিত
+আধুনিক সিস্টেম ডিজাইনের ক্রিপ্টোগ্রাফিক গোল্ড স্ট্যান্ডার্ড হলো **ECC**। এটি ট্র্যাডিশনাল ইন্টিজার ফ্যাক্টরাইজেশনের পরিবর্তে উপবৃত্তাকার বক্ররেখা বা Elliptic Curves-এর বিন্দুগুলোর জ্যামিতিক সম্পর্কের ওপর ভিত্তি করে কাজ করে।
+
+$$y^2 = x^3 + ax + b \pmod p$$
+
+```
+Elliptic Curve Point Multiplication Concept:
+  y ^
+    |       .
+    |     .   .  (Point addition P + Q)
+    |    .     .
+----+----P-----Q--------------> x
+    |      .
+    |        . (Reflected Point R)
+```
+
+* **গ্রুপ ল (Group Law) ও পয়েন্ট মাল্টিপ্লিকেশন:**
+  কার্ভের যেকোনো দুটি বিন্দু $P$ এবং $Q$ যোগ করে আরেকটি তৃতীয় বিন্দু $R$ পাওয়া যায়। একইভাবে একটি নির্দিষ্ট বেস বিন্দু $P$-কে নিজের সাথে বারবার যোগ করে (Scalar Multiplication) আমরা একটি পাবলিক কী $Q$ তৈরি করি:
+  $$Q = d \cdot P$$
+  যেখানে $d$ হলো আমাদের অত্যন্ত বড় প্রাইভেট কী এবং $Q$ হলো পাবলিক কী। পাবলিক কী $Q$ এবং বেস পয়েন্ট $P$ প্রকাশ্য থাকলেও কোটি বছরেও ব্যাকগ্রাউন্ডে ক্যালকুলেশন করে $d$-এর মান বের করা গাণিতিকভাবে অসম্ভব। একে বলা হয় **Elliptic Curve Discrete Logarithm Problem (ECDLP)**।
+
+* **ECC-এর অসাধারণ ফিজিক্যাল এডভান্টেজ:**
+  ECC অবিশ্বাস্য ছোট কী-সাইজ ব্যবহার করে RSA-এর সমমানের নিরাপত্তা দিতে পারে:
+
+| Security Strength (Bits) | RSA Key Size (Bits) | ECC Key Size (Bits) | মেমরি ও সিপিইউ সাশ্রয় |
+| :--- | :--- | :--- | :--- |
+| ৮০ | ১০২৪ | ১৬০ | ৮ গুণ ছোট কী |
+| **১২৮ (Standard)** | **৩০৭২** | **২৫৬** | **১২ গুণ ছোট কী!** |
+| ২৫৬ | ১৫৩৬০ | ৫১২ | ৩০ গুণ ছোট কী |
+
+ছোট কী হওয়ার কারণে মেমরি ফুটপ্রিন্ট অনেক কম থাকে এবং নেটওয়ার্কে অল্প বাইটের প্যাকেট পাস করতে হয়, যা প্রতি সেকেন্ডে হাজার হাজার হ্যান্ডশেক প্রসেস করতে সিপিইউ লোড প্রায় ১০ গুণ কমিয়ে দেয়।
+
+* **বাস্তব কার্ভ অপশনস:**
+  * **secp256k1:** বিটকয়েন (Bitcoin) এবং ইথেরিয়াম (Ethereum) ব্লকচেইনের সিগনেচারের জন্য ব্যবহৃত বিশেষায়িত কার্ভ।
+  * **Curve25519:** আধুনিক TLS 1.3, SSH এবং সিগন্যাল (Signal) প্রোটোকলে ব্যবহৃত সুপার-ফাস্ট ও সাইড-চ্যানেল অ্যাটাক প্রতিরোধী কার্ভ।
+
+### গ. Node.js-এ ECDH (Elliptic Curve Diffie-Hellman) বাস্তব কোড
+নিচে দুটি নোডের মধ্যে কার্ভ২৫৫১৯ ব্যবহার করে নিরাপদ কী-এক্সচেঞ্জ ও Shared Secret জেনারেট করার বাস্তব প্রোডাকশন ডেমো দেওয়া হলো:
+
+```javascript
+const crypto = require('crypto');
+
+// ১. অ্যালিসের জন্য Curve25519 কী-পেয়ার জেনারেট করা
+const alice = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'X25519' // Curve25519 এর কী-এক্সচেঞ্জ ভেরিয়েন্ট
+});
+
+// ২. ববের জন্য Curve25519 কী-পেয়ার জেনারেট করা
+const bob = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'X25519'
+});
+
+// ৩. অ্যালিস তার প্রাইভেট কী এবং ববের পাবলিক কী দিয়ে Shared Secret গণনা করছে
+const aliceSharedSecret = crypto.diffieHellman({
+    privateKey: alice.privateKey,
+    publicKey: bob.publicKey
+});
+
+// ৪. বব তার প্রাইভেট কী এবং অ্যালিসের পাবলিক কী দিয়ে Shared Secret গণনা করছে
+const bobSharedSecret = crypto.diffieHellman({
+    privateKey: bob.privateKey,
+    publicKey: alice.publicKey
+});
+
+// ৫. ভ্যালিডেশন: উভয় Shared Secret ফিজিক্যালি মেমরিতে ১০০% সমান হবে!
+console.log("Alice Secret (Hex):", aliceSharedSecret.toString('hex'));
+console.log("Bob Secret   (Hex):", bobSharedSecret.toString('hex'));
+console.log("Secrets Match?  :", aliceSharedSecret.equals(bobSharedSecret)); // true
+```
+
+---
+
+## ৩. HTTPS, SSL/TLS 1.3 Handshake ও Session Resumption
+
+ট্রান্সপোর্ট লেয়ার সিকিউরিটি (TLS) হলো নেটওয়ার্কের মাধ্যমে ব্রাউজার ও সার্ভারের ডেটা স্ট্রিম সম্পূর্ণ এনক্রিপ্ট করার প্রোটোকল। ২০১৮ সালে রিলিজ হওয়া **TLS 1.3** প্রোটোকল পূর্ববর্তী TLS 1.2-এর তুলনায় নেটওয়ার্ক রাউন্ড ট্রিপ অনেক কমিয়ে স্পিড ও সিকিউরিটিতে বিপ্লব এনেছে।
+
+### ক. TLS 1.3 এর ১-RTT হ্যান্ডশেক ফ্লো (1-RTT Handshake)
+TLS 1.2-এ হ্যান্ডশেক সম্পন্ন করতে নেটওয়ার্কে ২টি সম্পূর্ণ রাউন্ড ট্রিপ (2-RTT) লাগত। TLS 1.3-এ অপ্টিমাইজড অ্যালগরিদম সিলেকশনের মাধ্যমে এটি মাত্র **১টি রাউন্ড ট্রিপে (1-RTT)** নামিয়ে আনা হয়েছে:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Web Browser
+    actor Server as Web Server
+
+    Client->>Server: ClientHello + Key Share (Guesses Curve & DH Public Key) [1 RTT starts]
+    Server->>Client: ServerHello + Key Share (DH Public Key) + Certificate + Finished (Encrypted)
+    Note over Client,Server: Session Keys computed by both sides locally. Handshake Complete! [1 RTT Ends]
+    Client->>Server: HTTP GET Request (Encrypted with TLS Session Key)
+```
+
+১. **ClientHello + KeyShare:** ক্লায়েন্ট প্রথম প্যাকেটেই তার সমর্থিত সাইফার সুইটের তালিকা এবং সাথে সম্ভাব্য ক্রিপ্টোগ্রাফিক কার্ভের জন্য তার Diffie-Hellman **পাবলিক কী শেয়ার (Key Share)** পাঠিয়ে দেয়।
+২. **ServerHello + KeyShare + Finished:** সার্ভার ক্লায়েন্টের পাঠানো কী-শেয়ার গ্রহণ করে নিজের পাবলিক কী শেয়ার তৈরি করে, সাথে তার ডিজিটাল সার্টিফিকেট এবং সিগনেচার এনক্রিপ্ট করে পাঠিয়ে দেয়।
+৩. প্রথম রাউন্ড ট্রিপেই উভয় পক্ষ একে অপরের পাবলিক কী পেয়ে মেমরিতে সেশন কী (`Symmetric Session Key`) গণনা করে ফেলে। সাথে সাথে নিরাপদ হাই-স্পিড ডেটা আদান-প্রদান শুরু হয়ে যায়।
+
+### খ. Zero-RTT (0-RTT) ও Replay Attack এর মারাত্মক ঝুঁকি
+পূর্বে ভিজিট করা কোনো ব্রাউজার যখন পুনরায় একই সার্ভারে কানেক্ট হতে চায়, তখন সে পূর্ববর্তী সেশনের সংগৃহীত **PSK (Pre-Shared Key)** ব্যবহার করে প্রথম প্যাকেটের সাথেই (০-RTT) রিকোয়েস্টের বডি ও ডেটা পাঠিয়ে দিতে পারে। একে বলা হয় **TLS 1.3 Early Data** বা **0-RTT Handshake**।
+
+* **রিপ্লে অ্যাটাক (Replay Attack) বিপদ:**
+  ০-RTT-তে প্রথম ডেটা প্যাকেটটি যেহেতু কোনো রিয়েল-টাইম হ্যান্ডশেক লাইভ চ্যালেঞ্জ ছাড়াই নেটওয়ার্কে চলে যায়, হ্যাকার চাইলে সকেট কানেকশন থেকে সেই সাইফার প্যাকেটটি ক্যাপচার করে হুবহু সার্ভারে পুনরায় পাঠাতে পারে (Replay)।
+  * **দুর্ঘটনা:** ইউজার যদি ১টি পণ্য কেনার জন্য POST রিকোয়েস্ট পাঠান এবং হ্যাকার সেটি ক্যাপচার করে ৫ বার রিপ্লে করে, সার্ভার ট্রানজেকশনটি ভ্যালিড মনে করে ইউজারের ব্যাংক থেকে ৫ বার টাকা কেটে নেবে!
+* **প্রতিরোধ স্ট্র্যাটেজি:**
+  * প্রোডাকশনে এপিআই গেটওয়ে লেভেলে ০-RTT-তে আসা কোনো অ-ইডেমপোটেন্ট (Non-idempotent) রিকোয়েস্ট (যেমন: POST, PUT, DELETE) প্রসেস করা নিষিদ্ধ করতে হবে। কেবল সেফ GET রিকোয়েস্ট এনাবেল করা উচিত।
+
+### গ. Perfect Forward Secrecy (PFS)
+পূর্বে যখন ট্র্যাডিশনাল RSA কী-এক্সচেঞ্জ ব্যবহার করা হতো, তখন হ্যাকার যদি নেটওয়ার্কের সমস্ত এনক্রিপ্টেড ডাটা রেকর্ড করে রাখত এবং পরবর্তীতে কোনোভাবে সার্ভারের প্রাইভেট কী চুরি করতে পারত, তবে সে অতীতের রেকর্ড করা সমস্ত ট্রাফিক ডিক্রিপ্ট করে ফেলতে পারত।
+
+**Perfect Forward Secrecy (PFS)** নিশ্চিত করে যে—ভবিষ্যতে মেইন প্রাইভেট কী চুরি হলেও পেছনের কোনো ডেটা ডিক্রিপ্ট করা যাবে না।
+* **মেকানিজম:** TLS 1.3-এ স্ট্যাটিক কী-এক্সচেঞ্জ সম্পূর্ণ ব্যান করা হয়েছে। এখানে প্রতিটি সেশনের জন্য ডাইনামিকালি ক্ষণস্থায়ী **ECDHE (Elliptic Curve Diffie-Hellman Ephemeral)** কী তৈরি করা হয়। সেশন শেষ হওয়া মাত্রই মেমরি থেকে কী মুছে ফেলা হয়। ফলে ভবিষ্যতে প্রাইভেট কী চুরি হলেও হ্যাকারের পক্ষে পুরনো সেশন কী ডিক্রিপ্ট করা অসম্ভব!
+
+---
+
+## ৪. Modern Hash Functions, Salting ও Memory-Hard KDFs (Argon2)
+
+ক্রিপ্টোগ্রাফিক হ্যাশ ফাংশন (Cryptographic Hash Function) হলো এমন একটি গাণিতিক অ্যালগরিদম যা যেকোনো সাইজের ডেটা গ্রহণ করে একটি নির্দিষ্ট ফিক্সড সাইজের হেক্সাডেসিমেল স্ট্রিং (Message Digest) আউটপুট দেয়। এটি সম্পূর্ণ একমুখী (One-Way); অর্থাৎ হ্যাশ ভ্যালু থেকে র-ডেটা ব্যাক করা অসম্ভব।
+
+### ক. SHA-256 (Merkle-Damgård) বনাম SHA-3 (Sponge Construction)
+১. **SHA-256:**
+   * এটি **Merkle-Damgård** আর্কিটেকচার ব্যবহার করে কাজ করে। এর ব্লক প্রসেসিং মেথডের কারণে এটি এক ধরণের বিশেষ নেটওয়ার্ক আক্রমণ **Length Extension Attack**-এর শিকার হতে পারে (যেখানে হ্যাশের সাথে অতিরিক্ত ডেটা অ্যাপেন্ড করে নতুন ভ্যালিড হ্যাশ জেনারেট করা যায়)।
+২. **SHA-3 (Keccak):**
+   * এটি সম্পূর্ণ নতুন **Sponge Construction** ব্যবহার করে ডিজাইন করা হয়েছে। এর কাজ দুটি ধাপে বিভক্ত:
+
+```
+SHA-3 Sponge Construction:
+Input Data ---> [Absorbing Phase (Squeeze and mix into memory state)]
+                        |
+                        v
+Output Hash <--- [Squeezing Phase (Extract bits layer by layer)]
+```
+
+SHA-৩ এর স্পঞ্জ আর্কিটেকচারের কারণে এটি কোনো প্রকার লেন্থ এক্সটেনশন অ্যাটাকের শিকার হয় না এবং এটি অত্যন্ত শক্তিশালী ক্রিপ্টোগ্রাফিক কোলিশন রেজিস্ট্যান্স অফার করে।
+
+### খ. পাসওয়ার্ড হ্যাশিং ও Memory-Hard KDFs
+অনেক ডেভেলপার ভুলবশত পাসওয়ার্ড ডেটাবেজে সেভ করার সময় SHA-256 বা MD5 ব্যবহার করেন।
+* **বিপদ:** SHA-256 ডিজাইন করা হয়েছে দ্রুত রান করার জন্য। একটি আধুনিক জিপিইউ (NVIDIA RTX 4090) প্রতি সেকেন্ডে শত কোটি SHA-256 হ্যাশ গণনা করতে পারে। ফলে ডাটাবেস লিক হলে হ্যাকার ব্রুট-ফোর্স বা রেইনবো টেবিল অ্যাটাক চালিয়ে কয়েক সেকেন্ডেই সব ইউজারের পাসওয়ার্ড ডিক্রিপ্ট করে ফেলবে।
+* **Salting:** পাসওয়ার্ডের সাথে একটি র্যান্ডম স্ট্রিং (Salt) যোগ করে হ্যাশ করা, যা ডুপ্লিকেট পাসওয়ার্ডের হ্যাশ আলাদা করে এবং প্রাক-গণনাকৃত রেইনবো টেবিল সম্পূর্ণ অকেজো করে দেয়।
+
+#### 🏆 Argon2 - আধুনিক পাসওয়ার্ড হ্যাশিংয়ের রাজা:
+২০১৫ সালের পাসওয়ার্ড হ্যাশিং প্রতিযোগিতার বিজয়ী অ্যালগরিদম হলো **Argon2**। এটি একটি **Memory-Hard KDF**।
+
+* **কেন এটি এএসআইসি/জিপিইউ প্রতিরোধী?**
+  Argon2-এর হ্যাশ গণনা করতে ওএসের নির্দিষ্ট মেমরি (উদা: ৬৪ মেগাবাইট বা ১২৮ মেগাবাইট র‍্যাম) এবং একাধিক সিপিইউ থ্রেড ব্যবহার করতে হয়। যেহেতু জিপিইউ বা এএসআইসি চিপগুলোর প্রতিটি কোরের র‍্যাম অত্যন্ত সীমিত থাকে, তাই তারা প্যারালালি কোটি কোটি Argon2 হ্যাশ ট্রাই করতে পারে না। এর ফলে হার্ডওয়্যার এক্সিলারেটেড ব্রুট-ফোর্স অ্যাটাক সম্পূর্ণ থমকে যায়।
+
+#### Argon2-এর তিনটি প্রধান ভেরিয়েন্ট:
+১. **Argon2d (Data-dependent):** ডেটার ওপর ভিত্তি করে মেমরি অ্যাক্সেস করে। সাইড-চ্যানেল টাইমিং অ্যাটাক হতে পারে এমন সিস্টেমে এটি অনুপোযুক্ত, তবে ক্রিপ্টোকারেন্সির জন্য এটি সেরা জিপিইউ প্রতিরোধী অ্যালগরিদম।
+২. **Argon2i (Data-independent):** পাসওয়ার্ড ডেটা নির্বিশেষে সিকুয়েন্সিয়াল মেমরি অ্যাক্সেস করে। এটি সাইড-চ্যানেল টাইমিং অ্যাটাক সম্পূর্ণ প্রতিরোধ করে বলে ওয়েব এপিআই ও ইউজার লগইনের জন্য আদর্শ।
+৩. **Argon2id (Hybrid - Gold Standard):** এটি প্রথম ধাপে Argon2i-এর মতো সিকিউরড মেমরি অ্যাক্সেস করে এবং পরবর্তী ধাপে Argon2d-এর মতো ডেটা-ডিপেন্ডেন্ট স্পিড ব্লক করে। এটি সমস্ত এন্টারপ্রাইজ অ্যাপের জন্য ডিফল্ট রিকমেন্ডেড ভেরিয়েন্ট।
+
+### গ. Node.js-এ Argon2id পাসওয়ার্ড হ্যাশিং বাস্তব কোড
+প্রোডাকশন-গ্রেড কনফিগারেশন প্যারামিটারসহ (মেমরি খরচ ৬৪এমবি, টাইম কস্ট ৩ ইটারেশন, ৪টি প্যারালাল থ্রেড) পাসওয়ার্ড হ্যাশিং ও ভেরিফিকেশনের কোড নিচে দেওয়া হলো:
+
+```javascript
+// npm install argon2
+const argon2 = require('argon2');
+
+// ১. পাসওয়ার্ড নিরাপদে হ্যাশ করার ফাংশন
+async function hashPassword(password) {
+    try {
+        const hashedPassword = await argon2.hash(password, {
+            type: argon2.argon2id, // Hybrid Mode
+            memoryCost: 65536, // ৬৪ মেগাবাইট র‍্যাম কনজাম্পশন
+            timeCost: 3,       // ৩ বার ইটারেশন রান হবে
+            parallelism: 4     // ৪টি সিপিইউ থ্রেড একসাথে প্রসেস করবে
+        });
+        return hashedPassword;
+    } catch (err) {
+        console.error("Hashing Error:", err);
+        throw err;
+    }
+}
+
+// ২. ইনপুট পাসওয়ার্ডের সাথে হ্যাশ ম্যাচিং চেক করা
+async function verifyPassword(hashedPassword, inputPassword) {
+    try {
+        const isMatch = await argon2.verify(hashedPassword, inputPassword);
+        return isMatch;
+    } catch (err) {
+        console.error("Verification Error:", err);
+        throw err;
+    }
+}
+
+// লাইভ ডেমো:
+(async () => {
+    const rawPassword = "UserSuperSecurePassword2026";
+    
+    // হ্যাশ জেনারেট করা
+    const myHash = await hashPassword(rawPassword);
+    console.log("Argon2id Hash:", myHash); 
+    // আউটপুট ফরম্যাট: $argon2id$v=19$m=65536,t=3,p=4$... (এতে সল্ট ও প্যারামিটার অটো-ইনজেক্টেড থাকে)
+
+    // পাসওয়ার্ড ভেরিফাই করা (সঠিক পাসওয়ার্ড)
+    const isValid = await verifyPassword(myHash, rawPassword);
+    console.log("Is Password Valid? :", isValid); // true
+
+    // ভুল পাসওয়ার্ড চেক করা
+    const isInvalid = await verifyPassword(myHash, "WrongPassword123");
+    console.log("Is Wrong Password Valid? :", isInvalid); // false
+})();
+```
+
+---
+
+## Module 2: Identity & Token Security (আইডেন্টিটি ও টোকেন সিকিউরিটি)
+
+আধুনিক এন্টারপ্রাইজ অ্যাপ্লিকেশন এবং মাইক্রোসার্ভিস আর্কিটেকচারে ক্লায়েন্টদের প্রমাণীকরণ (Authentication) এবং সম্পদের অ্যাক্সেস নিয়ন্ত্রণ (Authorization) করার জন্য একটি সেন্ট্রাল আইডেন্টিটি ম্যানেজমেন্ট সিস্টেম অত্যন্ত জরুরি। এই মডিউলে আমরা OAuth 2.0, OpenID Connect এবং JSON Web Tokens (JWT) এর জটিল মেকানিজম এবং এদের ফিজিক্যাল সিকিউরিটি বাউন্ডারি নিয়ে আলোচনা করব।
+
+---
+
+## ৫. Web Identity & Access Management (IAM): OAuth 2.0 ও OIDC (OpenID Connect) ফ্লো
+
+অনেকে গুলিয়ে ফেলেন—OAuth 2.0 কিন্তু প্রমাণীকরণ বা অথেন্টিকেশন প্রোটোকল নয়; এটি একটি **অনুমোদন বা অথরাইজেশন ফ্রেমওয়ার্ক (Authorization Framework)**। অপরদিকে **OpenID Connect (OIDC)** হলো OAuth 2.0-এর ওপর তৈরি করা একটি আইডেন্টিটি লেয়ার যা অথেন্টিকেশন নিশ্চিত করে।
+
+### ক. OAuth 2.0 এর ৪টি কোর রোলস (Roles)
+১. **Resource Owner:** মূলত শেষ ব্যবহারকারী (End User), যিনি তার অ্যাকাউন্টের অ্যাক্সেস দিতে সম্মত হন।
+২. **Client:** যে থার্ড-পার্টি অ্যাপ্লিকেশনটি ইউজারের পক্ষ থেকে ডেটা অ্যাক্সেস করতে চায় (যেমন: একটি মোবাইল অ্যাপ বা ফ্রন্টএন্ড সিঙ্গেল পেজ অ্যাপ্লিকেশন)।
+৩. **Authorization Server:** আইডেন্টিটি প্রোভাইডার (উদা: Okta, Auth0, Keycloak বা Google Identity Service) যা ইউজারকে অথেন্টিকেট করে এবং টোকেন ইস্যু করে।
+৪. **Resource Server:** আমাদের সুরক্ষিত এপিআই সার্ভার (Protected API Gateway/Backend), যা ভ্যালিড অ্যাক্সেস টোকেন যাচাই করে ডেটা রিটার্ন করে।
+
+### খ. Authentication বনাম Authorization
+* **Authentication (AuthN):** "আপনি কে?" (Verifying identity)। এর আউটপুট হলো ওআইডিসি থেকে প্রাপ্ত **ID Token**।
+* **Authorization (AuthZ):** "আপনি কী করতে পারবেন?" (Verifying permissions)। এর আউটপুট হলো ওঅথ ২.০ থেকে প্রাপ্ত **Access Token**।
+
+---
+
+### গ. PKCE (Proof Key for Code Exchange) ফ্লো
+ঐতিহ্যবাহী *Authorization Code Flow*-তে ব্রাউজার যখন অথরাইজেশন কোড পায়, তখন ব্যাকএন্ডে গিয়ে টোকেন এক্সচেঞ্জ করতে একটি গোপন `client_secret` পাস করতে হয়। কিন্তু মোবাইল অ্যাপ বা সিঙ্গেল পেজ অ্যাপের (React/Vue/Svelte) কোড যেহেতু ব্রাউজারে রিড করা যায়, সেখানে সিক্রেট কি লুকিয়ে রাখা অসম্ভব (Public Clients)। এই পাবলিক ক্লায়েন্টদের সিকিউরিটি নিশ্চিত করতে **PKCE** উদ্ভাবন করা হয়।
+
+#### PKCE মেকানিজম:
+১. **Code Verifier:** ক্লায়েন্ট প্রথমে একটি উচ্চ-এনট্রপির ক্রিপ্টোগ্রাফিকভাবে সুরক্ষিত র্যান্ডম স্ট্রিং তৈরি করে (ন্যূনতম ৪৩ ক্যারেক্টার)।
+২. **Code Challenge:** সেই ভেরিফায়ার স্ট্রিংকে SHA-256 দিয়ে হ্যাশ করে Base64URL-এ কনভার্ট করা হয়:
+   $$\text{Code Challenge} = \text{Base64URL}(\text{SHA256}(\text{Code Verifier}))$$
+৩. ক্লায়েন্ট যখন অথ সার্ভারকে রিকোয়েস্ট পাঠায়, সে `code_challenge` এবং `code_challenge_method=S256` ইনজেক্ট করে দেয়।
+৪. অথ সার্ভার কোড চ্যালেঞ্জটি নিজের ডেটাবেজে সেভ করে ক্লায়েন্টকে একটি ক্ষণস্থায়ী `authorization_code` দেয়।
+৫. ক্লায়েন্ট যখন ব্যাকএন্ড থেকে টোকেন দাবি করে, তখন সে `authorization_code` এর সাথে র-টেক্সট **`code_verifier`** পাঠিয়ে দেয়।
+৬. অথ সার্ভার সেই র-ভেরিফায়ারকে পুনরায় SHA-256 করে দেখে যে তা পূর্বে সেভ করা চ্যালেঞ্জের সাথে মিলছে কি না। মিললে কেবল অ্যাক্সেস টোকেন ইস্যু করা হয়। এর ফলে নেটওয়ার্ক ট্রাফিকের মাঝখান থেকে কেউ যদি কোড চুরিও করে, সে `code_verifier` ছাড়া টোকেন বের করতে পারবে না!
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Single Page App (SPA)
+    actor AuthServer as Authorization Server (IdP)
+
+    Note over Client: 1. Generate random Code Verifier <br> 2. Code Challenge = SHA256(Verifier)
+    Client->>AuthServer: GET /authorize?code_challenge=XYZ&method=S256
+    AuthServer-->>Client: Return short-lived Authorization Code (AuthCode)
+    Client->>AuthServer: POST /token?code=AuthCode&code_verifier=RawVerifier
+    Note over AuthServer: Validate SHA256(RawVerifier) == XYZ
+    AuthServer-->>Client: Issue ID Token, Access Token & Refresh Token
+```
+
+### ঘ. Client Credentials Flow ও Modern Deprecations
+* **Client Credentials Flow:** এটি কোনো ইউজার কনটেক্সট ছাড়া মেশিন-টু-মেশিন (M2M) যোগাযোগের জন্য ব্যবহৃত হয় (উদা: একটি ব্যাকএন্ড মাইক্রোসার্ভিস যখন অন্য আরেকটি ইন্টারনাল সার্ভিসের সাথে কথা বলে)। এখানে ডিরেক্ট ক্লায়েন্ট আইডি ও ক্লায়েন্ট সিক্রেট দিয়ে অ্যাক্সেস টোকেন নেওয়া হয়।
+* **Modern OAuth 2.1 Deprecations:** আধুনিক OAuth 2.1 স্পেসিফিকেশনে ব্রাউজার লেভেলে ক্ষতিকারক **Implicit Flow** (যেখানে সরাসরি ব্রাউজারের ইউআরএল-এ অ্যাক্সেস টোকেন রিটার্ন করা হতো) সম্পূর্ণ নিষিদ্ধ বা ব্যান করা হয়েছে। কারণ ইউআরএল ট্র্যাকিং বা রেফারার হেডার লিকের মাধ্যমে টোকেন সহজেই হ্যাক হতে পারত। এখন এসপিএ-তেও PKCE ফ্লো বাধ্যতামূলক।
+
+---
+
+## ৬. JWT (JSON Web Tokens) Security, Hijacking ও Token Revocation
+
+JSON Web Token (JWT) হলো দুটি পক্ষের মধ্যে সিকিউরড তথ্য আদান-প্রদানের জন্য একটি কমপ্যাক্ট, ইউআরএল-সেফ এবং সেলফ-কন্টেইন্ড স্ট্যাটলেস কন্টেইনার।
+
+### ক. JWT-এর গঠন
+একটি JWT তিনটি অংশে বিভক্ত থাকে যা ডট (`.`) দ্বারা পৃথক করা হয়:
+১. **Header:** অ্যালগরিদম টাইপ এবং টোকেন টাইপ মেটাডাটা ধারণ করে (যেমন: `{"alg": "RS256", "typ": "JWT"}`).
+২. **Payload:** ইউজারের রিয়েল ক্লেইমস বা দাবি (যেমন: `{"sub": "123456", "name": "Awolad", "role": "admin"}`).
+৩. **Signature:** হেডার ও পে-লোডের সাইনড ক্রিপ্টোগ্রাফিক প্রুফ, যা ডেটার অখণ্ডতা রক্ষা করে।
+
+$$\text{JWT} = \text{Base64}(H) . \text{Base64}(P) . \text{Signature}$$
+
+---
+
+### খ. Symmetric বনাম Asymmetric JWT Signing
+
+#### ①. HMAC Symmetric Signing (HS256):
+HS256 মোডে টোকেন তৈরি এবং ভেরিফাই করতে একটিমাত্র গোপন পাসওয়ার্ড বা **Shared Secret Key** ব্যবহার করা হয়।
+* **আর্কিটেকচারাল বিপর্যয়:** আপনার যদি ৫টি মাইক্রোসার্ভিস থাকে, তবে টোকেন যাচাই করতে ৫টি সার্ভিসকেই সেই একই গোপন মাস্টার কী প্রোভাইড করতে হবে। এর মধ্যে ১টি সার্ভারের ডেটাবেস হ্যাক হলে বা কোনো ডেভেলপার ভুল করে কী লিক করলে, হ্যাকার সম্পূর্ণ ইনফ্রাস্ট্রাকচারের জন্য যেকোনো ভুয়া অ্যাডমিন টোকেন নিজে সাইন করে জেনারেট করে ফেলতে পারবে!
+
+#### ②. RSA/ECDSA Asymmetric Signing (RS256/ES256) - গোল্ড স্ট্যান্ডার্ড:
+এখানে আইডেন্টিটি সার্ভার তার নিজস্ব অত্যন্ত সুরক্ষিত **Private Key** দিয়ে টোকেন সাইন করে। আর আমাদের ইন্টারনাল বা এক্সটারনাল মাইক্রোসার্ভিসগুলো সেই টোকেন ডিক্রিপ্ট ও ভেরিফাই করে একটি ওপেনলি শেয়ার্ড **Public Key** দিয়ে।
+* **সুবিধা:** মাইক্রোসার্ভিসগুলোর কাছে কোনো রাইট অ্যাক্সেস বা সিক্রেট কি থাকে না। তারা কেবল পাবলিক কী দিয়ে রিড করতে পারে। ফলে কোনো ব্যাকএন্ড মাইক্রোসার্ভিস হ্যাক হলেও সিস্টেম সুরক্ষিত থাকে।
+
+```
+Signing Flow (Identity Provider):
+Header + Payload ---> Hash (SHA-256) ---> Encrypt with Private Key ---> JWT Signature
+
+Verification Flow (Microservices):
+Header + Payload ---> Hash (SHA-256) == Decrypt Signature with Public Key? (True/False)
+```
+
+---
+
+### গ. JWKS (JSON Web Key Sets) ও ডাইনামিক কী রোটেশন
+রিয়েল-টাইম প্রোডাকশন আর্কিটেকচারে পাবলিক কী ব্যাকএন্ড কোডে বা এনভায়রনমেন্ট ভ্যারিয়েবলে হার্ডকোড করা একটি বড় সিকিউরিটি অ্যান্টি-প্যাটার্ন। কারণ কী পরিবর্তিত হলে সমস্ত সার্ভিস ডাউন হয়ে যাবে।
+এর সমাধান হলো **JWKS (JSON Web Key Sets)**:
+
+১. অথরাইজেশন সার্ভার একটি উন্মুক্ত এন্ডপয়েন্টে তার পাবলিক কী-গুলোর মেটাডাটা প্রকাশ করে (সাধারণত `/.well-known/jwks.json`)।
+২. মাইক্রোসার্ভিসগুলো যখন প্রথম রান হয় বা যখন কোনো নতুন JWT পায়, সে টোকেনের হেডার থেকে **`kid` (Key ID)** রিড করে।
+৩. সার্ভিসটি ডাইনামিক্যালি JWKS এন্ডপয়েন্ট থেকে উক্ত `kid`-এর পাবলিক কী ম্যাচ করে ক্যাশে সংরক্ষণ করে এবং তা দিয়ে সিগনেচার যাচাই করে।
+৪. আইডেন্টিটি প্রোভাইডার যদি প্রতি সপ্তাহে কী পরিবর্তনও (Key Rotation) করে, ব্যাকএন্ড সার্ভিসগুলো অটোমেটিক্যালি নতুন কী ফেচ করে রানটাইমে হ্যান্ডশেক সফল রাখে।
+
+---
+
+### ঘ. JWT এর ভয়াবহ সিকিউরিটি লুপহোল ও বাইপাস
+
+#### ১. `"alg": "none"` এক্সপ্লয়েট:
+অনেক পুরানো বা দুর্বল কনফিগারেশনের লাইব্রেরি টোকেনের হেডার চেক করে যদি দেখে `"alg": "none"`, তবে তারা কোনো প্রকার সিগনেচার ভেরিফিকেশন ছাড়াই টোকেনকে ভ্যালিড ধরে নেয়।
+* **অ্যাটাক:** হ্যাকার একটি অ্যাডমিন ইমেইলের পে-লোড লিখে হেডারে `"alg": "none"` সেট করে সিগনেচার অংশটি সম্পূর্ণ ফাঁকা রেখে পাঠায়। লাইব্রেরি সেটি নির্বিঘ্নে গ্রহণ করে অ্যাডমিন এক্সেস দিয়ে দেয়!
+* **প্রতিরোধ:** আপনার ব্যাকএন্ড ভ্যালিডেটর কোডে explicitly ডিফল্ট অ্যালগরিদম হোয়াইটলিস্ট করুন (যেমন: `.alg(["RS256"])`) এবং রানটাইমে `none` টাইপ টোকেন স্ট্রিক্টলি রিজেক্ট করুন।
+
+#### ২. HMAC বনাম RSA কী কনফিউশন অ্যাটাক (Key Confusion Attack):
+যখন একটি ব্যাকএন্ড সার্ভিস RS256 (Asymmetric) টোকেন আশা করে, কিন্তু হ্যাকার হেডার পরিবর্তন করে HS256 (Symmetric) করে দেয়। 
+* **অ্যাটাক:** হ্যাকার সার্ভিসটির উন্মুক্ত পাবলিক কী-টিকে (যা সে ইন্টারনেট থেকে ডাউনলোড করেছে) সিমেট্রিক কী হিসেবে ব্যবহার করে একটি ভুয়া টোকেন সাইন করে পাঠায়। সার্ভিসটির লাইব্রেরি যখন সিগনেচার চেক করতে যায়, সে পাবলিক কী-টিকে সিমেট্রিক কী হিসেবে ট্রিট করে হ্যাকারের সাইন করা টোকেনটিকে ভ্যালিড মনে করে ডিক্রিপ্ট করে ফেলে!
+* **প্রতিরোধ:** ভেরিফিকেশন লাইব্রেরিতে ডাইনামিক অ্যালগরিদম সিলেকশন ব্লক করে সর্বদা হার্ডকোডেড সিগনেচার স্কিম ডিফাইন করুন।
+
+---
+
+### ঙ. স্টেটলেস আর্কিটেকচারে টোকেন রিভোকেশন (Token Revocation)
+JWT-এর প্রধান আকর্ষণ হলো এটি স্টেটলেস (ডাটাবেস কুয়েরি ছাড়া যাচাই করা যায়)। কিন্তু এর বড় অসুবিধা হলো—যদি কোনো ইউজারের পাসওয়ার্ড চুরি হয় বা কোনো টোকেন হ্যাক হয়, অথবা ইউজার যদি লগআউট করতে চান, স্টেটলেস হওয়ার কারণে টোকেন তার এক্সপায়ারি টাইম (`exp`) শেষ না হওয়া পর্যন্ত ইন্টারনেটে সচল থেকে যায়। ডাটাবেস চেক না করলে সার্ভারের জানার উপায় থাকে না যে টোকেনটি অবৈধ করা হয়েছে।
+
+#### রিয়েল-টাইম আর্কিটেকচারাল সমাধান:
+১. **Sliding Sessions (স্বল্পমেয়াদী Access Token):**
+   * **Access Token:** এর মেয়াদ হবে মাত্র ১০ বা ১৫ মিনিট। এটি পুরোপুরি স্টেটলেস থাকবে।
+   * **Refresh Token:** এর মেয়াদ হবে ৭ দিন। এটি ডাটাবেজ বা রেডিসে ট্র্যাক করা হবে। প্রতি ১৫ মিনিট পর ক্লায়েন্ট রিফ্রেশ টোকেন পাঠিয়ে নতুন অ্যাক্সেস টোকেন নেবে। ইউজার লগআউট করলে আমরা রিফ্রেশ টোকেনটি ডাটাবেস থেকে ডিলিট করে দেব, ফলে ১৫ মিনিট পর হ্যাকারের সেশন অটোমেটিক শেষ হয়ে যাবে।
+২. **Redis Bloom Filters দিয়ে লাইভ ব্ল্যাকলিস্টিং (Staff-Level Design):**
+   যদি ১৫ মিনিটের উইন্ডোও অত্যন্ত ঝুঁকিপূর্ণ মনে হয় এবং ইনস্ট্যান্ট ব্লক করতে হয়, তবে ব্ল্যাকলিস্টেড টোকেনের সিগনেচার বা `jti` (JWT Unique ID) রেডিসে স্টোর করতে হবে।
+   * **Bloom Filter ম্যাজিক:** প্রতিটি রিকোয়েস্টে প্রথাগত ডাটাবেস হিট এড়াতে আমরা এপিআই গেটওয়ে লেভেলে একটি **Redis Bloom Filter** বসাই। ব্লুম ফিল্টার অত্যন্ত কম মেমরিতে অত্যন্ত দ্রুত ($O(1)$) গ্যারান্টি দেয় যে কোনো টোকেন ব্ল্যাকলিস্টের তালিকায় আছে কি না (০% false negative)। টোকেনটি ব্ল্যাকলিস্টেড না হলে মিলি-সেকেন্ডের মধ্যে কুয়েরি সার্ভিস লেভেলে চলে যায়!
+
+---
+
+## Module 3: Browser & OWASP Attack Defense (ব্রাউজার ও ওডব্লিউএএসপি ডিফেন্স)
+
+ওয়েব ব্রাউজার হলো হ্যাকার এবং আপনার অ্যাপ্লিকেশনের মধ্যবর্তী প্রথম যুদ্ধক্ষেত্র। ব্রাউজারের অভ্যন্তরীণ সিকিউরিটি বাউন্ডারি এবং ওডব্লিউএএসপি (OWASP) তালিকাভুক্ত শীর্ষস্থানীয় দুর্বলতাগুলোর ফিজিক্যাল ডিফেন্স মেকানিজম আমাদের এই মডিউলের মূল ভিত্তি।
+
+---
+
+## ৭. HTTP Security Headers (CSP, HSTS, CORS & Cookie Security)
+
+সার্ভার থেকে পাঠানো প্রতিটি HTTP রেসপন্সের সাথে কিছু নির্দিষ্ট সিকিউরিটি হেডার যুক্ত করে আমরা আধুনিক ব্রাউজারকে বাধ্য করতে পারি যাতে তারা কোনো ক্ষতিকারক স্ক্রিপ্ট বা অননুমোদিত রিকোয়েস্ট ব্লক করে দেয়।
+
+### ক. Content Security Policy (CSP) - ব্রাউজারের লোহার ঢাল
+CSP হলো একটি অত্যন্ত শক্তিশালী HTTP রেসপন্স হেডার, যা ব্রাউজারকে সুনির্দিষ্টভাবে জানিয়ে দেয় যে কোন কোন সোর্স বা ডোমেইন থেকে ইমেজ, স্ক্রিপ্ট, স্টাইল বা ফন্ট লোড ও এক্সিকিউট করা যাবে। এটি **Cross-Site Scripting (XSS)** প্রতিরোধের অন্যতম সেরা ডিফেন্স-ইন-ডেপ্থ (Defense-in-depth)।
+
+* **ডাইরেক্ট কোড এনালিসিস:**
+  ```nginx
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'nonce-rAnd0m123' 'strict-dynamic'; object-src 'none'; base-uri 'self';" always;
+  ```
+  * `default-src 'self'`: ডিফল্টরূপে কেবল আমাদের নিজস্ব সার্ভার বা অরিজিন থেকেই সমস্ত ডেটা লোড করা যাবে।
+  * `object-src 'none'`: ফ্ল্যাশ (`<object>`) বা অন্যান্য রিসোর্স লোড করা বন্ধ করা।
+  * `nonce-rAnd0m123`: একটি ক্রিপ্টোগ্রাফিকভাবে সুরক্ষিত ওয়ান-টাইম র্যান্ডম ভ্যালু (Nonce)। ব্রাউজার কেবল সেই স্ক্রিপ্টগুলোই রান করবে যেগুলোর গায়ে `nonce="rAnd0m123"` অ্যাট্রিবিউট ইনজেক্টেড থাকবে। হ্যাকার যদি ইনপুটে স্ক্রিপ্ট ট্যাগ ইনজেক্টও করে, ননস না থাকায় ব্রাউজার তা ব্লক করে দেবে!
+  * `strict-dynamic`: এটি নিশ্চিত করে যে ননস ধারণকারী একটি ট্রাস্টেড স্ক্রিপ্ট যদি ডাইনামিকালি অন্য স্ক্রিপ্ট জেনারেট করে, তবে ব্রাউজার সেই চাইল্ড স্ক্রিপ্টকেও ট্রাস্ট করবে।
+
+### খ. HTTP Strict Transport Security (HSTS)
+HSTS ব্রাউজারকে নির্দেশ দেয় যে—ভবিষ্যতে এই ডোমেইনে প্রবেশ করতে গেলে যেন ব্রাউজার কখনোই কোনো আন-এনক্রিপ্টেড HTTP রিকোয়েস্ট না পাঠায়, বরং স্বয়ংক্রিয়ভাবে ব্রাউজার লেভেলেই তা HTTPS-এ কনভার্ট করে দেয়।
+
+* **SSL Stripping Attack প্রতিরোধ:**
+  ইউজার যখন কোনো পাবলিক ওয়াইফাই-এ বসে টাইপ করেন `http://example.com`, হ্যাকার মাঝখান থেকে কানেকশনটি হাইজ্যাক করে সার্ভারের সাথে নিজে HTTPS এ সিঙ্ক রেখে ইউজারের ব্রাউজারকে সাধারণ HTTP-তে আটকে রাখতে পারে। HSTS থাকলে ব্রাউজার কখনোই সাধারণ HTTP কানেকশন ওপেন করবে না।
+* **Nginx কনফিগ:**
+  ```nginx
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+  ```
+  * `preload`: এই ডিরেক্টিভ যুক্ত থাকলে ব্রাউজার ডোমেইনটিকে তাদের সোর্স কোডের ইন্টারনাল ক্রোম/ফায়ারফক্সের HSTS প্রি-লোড লিস্টে ঢুকিয়ে দেয়। ফলে ইউজারের প্রথম ভিজিটেও এটি ১০০% HTTPS এনফোর্সড থাকে।
+
+### গ. CORS (Cross-Origin Resource Sharing)
+CORS কোনো ওয়েবসাইট হ্যাকার বা স্ক্র্যাপার থেকে বাঁচানোর ডিরেক্ট এপিআই টুল নয়, এটি ব্রাউজার সিকিউরিটি বাউন্ডারি।
+
+* **মেকানিজম:** ব্রাউজারে থাকা কোনো ক্ষতিকারক ওয়েবসাইট `malicious.com` যদি ইউজারের অজান্তে ব্যাকগ্রাউন্ডে স্ক্রিপ্ট চালিয়ে আপনার এপিআই সার্ভারে (`bank.com/api/transfer`) রিকোয়েস্ট করে, ব্রাউজার নিরাপত্তা রক্ষার্থে প্রথমে সার্ভারে একটি **OPTIONS (Preflight) Request** পাঠায়। সার্ভার যদি তার `Access-Control-Allow-Origin` হেডার রেসপন্সে `malicious.com` হোয়াইটলিস্ট না করে, তবে ব্রাউজার সেই রেসপন্স রিড করতে রিজেক্ট করে দেয়।
+
+### ঘ. Cookie Security: XSS ও CSRF-রোধী আর্কিটেকচার
+টোকেন কুকিতে সেভ করার সময় ৩টি প্যারামিটার আবশ্যক:
+১. **`HttpOnly`:** এটি ব্রাউজার লেভেলে জাভাস্ক্রিপ্ট (`document.cookie`) দিয়ে কুকি রিড করা সম্পূর্ণ লক করে দেয়। ফলে হ্যাকার যদি কোনোভাবে XSS এক্সপ্লয়েট সফলও করে, সে মেমরি থেকে টোকেন চুরি করতে পারবে না।
+২. **`Secure`:** কুকি কেবল এনক্রিপ্টেড HTTPS কানেকশন ছাড়া কখনোই সাধারণ নেটওয়ার্কে পাস হবে না।
+৩. **`SameSite`:**
+   * `SameSite=Strict`: অন্য কোনো ওয়েবসাইট থেকে আমাদের সাইটে আসার সময় কুকি সেন্ড হবে না।
+   * `SameSite=Lax`: ডিফল্ট অপশন। টপ-লেভেল নেভিগেশন (যেমন অন্য ডোমেইনে থাকা লিংকে ক্লিক করে আসা GET রিকোয়েস্ট) ছাড়া অন্য কোনো ক্রোস-সাইট রিকোয়েস্টে কুকি পাঠানো হবে না। এটি **CSRF** সম্পূর্ণ ধ্বংস করে দেয়।
+
+---
+
+## ৮. Top OWASP Attacks & Mitigations (SQLi, XSS, CSRF, SSRF & IDOR)
+
+ওডব্লিউএএসপি (OWASP - Open Web Application Security Project) হলো বিশ্বব্যাপী ওয়েব অ্যাপ্লিকেশনের প্রধান সিকিউরিটি থ্রেটসমূহের একটি নির্ভরযোগ্য তালিকা।
+
+### ক. Cross-Site Scripting (XSS)
+ইউজারের ব্রাউজারে ক্ষতিকারক জাভাস্ক্রিপ্ট রান করানোর প্রক্রিয়াকে XSS বলে।
+
+১. **Stored XSS:** ক্ষতিকারক স্ক্রিপ্ট ডেটাবেজে পার্মানেন্টলি সেভ হয়ে থাকে (যেমন: কমেন্ট সেকশন) এবং অন্য যেকোনো ইউজার যখন সেই পেজে যান, ডেটাবেস থেকে স্ক্রিপ্টটি লোড হয়ে তাদের ব্রাউজারে এক্সিকিউট করে।
+২. **Reflected XSS:** ইউআরএল প্যারামিটারে ক্ষতিকারক কোড পাস করা হয় যা সার্ভার রিড করে সরাসরি রেসপন্স পেজে রিফ্লেক্ট করে।
+৩. **DOM-based XSS:** সার্ভার হিট ছাড়াই ব্রাউজার লেভেলে র কোড এক্সিকিউট করা (উদা: React-এ `dangerouslySetInnerHTML` বা জাভাস্ক্রিপ্টে র ডিরেক্ট `eval()` রান করানো)।
+
+#### 🛠️ ডিফেন্স মেথড:
+* **Context-Aware Encoding:** ইনপুট কখনই র-এইচটিএমএল হিসেবে পেজে প্রিন্ট করবেন না। HTML এনকোডিং (`&lt;` ইত্যাদি) ব্যবহার করে জাভাস্ক্রিপ্ট ট্যাগগুলোকে সাধারণ স্ট্রিংয়ে কনভার্ট করুন।
+* **DOMPurify:** কাস্টম রিচ টেক্সট এডিটরের ক্ষেত্রে ইনপুটকে ব্রাউজারে রেন্ডার করার আগে **DOMPurify** লাইব্রেরি দিয়ে স্যানিটাইজ করুন।
+
+---
+
+### খ. Cross-Site Request Forgery (CSRF)
+একটি ক্ষতিকারক ওয়েবসাইট থেকে ইউজারের সচল সেশনের ব্রাউজার ট্রাস্টের অপব্যবহার করে ইউজারের অজান্তেই আমাদের সার্ভারে কোনো অ্যাকশন এক্সিকিউট করাকে CSRF বলে।
+
+* **অ্যাটাক সিনারিও:**
+  ইউজার তার ব্যাংকে লগইন আছেন। হ্যাকার একটি ওয়েবসাইটে একটি হিডেন ইমেজ ট্যাগ রাখল:
+  ```html
+  <img src="https://bank.com/api/transfer?amount=10000&to=attacker_id" width="0" height="0" />
+  ```
+  ইউজার ওই সাইটে প্রবেশ করা মাত্র ব্রাউজার অটোমেটিক্যালি কুকি ট্রাস্ট ধরে ব্যাংকের এপিআই-তে হিট করবে এবং টাকা হ্যাক হয়ে যাবে।
+* **🛠️ ডিফেন্স মেথড:**
+  * **SameSite Lax Cookies:** এটি ডিফল্ট ডিফেন্স।
+  * **Anti-CSRF Tokens:** প্রতিটি ইউজারের সেশনের জন্য একটি ক্রিপ্টোগ্রাফিক ওয়ান-টাইম টোকেন সার্ভার জেনারেট করে ইউজারের ফর্মে ইনজেক্ট করে। ব্যাকএন্ডে সাবমিট করা ফর্মের টোকেন সেশন টোকেনের সাথে না মিললে রিকোয়েস্ট রিজেক্ট করা হয় (Synchronizer Token Pattern)।
+
+---
+
+### গ. Server-Side Request Forgery (SSRF)
+SSRF-এ হ্যাকার আমাদের ব্যাকএন্ড সার্ভারকে বাধ্য করে যাতে সে হ্যাকারের কাঙ্ক্ষিত কোনো অভ্যন্তরীণ নেটওয়ার্ক অ্যাড্রেসে বা এক্সটারনাল ডোমেইনে রিকোয়েস্ট পাঠায়।
+
+```
+Attacker ---> Web Server (Vulnerable to SSRF) ---> Internal Cloud Metadata API (169.254.169.254)
+```
+
+* **মারাত্মক ক্লাউড অ্যাটাক:**
+  ক্লাউড হোস্টেড ব্যাকএন্ড সার্ভার (যেমন AWS EC2) থেকে যদি হ্যাকার এই ইউআরএল-এ রিকোয়েস্ট করায়:
+  `http://169.254.169.254/latest/meta-data/iam/security-credentials/`
+  সার্ভারটি তার নিজস্ব ক্লাউড ইন্টারনাল মেটাডাটা রিড করে সম্পূর্ণ আইএএম (IAM) রোল কী হ্যাকারকে রিটার্ন করে দেবে! এর মাধ্যমে সেকেন্ডে সম্পূর্ণ ক্লাউড ইনফ্রাস্ট্রাকচার হ্যাক হতে পারে।
+* **🛠️ ডিফেন্স মেথড:**
+  * ইন্টারনাল আইপি (যেমন `10.0.0.0/8`, `192.168.0.0/16`, `127.0.0.1`, `169.254.169.254`) এ ব্যাকএন্ড রিকোয়েস্ট পাঠানো রানটাইম ফায়ারওয়াল বা ডিএনএস রেজোলিউশন লেভেলে ব্লক করতে হবে।
+  * **AWS IMDSv2 এনফোর্সমেন্ট:** ক্লাউডে মেটাডাটা সার্ভার ব্যবহারের ক্ষেত্রে IMDSv2 ব্যবহার করুন। এটিতে ডিরেক্ট GET রিকোয়েস্টসিউরড ব্লক করে প্রথমে PUT রিকোয়েস্টের মাধ্যমে সেশন টোকেন নেওয়া বাধ্যতামূলক করা হয়েছে, যা SSRF সম্পূর্ণ অকেজো করে দেয়।
+
+---
+
+### ঘ. Insecure Direct Object Reference (IDOR)
+IDOR হলো এমন একটি দুর্বলতা যেখানে ডেটাবেজের কোনো ফিজিক্যাল প্রাইমারি কি বা অবজেক্ট রেফারেন্স সরাসরি ক্লায়েন্টের ইউআরএল বা পে-লোডে এক্সপোজড থাকে এবং পর্যাপ্ত অথরাইজেশন ছাড়াই কেবল আইডি পরিবর্তন করে অন্য ইউজারের ফাইল বা ডেটা অ্যাক্সেস করা যায়।
+
+* **অ্যাটাক:**
+  ইউজার যখন তার ইনভয়েস ডাউনলোড করেন: `/api/invoices/992`
+  সে আইডি পরিবর্তন করে দেখল: `/api/invoices/993`
+  সার্ভার যদি ইউজার ৯৯৩-এর ইনভয়েসের মালিক কি না তা যাচাই না করেই ফাইল রিটার্ন করে দেয়, তবে সেটি একটি IDOR দুর্বলতা।
+* **🛠️ ডিফেন্স মেথড:**
+  * কোয়েরি লেভেলে সর্বদা ইউজারের সেশন কন্ট্রোল আইডি ইনজেক্ট করুন (যেমন: `SELECT * FROM invoices WHERE id = :invoice_id AND user_id = :current_user_id`).
+  * ডেটাবেজ আইডিতে সিরিয়াল ইনক্রিমেন্টিং সংখ্যার পরিবর্তে **UUIDv4** ব্যবহার করুন যাতে হ্যাকার সহজে আইডি অনুমান (Guess/Enumerate) করতে না পারে।
+
+---
+
+## Module 4: Infrastructure & Cloud Security (অবকাঠামো ও ক্লাউড সিকিউরিটি)
+
+নিরাপত্তা কেবল অ্যাপ্লিকেশন কোডের মধ্যে সীমাবদ্ধ নয়। কন্টেইনার আইসোলেশন, সার্ভিসগুলোর মধ্যে নিরাপদ ট্রাফিক প্রবাহ, গেটওয়ে স্তরের DDoS প্রতিরক্ষা এবং ক্রিপ্টোগ্রাফিক চাবিগুলোর ফিজিক্যাল হার্ডওয়্যার স্টোরেজ—একটি জিরো-ট্রাস্ট ইনফ্রাস্ট্রাকচার গড়ে তোলার জন্য সমানভাবে গুরুত্বপূর্ণ।
+
+---
+
+## ৯. API Gateway Security: Rate Limiting, WAF (Web Application Firewall) ও DDoS Defenses
+
+এপিআই গেটওয়ে (API Gateway) হলো আপনার সিস্টেমের এন্ট্রি পয়েন্ট বা প্রবেশদ্বার। এটি হ্যাকারের আক্রমণের প্রথম ফিল্টার হিসেবে কাজ করে।
+
+### ক. ডিস্ট্রিবিউটেড রেট লিমিটিং অ্যালগরিদম (Rate Limiting Algorithms)
+সার্ভারে প্রতি সেকেন্ডে রিকোয়েস্টের সংখ্যা সীমিত করে সার্ভিস ওভারলোড বা ব্রুট-ফোর্স অ্যাটাক প্রতিরোধ করাকে রেট লিমিটিং বলে।
+
+১. **Token Bucket Algorithm:**
+   * একটি বালতিতে নির্দিষ্ট সংখ্যক টোকেন জমা থাকে। প্রতিটি রিকোয়েস্টের জন্য ১টি টোকেন কেটে নেওয়া হয়। বালতি খালি হলে রিকোয়েস্টসিউরড ব্লক হয় (`429 Too Many Requests`)। নির্দিষ্ট সময় পর পর বালতিতে নতুন টোকেন জমা হয়।
+   * **সুবিধা:** এটি ট্রাফিকের আকস্মিক বৃদ্ধি বা মাইক্রো-বার্স্ট (Micro-burst) হ্যান্ডেল করতে পারে।
+২. **Leaky Bucket Algorithm:**
+   * বালতিতে রিকোয়েস্ট জমা হয় এবং বালতির তলা দিয়ে একটি নির্দিষ্ট ধীরগতিতে (Smooth rate) রিকোয়েস্টগুলো প্রসেস হতে বের হয়ে যায়। রিকোয়েস্ট ইনকামিং রেট বেশি হলে বালতি উপচে পড়ে এবং অতিরিক্ত রিকোয়েস্ট ব্লক হয়।
+   * **সুবিধা:** এটি সার্ভারকে সর্বদা একটি কনস্ট্যান্ট ও স্মুথ ট্রাফিক ফ্লো দেয়।
+
+* **স্কেলিং চ্যালেঞ্জ (Distributed Rate Limiting at Scale):**
+  যদি আপনার ব্যাকএন্ডে ১০টি সার্ভার থাকে, তবে লোকাল মেমরিতে রেট লিমিট হিসাব করলে হবে না। কারণ ইউজার একেকবার একেক সার্ভারে হিট করবে। কিন্তু প্রতি রিকোয়েস্টে প্রথাগত ডাটাবেজে হিট করাও একটি বড় ল্যাটেন্সি বিপর্যয়।
+  * **সমাধান:** **Redis-based Sliding Window Log**। এটি করতে এপিআই গেটওয়ে লেভেলে কাস্টম **Redis Lua Script** ব্যবহার করা হয়। লূয়া স্ক্রিপ্ট রেডিস মেমরির ভেতরে অ্যাটমিক্যালি (Atomic execution) রান করে বলে কোনো লক কনটেনশন ছাড়াই ন্যানো-সেকেন্ডে ডিস্ট্রিবিউটেড রেট লিমিট হ্যান্ডেল করতে পারে।
+
+### খ. Web Application Firewall (WAF)
+WAF হলো একটি Layer 7 (Application Layer) ফায়ারওয়াল, যা ইনকামিং HTTP রিকোয়েস্টের হেডার, বডি এবং প্যারামিটার বাইট-বাই-বাইট বিশ্লেষণ করে।
+
+১. **Signature-based Detection:**
+   * পূর্বে সংজ্ঞায়িত নিয়মের (Regex rules) সাথে রিকোয়েস্ট পে-লোড ম্যাচ করে (উদা: ইনপুটে `' OR '1'='1` বা `<script>` ট্যাগ আছে কি না)। এটি পরিচিত আক্রমণগুলো চোখের পলকে ব্লক করে দেয়।
+২. **Anomaly-based / Behavioral Detection:**
+   * এটি ইউজারের স্বাভাবিক ব্রাউজিং প্যাটার্ন বিশ্লেষণ করে একটি বেইজলাইন তৈরি করে। ইউজার যদি হঠাৎ করে অস্বাভাবিক স্পিডে কুয়েরি রিকোয়েস্ট করতে শুরু করে বা তার রিকোয়েস্ট হেডারগুলোর এন্ট্রপি (Entropy) পরিবর্তিত হয়, WAF তাকে ব্লক করে কাস্টম চ্যালেঞ্জ (CAPTCHA) ছুড়ে দেয়।
+
+### গ. DDoS (Distributed Denial of Service) প্রতিরোধ ও Anycast Routing
+DDoS-এর লক্ষ্য হলো সার্ভারের মেমরি, সিপিইউ বা নেটওয়ার্ক ব্যান্ডউইডথ জ্যাম করে রিয়েল ইউজারদের জন্য সাইট ডাউন করে দেওয়া।
+
+* **Layer 3/4 (Network/Transport) বনাম Layer 7 (Application) Attacks:**
+  * **Layer 3/4 (উদা: SYN Flood, UDP Amplification):** নেটওয়ার্ক লেভেলের বিশাল ব্যান্ডউইডথ জ্যাম।
+  * **Layer 7 (উদা: HTTP Flood, Slowloris):** এটি অত্যন্ত বিপজ্জনক। হ্যাকার অত্যন্ত ধীরগতিতে আংশিক HTTP হেডার পাঠায় (Slowloris) যা সার্ভারের থ্রেড পুলকে (Thread Pool) চিরতরে ব্লক করে রাখে, ফলে রিয়েল ইউজাররা আর কানেক্ট হতে পারেন না।
+* **Anycast Routing ডিফেন্স (উদা: Cloudflare CDN):**
+  Anycast আর্কিটেকচারে বিশ্বব্যাপী শত শত এজ ডিরেক্টরি সার্ভারের (Edge Servers) একই আইপি এড্রেস থাকে। হ্যাকার যখন অ্যাটাক শুরু করে, Anycast নেটওয়ার্কের রাউটিং প্রোটোকল (BGP) স্বয়ংক্রিয়ভাবে সেই ট্রাফিককে হ্যাকারের ভৌগোলিক নিকটবর্তী এজ সার্ভারে ডিস্ট্রিবিউট বা স্প্রেড করে দেয়। এর ফলে কোনো সেন্টাল ডাটা সেন্টার ডাউন না হয়ে হ্যাকারের ট্রাফিক এজ লেভেলেই শোষিত (Scrubbed) হয়ে যায়।
+  * **Slowloris Mitigation:** রিভার্স প্রক্সি (Nginx) লেভেলে কানেকশন রিড টাইমআউট (`client_header_timeout` ও `client_body_timeout`) অত্যন্ত কম সময়ে (যেমন ৫ সেকেন্ড) সেট করে ধীরগতির কানেকশনগুলো সাথে সাথে কিল করা।
+
+---
+
+## ১০. Zero-Trust Architecture ও Microservices Security (mTLS ও Service Mesh)
+
+অতীতে এন্টারপ্রাইজ সিস্টেমগুলো ডিফাইন করা হতো **Perimeter Security** বা "দুর্গের নিরাপত্তা" দিয়ে। অর্থাৎ বাইরে একটি বড় ফায়ারওয়াল থাকবে, আর ভেতরের নেটওয়ার্কের সবাই ট্রাস্টেড বা নিরাপদ। কিন্তু আধুনিক সিস্টেমে যদি একটি কন্টেইনার বা নোড হ্যাক হয়, তবে হ্যাকার ইন্টারনাল নেটওয়ার্ক দিয়ে সমস্ত ডেটা স্নাইপ বা চুরি করতে পারে। এর অবসান ঘটিয়েছে **Zero-Trust Model**—"Never Trust, Always Verify"।
+
+### ক. Mutual TLS (mTLS) - দ্বিমুখী প্রমাণীকরণ
+প্রথাগত TLS হ্যান্ডশেকে ব্রাউজার কেবল নিশ্চিত করে যে সে সঠিক সার্ভারের সাথে কথা বলছি (একমুখী)।
+**Mutual TLS (mTLS)**-এ সার্ভার এবং ক্লায়েন্ট (এখানে দুটি ব্যাকএন্ড মাইক্রোসার্ভিস) উভয়ই হ্যান্ডশেকের সময় একে অপরের ডিজিটাল সার্টিফিকেট আদান-প্রদান করে এবং ক্রিপ্টোগ্রাফিকভাবে একে অপরের আসল পরিচয় যাচাই করে।
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor ServiceA as Payment Service (Client)
+    actor ServiceB as Database API (Server)
+
+    ServiceA->>ServiceB: ClientHello + Client Certificate
+    ServiceB->>ServiceA: ServerHello + Server Certificate + CertificateRequest
+    Note over ServiceA,ServiceB: Cryptographically verify each other's certificates using Root CA
+    ServiceA-->>ServiceB: Handshake Complete (Secure Encrypted Tunnel established)
+```
+
+mTLS নিশ্চিত করে যে, যদি হ্যাকার ক্লাস্টারের ইন্টারনাল নেটওয়ার্কে প্রবেশ করে আমাদের কোনো ডাটাবেস এপিআই-তে ডিরেক্ট হিট করতে চায়, সার্টিফিকেট না থাকায় তার কানেকশন সাথে সাথে রিজেক্ট হয়ে যাবে!
+
+### খ. Service Mesh ও Istio/Envoy Sidecar আর্কিটেকচার
+প্রতিটি মাইক্রোসার্ভিসের কোডের ভেতরে ম্যানুয়ালি সার্টিফিকেট হ্যান্ডলিং ও রোটেশন কোড লেখা অত্যন্ত কঠিন। এই অবকাঠামোগত জটিলতা দূর করতে ব্যবহৃত হয় **Service Mesh** (যেমন: Istio, Linkerd)।
+
+* **Sidecar Pattern:**
+  কুবেরনেটিস ক্লাস্টারে প্রতিটি প্রজেক্ট কন্টেইনারের পাশে একটি হালকা ওজনের প্রক্সি কন্টেইনার (যেমন: **Envoy Proxy**) ইনজেক্ট করা হয়।
+  * **কিভাবে কাজ করে?** সার্ভিস ক যখন সার্ভিস খ-এর সাথে কথা বলতে চায়, সার্ভিস ক সরাসরি নেটওয়ার্ক হিট না করে তার লোকাল Envoy প্রক্সিকে রিকোয়েস্ট পাঠায়। Envoy প্রক্সি ব্যাকগ্রাউন্ডে ক্ষণস্থায়ী সার্টিফিকেট ম্যানেজ করে সার্ভিস খ-এর Envoy প্রক্সির সাথে mTLS হ্যান্ডশেক সম্পন্ন করে ডেটা স্ট্রিম করে। আমাদের মূল প্রজেক্ট কোডকে সিকিউরিটির কোনো ঝামেলার খবরই জানতে হয় না!
+
+```
+[Service A Container] ---> localhost ---> [Envoy Proxy A]
+                                                |
+                                           mTLS Tunnel (Network Boundary)
+                                                v
+[Service B Container] <--- localhost <--- [Envoy Proxy B]
+```
+
+* **SPIFFE/SPIRE স্ট্যান্ডার্ড:**
+  এটি একটি ইন্ডাস্ট্রি স্ট্যান্ডার্ড যা কুবেরনেটিসের প্রতিটি পড বা সার্ভিস অ্যাকাউন্টকে একটি ক্রিপ্টোগ্রাফিক আইডি দেয় (SPIFFE ID)। **SPIRE Agent** কন্টেইনারের ওএস কার্নেল প্রপার্টি যাচাই করে তাকে রানটাইমে শর্ট-লাইভড X.509 সার্টিফিকেট প্রদান ও প্রতি কয়েক ঘণ্টা পর পর অটো-রোটেট করে।
+
+---
+
+## ১১. Container Security & Sandbox Isolation (Namespaces, cgroups, Seccomp ও AppArmor)
+
+কন্টেইনারগুলো কিন্তু ভার্চুয়াল মেশিনের (VM) মতো সম্পূর্ণ আলাদা ওএস নয়। তারা সবাই হোস্ট কার্নেল (Host Kernel) শেয়ার করে চলে। এই কারণে কন্টেইনারের সিকিউরিটি বাউন্ডারি অত্যন্ত সূক্ষ্ম হতে হয়।
+
+### ক. Linux Namespaces ও cgroups
+লিনাক্স কার্নেলের দুটি প্রধান ফিচার কন্টেইনারের জন্ম দেয়:
+১. **Namespaces (আইসোলেশন বাউন্ডারি):**
+   * **PID Namespace:** কন্টেইনারের ভেতরের প্রসেস আইডি হোস্টের প্রসেস আইডি দেখতে পায় না।
+   * **Net Namespace:** কন্টেইনারের নিজস্ব ভার্চুয়াল নেটওয়ার্ক ইন্টারফেস থাকে।
+   * **User Namespace:** কন্টেইনারের ভেতরের `root` ইউজারকে হোস্ট ওএসের একটি সাধারণ নন-রুট (Non-root) ইউজারের সাথে ম্যাপ করা। ফলে কন্টেইনার হ্যাক হলেও হ্যাকার হোস্টের রুট বাস্টার্ড হতে পারে না।
+২. **Control Groups (cgroups - রিসোর্স কন্ট্রোল):**
+   * এটি কন্টেইনারের হার্ডওয়্যার রিসোর্স (CPU, RAM, Disk I/O) লিমিট করে। এটি ছাড়া কন্টেইনার যদি লুপে পড়ে সমস্ত মেমরি খেয়ে ফেলে, তবে হোস্টের অন্য সব কন্টেইনার ক্র্যাশ করবে (Noisy Neighbor anomaly)।
+
+### খ. Seccomp (Secure Computing Mode) - সিস্টেম কল ফিল্টার
+লিনাক্স কার্নেলে প্রায় ৩০০+ সিস্টেম কল (Syscalls) থাকে যার মাধ্যমে প্রসেসগুলো কার্নেলকে কাজের অনুরোধ পাঠায় (উদা: ফাইল রিড, নেটওয়ার্ক সকেট ওপেন)। কিন্তু একটি সাধারণ নোড বা পাইথন অ্যাপ্লিকেশনের বড়জোর ৪০টি সিস্টেম কল প্রয়োজন হয়।
+**Seccomp** হলো একটি কার্নেল ফিল্টার যা কন্টেইনারের অনাবশ্যক এবং বিপজ্জনক সিস্টেম কলগুলো ব্লক করে দেয়।
+
+* **Nginx কন্টেইনার প্রোফাইল:**
+  Nginx কন্টেইনারের রানটাইমে কার্নেল ওএস রিবুট করার সিস্টেম কল `reboot` বা মেমরি ডিবাগ করার কল `ptrace` রান করার কোনো দরকার নেই। Seccomp প্রোফাইল দিয়ে এগুলো নিষিদ্ধ করা হয়। ফলে হ্যাকার কন্টেইনারের ভেতর প্রবেশ করে রুট প্রিভিলেজ পেলেও সে ওএস ডাউন করতে পারে না।
+
+### গ. AppArmor ও SELinux
+এগুলো হলো **Mandatory Access Control (MAC)** সিস্টেম। লিনাক্সে প্রথাগত ফাইল পারমিশন যদি রুট ইউজারের হাতে থাকে, সে যেকোনো ফাইল রাইট করতে পারে। কিন্তু AppArmor প্রোফাইল অ্যাক্টিভেটেড থাকলে, প্রসেসটি রুট ইউজার দ্বারা রান হলেও কার্নেল তাকে প্রোফাইলে উল্লেখিত ডিরেক্টরি (যেমন কেবল `/var/log/nginx/`) ছাড়া ওএসের অন্য কোনো ডিরেক্টরিতে (যেমন `/etc/passwd`) রিড বা রাইট করতে দেবে না!
+
+---
+
+## ১২. Cryptographic Key Management & Envelope Encryption (KMS, HSM & Vault)
+
+ডাটাবেস ও সিস্টেম এনক্রিপশনের সবচেয়ে বড় ক্লাউড আর্কিটেকচারাল চ্যালেঞ্জ হলো—চাবি বা কি (Keys) কীভাবে নিরাপদে স্টোর করা যায়। আপনি যদি ডেটা এনক্রিপ্ট করার মাস্টার কী প্রজেক্ট কোডে বা গিট রিপোজিটরির কনফিগে রেখে দেন, তবে তা চরম নিরাপত্তা লঙ্ঘন।
+
+### ক. Envelope Encryption (খাম এনক্রিপশন) আর্কিটেকচার
+একটি সিঙ্গেল মাস্টার কী দিয়ে সমস্ত কোটি কোটি ডেটা এনক্রিপ্ট করা অত্যন্ত বিপজ্জনক। কোনোভাবে কী লিক হলে সম্পূর্ণ সিস্টেম ডাউন। এই সমস্যার ক্লাউড-নেটিভ সমাধান হলো **Envelope Encryption**:
+
+```mermaid
+flowchart TD
+    subgraph EnvEncryption ["Envelope Encryption Architecture"]
+        KMS["AWS KMS / HSM <br> (Stores Master Key / KEK)"]
+        PlainTextData["Plaintext Database Row"]
+        
+        KMS -->|"1. Generate & Return"| DEK["Data Encryption Key (Plaintext & Encrypted)"]
+        PlainTextData -->|"2. Encrypts with Plaintext DEK"| CipherText["Encrypted Database Row"]
+        DEK -->|"3. Discard Plaintext DEK, Keep Encrypted DEK"| StoreDB["Store in DB: Encrypted Row + Encrypted DEK"]
+    end
+```
+
+১. **Data Encryption Key (DEK):** প্রতিটি নির্দিষ্ট ডেটা বা ডাটাবেস রো এনক্রিপ্ট করতে একটি স্বাধীন র্যান্ডম কী জেনারেট করা হয়। এটি দিয়ে ডেটা এনক্রিপ্ট করার পর **Plaintext DEK** মেমরি থেকে সাথে সাথে মুছে ফেলা হয়।
+২. **Key Encryption Key (KEK / Master Key):** এটি হলো মূল প্যারেন্ট চাবি যা দিয়ে আমাদের জেনারেটেড DEK-টিকে এনক্রিপ্ট বা লক করে রাখা হয়। এনক্রিপ্টেড DEK-টি সুরক্ষিতভাবে ডেটাবেজের রো-এর পাশেই সেভ করা থাকে।
+৩. KEK বা মাস্টার কী-টি সর্বদা ব্যাকগ্রাউন্ডে ক্লাউডের ডেডিকেটেড **KMS (Key Management Service)** এর স্পর্শাতীত মেমরিতে সংরক্ষিত থাকে। ডেটা ডিক্রিপ্ট করতে হলে সার্ভার শুধু এনক্রিপ্টেড DEK-টি KMS-এ পাঠায়। KMS তা ডিক্রিপ্ট করে র-DEK সার্ভার মেমরিতে রিটার্ন করে, যা দিয়ে চোখের পলকে ডেটা ডিক্রিপ্ট করা হয়।
+
+### খ. Hardware Security Module (HSM)
+KMS-এর ব্যাকগ্রাউন্ডে থাকা ফিজিক্যাল হার্ডওয়্যার ডিভাইস হলো **HSM**। এটি অত্যন্ত সুরক্ষিত军事-গ্রেড ক্রিপ্টোগ্রাফিক চিপ (FIPS 140-2 Level 3/4 Compliant)।
+* **ফিজিক্যাল ম্যাজিক:** HSM-এর ভেতরে জেনারেট হওয়া ক্রিপ্টোগ্রাফিক প্রাইভেট কী কোনোদিনও কম্পিউটার মেমরিতে বা ইন্টারনেটে বের হয়ে আসে না। ক্রিপ্টোগ্রাফিক ক্যালকুলেশন চিপের ফিজিক্যাল সিলিকন সার্কিটের ভেতরে সম্পন্ন হয় এবং কেবল রেজাল্ট বাইরে পাঠানো হয়। কেউ যদি ফিজিক্যালি ডাটা সেন্টারের HSM চিপটি ড্রিল করে বা খোলার চেষ্টা করে, তবে চিপের সেলফ-ডিপ্লোয়িং সার্কিট সেকেন্ডের মধ্যে মাস্টার কী মুছে ফেলে (Anti-tamper protection)!
+
+### গ. HashiCorp Vault Internals ও Shamir's Secret Sharing
+HashiCorp Vault হলো এন্টারপ্রাইজ সিস্টেমের সিক্রেট ও পাসওয়ার্ড ম্যানেজমেন্টের অন্যতম সেরা ওপেন-সোর্স টুল। এর ভেতরের ক্রিপ্টোগ্রাফিক মেকানিজম অত্যন্ত চমৎকার:
+
+* **Shamir's Secret Sharing Scheme (ভল্ট আনসিলিং):**
+  ভল্ট সার্ভার যখন বন্ধ বা রিস্টার্ট হয়, তখন মেমরিতে থাকা সমস্ত সিক্রেট ডিক্রিপ্ট করার মাস্টার কী লক হয়ে যায় (Sealed State)। এই মাস্টার কী কোনো একজন সিঙ্গেল অ্যাডমিনিস্ট্রেটরের হাতে থাকে না কারণ সে চলে গেলে বা তার অ্যাকাউন্ট হ্যাক হলে ভয়াবহ বিপর্যয় ঘটবে।
+  * **মেকানিজম:** ভল্ট মাস্টার কী-টিকে গাণিতিক বহুপদী সমীকরণের (Polynomial Equation) মাধ্যমে $N$ টি চাবির টুকরো বা **Key Shares**-এ ভাগ করে দেয়। ভল্টকে পুনরায় আনলক বা আনসিল (Unseal) করতে হলে কমপক্ষে $K$ সংখ্যক (Threshold, উদা: ৫ জনের মধ্যে ৩ জন) অ্যাডমিনিস্ট্রেটরের চাবির টুকরো একসাথে ইনপুট দিতে হয়। ৩ জন অ্যাডমিন তাদের চাবি সাবমিট করলেই কেবল লগ্রাঞ্জ ইন্টারপোলেশন (Lagrange Interpolation) গণিতের মাধ্যমে মাস্টার কী পুনরায় মেমরিতে গঠিত হয় এবং ভল্ট ডিক্রিপ্ট হয়।
+
+```
+Master Key split into 5 Unseal Keys (N=5, Threshold K=3):
+Admin 1 (Key 1) Admin 2 (Key 2)  ===> Combine at Vault Portal ===> Reconstruct Master Key! (Unsealed)
+Admin 3 (Key 3) /
+```
+
+* **Memory Shielding:** ভল্ট সার্ভার সচল থাকা অবস্থায় মাস্টার কী শুধুমাত্র সিস্টেমের ভোলাটাইল র‍্যামে (RAM) অবস্থান করে। ভল্টকে সিল করার সাথে সাথে মেমরির উক্ত সেগমেন্ট বাইট-লেভেলে জিরো (Zeroed out) করে ফেলা হয়, ফলে হ্যাকার সার্ভারের ডিস্ক হ্যাক করলেও কোনো সিক্রেট চুরি করতে পারে না!
+
+---
