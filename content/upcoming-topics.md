@@ -133,7 +133,7 @@ flowchart TD
 
 ---
 
-### ৫. ডেভঅপ্স ও ক্লাউড-নেティブ ইনফ্রাস্ট্রাকচার (DevOps & Infrastructure)
+### ৫. ডেভঅপ্স ও ক্লাউড-নেটিভ ইনফ্রাস্ট্রাকচার (DevOps & Infrastructure)
 *   **৫.১ Infrastructure as Code (IaC) & Terraform (`terraform-iac`):**
     *   **বিস্তারিত:** Declarative vs Imperative IaC, Terraform State Management, State Locking, Terraform Lifecycle (Plan, Apply, Destroy).
 *   **৫.২ GitOps & Continuous Delivery (`gitops-cd`):**
