@@ -24,3 +24,25 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), var(--font-bengali), system-ui, -apple-system, sans-serif;
 }
+
+
+/* Official Lenis Smooth Scroll Normalization Rules */
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}

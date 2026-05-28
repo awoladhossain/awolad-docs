@@ -446,7 +446,7 @@ export default async function DocPage({ params }: Props) {
             relative
             min-w-0
             flex-1
-            overflow-hidden
+            overflow-x-clip
             bg-[#09090b]
           "
         >
