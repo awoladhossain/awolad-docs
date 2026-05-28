@@ -2860,12 +2860,327 @@ export class MetricsScraperManager {
 
 ---
 
-## 🔒 Chapters 16 - 20: Syllabus Blueprint (Ready to Unlock)
+## 💻 Chapter 16: Ad Click Aggregator (Big Data Stream Processing & Aggregation)
 
-বাকি ৫টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+ডিজিটাল এডভার্টাইজিং ইন্ডাস্ট্রিতে প্রতি সেকেন্ডে বিশ্বজুড়ে লাখ লাখ ইউজার বিভিন্ন বিজ্ঞাপনে ক্লিক করেন। একজন অ্যাডভার্টাইজারকে (বিজ্ঞাপনদাতা) সঠিক বিল চার্জ করতে এবং রিয়েল-টাইম অ্যাড ক্যাম্পেইন পারফরম্যান্স ট্র্যাক করতে প্রতি সেকেন্ডে মিলিয়ন মিলিয়ন ক্লিক ইভেন্ট প্রসেস, ডি-ডুপ্লিকেট (ডাবল ক্লিক রোধ) এবং অ্যাগ্রিগেট করতে হয়।
+
+এই চ্যাপ্টারে আমরা ডিজাইন করব একটি আল্ট্রা-স্কেলেবল, ফল্ট-টলারেন্ট **Ad Click Aggregator System** যা **Exactly-Once Processing** গ্যারান্টি সহ রিয়েল-টাইম স্ট্রিম প্রসেসিং (Apache Flink/Kafka স্টাইলে) হ্যান্ডেল করে।
+
+---
+
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **রিয়েল-টাইম অ্যাগ্রিগেশন (Real-Time Aggregation):** প্রতি ১ মিনিটে প্রতিটি বিজ্ঞপ্তির (`ad_id`) মোট ক্লিক সংখ্যা এবং মোট খরচ (Ad Spend) ক্যালকুলেট করা।
+2. **ক্লিক ফ্রড ডিটেকশন (Click Fraud Detection):** ম্যালিশিয়াস বা বট অ্যাক্টিভিটি (উদা: ১ সেকেন্ডে একই আইপি থেকে কোনো বিজ্ঞপ্তিতে ৫০টি ক্লিক) রিয়েল-টাইম ফিল্টার বা ড্রপ করা।
+3. **কোয়েরি ইন্টারফেস (Advertiser Dashboard):** বিজ্ঞাপনদাতারা যেন তাদের ড্যাশবোর্ডে বিগত ১ ঘণ্টা বা ১ দিনের রিয়েল-টাইম ক্লিক ট্রেন্ড ও বাজেট স্পেন্ড সাব-সেকেন্ড ল্যাটেন্সিতে দেখতে পান।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **Exactly-Once Processing (নিখুঁত হিসাব):** কোনো বিজ্ঞাপনদাতাকে ডাবল চার্জ করা যাবে না বা কোনো রিয়েল ক্লিক মিস করা যাবে না (At-least-once বা At-most-once এখানে অগ্রহণযোগ্য)।
+2. **রিয়েল-টাইম ল্যাটেন্সি (Sub-Second Latency):** ক্লিক হওয়া থেকে শুরু করে ড্যাশবোর্ডে ডেটা রিফ্লেক্ট হতে সর্বোচ্চ ৩ থেকে ৫ সেকেন্ড ল্যাটেন্সি থাকতে পারবে।
+3. **ইনফিনিট স্কেলেবিলিটি (Fault-Tolerance):** যেকোনো স্ট্রিম প্রসেসর নোড ক্র্যাশ করলে ডেটা লস ছাড়াই যেন সিস্টেম অটো-রিকভার করতে পারে।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Big Data Scale Estimations):
+* **গড় ক্লিক রেট (Average Throughput):** $10,000$ clicks/sec.
+* **পিক ক্লিক রেট (Peak Traffic):** $100,000$ clicks/sec.
+* **দৈনিক ইভেন্ট সংখ্যা (Daily Events Volume):**
+  $$\text{Daily Clicks} = 10,000 \text{ clicks/sec} \times 86,400 \text{ sec} = 864,000,000 \text{ clicks/day (approx 864 Million)}$$
+* **ক্লিক ইভেন্ট সাইজ (Event Payload Size):**
+  `click_id` ($16$ bytes) + `ad_id` ($8$ bytes) + `user_id` ($8$ bytes) + `ip` ($4$ bytes) + `cost` ($8$ bytes) + `timestamp` ($8$ bytes) + `labels` ($48$ bytes) = ~ $100$ bytes.
+
+**১. নেটওয়ার্ক ব্যান্ডউইথ (Ingestion Bandwidth):**
+$$\text{Average Ingest Rate} = 10,000 \times 100 \text{ bytes} = 1,000,000 \text{ bytes/sec} \approx 1 \text{ MB/sec}$$
+$$\text{Peak Ingest Rate} = 100,000 \times 100 \text{ bytes} = 10,000,000 \text{ bytes/sec} \approx 10 \text{ MB/sec}$$
+
+**২. স্টোরেজ রিকোয়ারমেন্ট (Daily Analytics Storage):**
+রিয়েল-টাইমে স্ট্রিম প্রসেসর ডেটা অ্যাগ্রিগেট করে ক্লিকহাউস (ClickHouse) বা ক্যাসান্দ্রায় (Cassandra) জমা করবে।
+$$\text{Raw Event Storage per Day} = 864 \text{ Million} \times 100 \text{ bytes} \approx 86.4 \text{ GB/day (Uncompressed)}$$
+উইন্ডো অ্যাগ্রিগেশনের পর (প্রতি ১ মিনিটে `ad_id` ভিত্তিক গ্রুপ-বাই করলে):
+ধরি, আমাদের ১ লক্ষ অ্যাক্টিভ এড ক্যাম্পেইন আছে।
+$$\text{Aggregated Rows per Day} = 100,000 \text{ ads} \times 1440 \text{ minutes} = 144,000,000 \text{ rows/day}$$
+প্রতিটি অ্যাগ্রিগেটেড রো সাইজ যদি ৫০ বাইট হয়:
+$$\text{Aggregated Storage per Day} = 144,000,000 \times 50 \text{ bytes} \approx 7.2 \text{ GB/day}$$
+এর ফলে আমরা ১ দিনে ৮৬ জিবি র-ইভেন্ট ফাইল প্রসেস করে মাত্র ৭.২ জিবির হাই-পারফরম্যান্স কুয়েরিটেবল ডেটা স্টোর করতে পারছি!
+
+---
+
+### ২. হাই-ফিডেলিটি স্ট্রিম প্রসেসিং আর্কিটেকচার (Ad Click Aggregator Architecture)
+
+নিচের আর্কিটেকচারাল ফ্লোতে ক্লিক ইভেন্ট ইনজেশন, কাফকা টপিক বাফারিং, এফলিংক স্ট্রিম প্রসেসিং উইন্ডো, রিয়েল-টাইম ফ্রড ফিল্টারিং এবং কলামনার ডেটাবেস সিঙ্ক দেখানো হলো:
+
+```mermaid
+graph TD
+    %% User Action
+    User[User Clicks Ad] -->|1. Redirect via Load Balancer| API[Ingestion API Service Gateway]
+
+    %% Fraud Detection Layer (Fast-path)
+    API -->|2. Check Duplicates & Spams| Redis[(Redis Distributed Bloom Filter)]
+    
+    %% Kafka Ingestion Buffer
+    API -->|3. Append to Raw Topic| Kafka["Apache Kafka Broker (raw-clicks-topic)"]
+
+    %% Stream Processing Engine (Flink)
+    subgraph FlinkCluster [Apache Flink Stateful Stream Processor]
+        Source[Kafka Consumer Source]
+        FraudFilter[IP/User Fraud Detector]
+        WindowEngine[Event-Time Window Aggregator]
+        StateStore[(RocksDB Local State Store)]
+
+        Source --> FraudFilter
+        FraudFilter -->|Filtered Valid Clicks| WindowEngine
+        WindowEngine <-->|Checkpoint state| StateStore
+    end
+    
+    Kafka -->|4. Consume Stream| Source
+
+    %% Data Destinations
+    WindowEngine -->|5. Two-Phase Commit Sink| ClickHouse[(ClickHouse Columnar OLAP DB)]
+    WindowEngine -->|6. Trigger Budget Exhausted| KafkaAlert["Kafka Alert Topic"]
+    
+    %% Real-time Budget Engine
+    KafkaAlert --> AlertEngine[Budget Monitor Service]
+    AlertEngine -->|7. Disable Ad Campaign| Redis
+
+    %% Advertisers Query
+    Advertiser[Advertiser Dashboard] -->|8. High-speed OLAP Query| ClickHouse
+
+    %% Styling
+    style Redis fill:#ffebee,stroke:#c62828,stroke-width:2px;
+    style Kafka fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    style FlinkCluster fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    style ClickHouse fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+```
+
+---
+
+### ৩. স্ট্রিম প্রসেসিং উইন্ডো ও Exactly-Once মেকানিজম
+
+#### ক. উইন্ডো টাইপস (Types of Windows in Stream Processing):
+1. **Tumbling Window (নন-ওভারল্যাপিং):** ফিক্সড টাইম বাউন্ডারি। যেমন: ৫ মিনিটের টাম্বলিং উইন্ডো (12:00-12:05, 12:05-12:10)। প্রতি ক্লিকে ডেটা একবারই কাউন্ট হবে।
+2. **Sliding Window (ওভারল্যাপিং):** টাইম বাউন্ডারি এবং স্লাইড ফ্রিকোয়েন্সি থাকে। যেমন: প্রতি ১ মিনিট পর পর বিগত ৫ মিনিটের ক্লিক অ্যাগ্রিগেশন (12:00-12:05, 12:01-12:06)। এটি রিয়েল-টাইম স্পাইক ট্রেন্ড ট্র্যাকিংয়ের জন্য অত্যন্ত উপযোগী।
+3. **Session Window (গ্যাপ-বেসড):** ইউজারের নিষ্ক্রিয়তার (Inactivity) উপর ভিত্তি করে উইন্ডো ক্লোজ হয়। যেমন: ৩০ মিনিট কোনো ক্লিক না হলে নতুন সেশন উইন্ডো স্টার্ট হবে।
+
+#### খ. Exactly-Once Processing (দুই-দফা কমিট বা Two-Phase Commit Protocol):
+কাফকা থেকে ডেটা রিড করে ডাটাবেসে রাইট করার সময় প্রসেসর ক্র্যাশ করলে ডেটা ডুপ্লিকেট হতে পারে। এফলিংক এটি সমাধান করে **Chandy-Lamport Algorithm** এবং **Two-Phase Commit (2PC)** সঙ্কের মাধ্যমে:
+* **Phase 1 (Pre-Commit):** এফলিংক প্রতি ১ মিনিটে সোর্স থেকে সিঙ্ক পর্যন্ত একটি "ব্যারিয়ার" বা চেকপয়েন্ট পাঠায়। সিঙ্ক নোডটি তার স্টেট RocksDB-তে সেভ করে এবং ডাটাবেসে ট্রানজেকশন ওপেন করে প্রি-কমিট স্টেটে ফাইল রাইট করে।
+* **Phase 2 (Commit):** যখন ক্লাস্টারের সমস্ত নোড চেকপয়েন্ট সফলভাবে শেষ করার সিগন্যাল দেয়, তখন এফলিংক মাস্টার সিঙ্ক নোডকে ট্রানজেকশনটি `COMMIT` করার নির্দেশ দেয়। কোনো একটি নোড ফেইল করলে পুরো ট্রানজেকশনটি `ROLLBACK` হয়ে যায়, যা ডাবল কাউন্টিং শতভাগ প্রতিরোধ করে।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা এবার নোড জেএস-এর জন্য একটি **Real-Time Event-Time Sliding Window Aggregator** এবং **Click Fraud Engine** ডিজাইন করব। এটি ইভেন্ট টাইম (Event Time - কোড জেনারেট হওয়ার সময়) ব্যবহার করে ওয়াটারমার্কিং এবং আউট-অর্ডার ইভেন্ট হ্যান্ডলিং সিমুলেট করে:
+
+```typescript
+// ============================================================================
+// ১. ডেটা ইন্টারফেস ডিফিনিশনস (Data Models)
+// ============================================================================
+export interface AdClickEvent {
+  clickId: string;
+  adId: string;
+  userId: string;
+  ip: string;
+  cost: number;
+  timestamp: number; // Event-time timestamp (ms)
+}
+
+export interface WindowResult {
+  adId: string;
+  windowStart: number;
+  windowEnd: number;
+  totalClicks: number;
+  totalSpend: number;
+}
+
+// ============================================================================
+// ২. ডিস্ট্রিবিউটেড স্ট্রিম প্রসেসর ও অ্যাগ্রিগেটর ইঞ্জিন
+// ============================================================================
+export class AdClickStreamProcessor {
+  private windowSizeMs: number;
+  private slideSizeMs: number;
+  private allowedLatenessMs: number;
+  private watermark: number = 0;
+
+  // ইন-মেমোরি উইন্ডো বাফার (RocksDB-র ডেমো সংস্করণ)
+  // Key: adId, Value: map of windowStart -> aggregated data
+  private stateStore: Map<string, Map<number, { clicks: number; spend: number }>> = new Map();
+
+  constructor(windowMinutes: number = 1, slideSeconds: number = 10, allowedLatenessSeconds: number = 5) {
+    this.windowSizeMs = windowMinutes * 60 * 1000;
+    this.slideSizeMs = slideSeconds * 1000;
+    this.allowedLatenessMs = allowedLatenessSeconds * 1000;
+  }
+
+  /**
+   * স্ট্রিমের ওয়াটারমার্ক আপডেট করে। ওয়াটারমার্ক হলো এমন একটি সময় 
+   * যার পরে আমরা ধরে নিই যে এর চেয়ে পুরনো আর কোনো লেট ইভেন্ট সিস্টেমে আসবে না।
+   */
+  public updateWatermark(eventTimestamp: number): void {
+    const currentWatermark = eventTimestamp - this.allowedLatenessMs;
+    if (currentWatermark > this.watermark) {
+      this.watermark = currentWatermark;
+    }
+  }
+
+  /**
+   * রিয়েল-টাইম ক্লিক ইভেন্ট প্রসেস এবং স্টেট ইনজেকশন
+   */
+  public processElement(event: AdClickEvent): void {
+    this.updateWatermark(event.timestamp);
+
+    // ১. (লেট ডেটা ফিল্টারিং) যদি ইভেন্ট ওয়াটারমার্কের চেয়েও পুরনো হয়, তবে সেটি ড্রপ বা সাইড-আউটপুট করা হবে
+    if (event.timestamp < this.watermark) {
+      console.warn(`[Stream-Warning] Rejected extremely late click event ${event.clickId}. Timestamp: ${event.timestamp}, Current Watermark: ${this.watermark}`);
+      return; 
+    }
+
+    // ২. স্লাইডিং উইন্ডোর জন্য বাউন্ডারি ক্যালকুলেট করা 
+    // একটি ইভেন্ট একই সাথে একাধিক ওভারল্যাপিং স্লাইডিং উইন্ডোর অংশ হতে পারে
+    const activeWindows = this.getWindowsForTimestamp(event.timestamp);
+
+    for (const windowStart of activeWindows) {
+      if (!this.stateStore.has(event.adId)) {
+        this.stateStore.set(event.adId, new Map());
+      }
+
+      const adWindows = this.stateStore.get(event.adId)!;
+      if (!adWindows.has(windowStart)) {
+        adWindows.set(windowStart, { clicks: 0, spend: 0 });
+      }
+
+      const state = adWindows.get(windowStart)!;
+      state.clicks += 1;
+      state.spend += event.cost;
+    }
+  }
+
+  /**
+   * স্লাইডিং উইন্ডোর স্টার্ট-টাইম লিস্ট জেনারেট করে
+   */
+  private getWindowsForTimestamp(timestamp: number): number[] {
+    const windows: number[] = [];
+    // প্রথম উইন্ডো স্টার্ট পয়েন্ট যা এই টাইমস্ট্যাম্পকে কভার করে
+    const firstWindowStart = Math.floor(timestamp / this.slideSizeMs) * this.slideSizeMs - this.windowSizeMs + this.slideSizeMs;
+    
+    for (let start = firstWindowStart; start <= timestamp; start += this.slideSizeMs) {
+      if (timestamp >= start && timestamp < start + this.windowSizeMs) {
+        windows.push(start);
+      }
+    }
+    return windows;
+  }
+
+  /**
+   * ওয়াটারমার্কের চেয়ে পুরনো হয়ে যাওয়া উইন্ডোগুলোকে ক্লোজ ও ইমিট (Emit) করে মেমরি ক্লিন করা
+   */
+  public emitAndPurgeClosedWindows(): WindowResult[] {
+    const emittedResults: WindowResult[] = [];
+
+    for (const [adId, adWindows] of this.stateStore.entries()) {
+      for (const [windowStart, state] of adWindows.entries()) {
+        const windowEnd = windowStart + this.windowSizeMs;
+
+        // যদি উইন্ডোর এন্ড-টাইম আমাদের বর্তমান ওয়াটারমার্কের চেয়ে ছোট হয়, 
+        // তার মানে এই উইন্ডোর জন্য আর কোনো লেট ডেটা গ্রহণযোগ্য নয় এবং এটি ক্লোজড!
+        if (windowEnd <= this.watermark) {
+          emittedResults.push({
+            adId,
+            windowStart,
+            windowEnd,
+            totalClicks: state.clicks,
+            totalSpend: Number(state.spend.toFixed(4))
+          });
+
+          // স্টেট থেকে ক্লোজড উইন্ডো ডিলিট করে মেমরি ফ্রি করা
+          adWindows.delete(windowStart);
+        }
+      }
+
+      if (adWindows.size === 0) {
+        this.stateStore.delete(adId);
+      }
+    }
+
+    return emittedResults;
+  }
+
+  public getWatermark(): number {
+    return this.watermark;
+  }
+}
+
+// ============================================================================
+// ৩. রিয়েল-টাইম ক্লিক ফ্রড ডিটেকশন ইঞ্জিন (Fraud Detection Engine)
+// ============================================================================
+export class ClickFraudDetector {
+  // Key: IP:adId, Value: list of click timestamps in the last 1 second
+  private ipClickTracker: Map<string, number[]> = new Map();
+  private fraudThresholdPerSecond: number;
+
+  constructor(maxClicksPerSec: number = 5) {
+    this.fraudThresholdPerSecond = maxClicksPerSec;
+  }
+
+  /**
+   * একটি নতুন ক্লিক ম্যালিশিয়াস বা বট দ্বারা জেনারেট হয়েছে কিনা তা ভেরিফাই করে
+   */
+  public isFraudulent(event: AdClickEvent): boolean {
+    const trackerKey = `${event.ip}:${event.adId}`;
+    const now = event.timestamp;
+
+    if (!this.ipClickTracker.has(trackerKey)) {
+      this.ipClickTracker.set(trackerKey, []);
+    }
+
+    const clickTimestamps = this.ipClickTracker.get(trackerKey)!;
+
+    // ১. ১ সেকেন্ডের বাইরের পুরনো ক্লিক ট্র্যাকিং লিস্ট থেকে ক্লিন করা
+    const filteredTimestamps = clickTimestamps.filter(ts => now - ts <= 1000);
+    this.ipClickTracker.set(trackerKey, filteredTimestamps);
+
+    // ২. ১ সেকেন্ডে ক্লিকে লিমিট থ্রেশহোল্ড চেক করা
+    if (filteredTimestamps.length >= this.fraudThresholdPerSecond) {
+      console.warn(`[Fraud-Detected] Suspicious micro-burst clicks from IP ${event.ip} for ad ${event.adId}. Clicks count in last 1s: ${filteredTimestamps.length}`);
+      return true; // Fraudulent
+    }
+
+    // ৩. নতুন ক্লিক টাইমস্ট্যাম্প ট্র্যাকিং লিস্টে যুক্ত করা
+    filteredTimestamps.push(now);
+    return false; // Valid click
+  }
+}
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব প্রোডাকশনে সেকেন্ডে লাখ লাখ ক্লিক প্রসেস করার সময় প্রোডাকশনে যে ৩টি গুরুতর সমস্যা তৈরি হয় এবং তার স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Hotspot Key Skew (ভাইরাল বিজ্ঞপ্তির ব্ল্যাকহোল)
+ইউটিউব বা ফেসবুকে কোনো ভাইরাল বা সুপার বোল বিজ্ঞাপন (`ad_id`) রিলিজ হলে, হঠাৎ কোটি ইউজার একই লিংকে একসাথে ক্লিক করবেন। এর ফলে, কাফকা ও এফলিংক ক্লাস্টারে ওই নির্দিষ্ট `ad_id` হ্যাশ রুট হয়ে যে প্রসেসর নোডটিতে যাবে, সেই নোডের CPU ও মেমরি সাথে সাথে ১০০% হিট করে সার্ভার ডাউন করে দেবে। বাকি নোডগুলো অলস বসে থাকবে।
+* **Smearing (Two-Stage Aggregation) সল্যুশন:**
+  - **Local Pre-Aggregation:** আমরা রাইটার এন্ডে মূল `ad_id` কী-এর সাথে একটি র্যান্ডম সল্ট বা নম্বর যোগ করব (উদা: `ad_id_102` -> `ad_id_102_salt_3`)। সল্ট যুক্ত করার কারণে ট্রাফিক এফলিংক ক্লাস্টারের সমস্ত নোডে সমানভাবে ছড়িয়ে (Round-robin) যাবে।
+  - **Global Final Merge:** এফলিংকের প্রথম নোডগুলো লোকাল সল্ট করা ডেটা অ্যাগ্রিগেট করে পরবর্তী ফাইনাল সিঙ্ক নোডে পাঠাবে, যা সল্ট রিমুভ করে চূড়ান্ত সামারি বের করবে। এর ফলে একটি নোডের উপর চাপ ১০% এ নেমে আসে।
+
+#### ২. RocksDB State Expansion & Out-of-Memory (ডিস্ক ফুল ও স্পিলিং)
+এফলিংক মেমরিতে স্টেট রাখার জন্য RocksDB ব্যবহার করে। যদি allowed lateness এবং উইন্ডোর সাইজ খুব বড় হয় (উদা: ১ দিনের লেট ডেটা এলাও করা), তবে RocksDB-র মেমরি ও লোকাল এসএসডি ডিস্ক লাখ লাখ আন-ক্লোজড স্যাম্পলে ভরে যাবে। নোডের থ্রু-পুট হুট করে ১০ গুণ কমে যাবে কারণ RocksDB ডেটা র্যাম থেকে ডিস্কে সোয়াপ (Spilling to SSD) করা শুরু করবে।
+* **মিটিগেশন (Strict TTL Configuration & SSD IOPS Scaling):**
+  - **State TTL Setting:** RocksDB-র প্রতিটি উইন্ডো স্টেটের জন্য কঠোর TTL (Time To Live) সেটআপ করা। যেমন: `state.clear()` এনফোর্স করা উইন্ডো অ্যান্ড হওয়ার ৫ মিনিট পরই। 
+  - **Allowed Lateness Optimization:** লেট ডেটার বাউন্ডারি সর্বোচ্চ ৫ থেকে ১০ সেকেন্ডে নামিয়ে আনা। এর চেয়ে পুরনো ডেটা র্যামে না রেখে সরাসরি ডেড-লেটার কাফকা টপিক বা ব্যাকগ্রাউন্ড কোল্ড স্টোরেজে (S3) ডাম্প করে দেওয়া।
+
+#### ৩. Clickhouse Insert Throttling (সিঙ্ক নোড বটলনেক)
+ক্লিকহাউস বা ক্যাসান্দ্রার মতো কলামনার ডেটাবেস প্রতি সেকেন্ডে লাখ লাখ সিঙ্গেল `INSERT` হ্যান্ডেল করতে পারে না। যদি এফলিংকের প্রতিটি প্রসেসর উইন্ডো ক্লোজ হওয়ার সাথে সাথে ১টি করে একক রো ইনসার্ট করতে যায়, তবে ডেটাবেসের রাইট-লক লেগে পুরো স্ট্রিম পাইপলাইন ব্লক হয়ে যাবে।
+* **মিটিগেশন (Micro-Batching & Two-Phase Commit Sink):**
+  - **Micro-Batch Sinking:** এফলিংক সিঙ্কে ডেটা আসার সাথে সাথে সিঙ্গেল ইনসার্ট না করে কমপক্ষে ৫ সেকেন্ড বা ১০,০০০ রো-এর বাফার বা মাইক্রো-ব্যাচ তৈরি করবে এবং `Clickhouse BULK INSERT` স্ক্রিপ্ট চালাবে যা ডাটাবেস রাইট লকিং জিরোতে নামিয়ে আনে।
+
+---
+
+## 🔒 Chapters 17 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ৪টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
 
 যেমন:
-- **চ্যাপ্টার ১৬ (Ad Click Aggregator):** জানবো কীভাবে Apache Flink, Kafka এবং MapReduce ব্যবহার করে প্রতি সেকেন্ডে মিলিয়ন ক্লিকে অ্যাড রেভিনিউ ক্যালকুলেট করা যায়।
 - **চ্যাপ্টার ১৭ (Distributed Message Queue - Kafka style):** ডিজাইন করব লিনিয়ারলি স্কেলেবল, পার্টিশনড এবং হাই-পারফরম্যান্স মেসেজিং পাইপলাইন।
 - **চ্যাপ্টার ১৮ (Distributed Rate Limiter):** টোকেন বাকেট অ্যালগরিদম ও স্লাইডিং উইন্ডো ব্যবহার করে মিলিয়ন ইউজার রিকোয়েস্ট ফিল্টারিং আর্কিটেকচার তৈরি।
 - **চ্যাপ্টার ১৯ (Real-Time Gaming Leaderboard):** Redis Sorted Sets ও ডিস্ট্রিবিউটেড র্যাঙ্কিং ইঞ্জিন ডিজাইন।
@@ -2873,4 +3188,4 @@ export class MetricsScraperManager {
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 15 (Metrics & Monitoring System - Prometheus)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 16 (Ad Click Aggregator)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো স্পেসিফিক চ্যাপ্টার আনলক করতে চান? Let's discuss and design!
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 16 (Ad Click Aggregator)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 17 (Distributed Message Queue - Kafka style)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো স্পেসিফিক চ্যাপ্টার আনলক করতে চান? Let's discuss and design!
