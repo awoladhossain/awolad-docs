@@ -2497,14 +2497,380 @@ export class DistributedLRUCache<K, V> {
 
 ---
 
-## 🔒 Chapters 15 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📊 Chapter 15: Metrics & Monitoring System (Time Series Database & Pull-Based Architecture)
 
-বাকি ৬টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+একটি এন্টারপ্রাইজ ডিস্ট্রিবিউটেড মাইক্রোসার্ভিস আর্কিটেকচারে হাজার হাজার নোড, কন্টেইনার এবং সার্ভিস প্রতি মিলি-সেকেন্ডে হাজার হাজার রিকোয়েস্ট প্রসেস করে। এই বিশাল সিস্টেমের স্বাস্থ্য (Health), পারফরম্যান্স (Throughput/Latency), এবং এরর রেট ট্র্যাক করার জন্য একটি আল্ট্রা-হাই থ্রুপুট মনিটরিং ও মেট্রিক্স কালেকশন সিস্টেমের প্রয়োজন হয়। 
 
-যেমন:
-- **চ্যাপ্টার ১৫ (Metrics & Monitoring System - Prometheus):** বুঝবো কীভাবে TSDB (Time Series DB) ব্যবহার করে পিক আওয়ারে রিয়েল-টাইম মেট্রিক্স স্ক্র্যাপ ও মনিটর করতে হয়।
-- **চ্যাপ্টার ১৬ (Ad Click Aggregator):** জানবো কীভাবে Apache Flink, Kafka এবং MapReduce ব্যবহার করে প্রতি সেকেন্ডে মিলিয়ন ক্লিকে অ্যাড রেভিনিউ ক্যালকুলেট করা যায়।
+এই চ্যাপ্টারে আমরা ডিজাইন করব **Prometheus**-এর মতো একটি হাই-পারফরম্যান্স **Pull-Based Metrics Collection System** এবং এর ব্যাকএন্ড স্টোরেজ **Time Series Database (TSDB)**-এর ইন্টারনাল মেকানিজম।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 14 (Distributed Cache - Redis Internals)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 15 (Metrics & Monitoring System - Prometheus)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **মেট্রিক্স স্ক্র্যাপিং (Ingestion):** নির্দিষ্ট ইন্টারভালে বিভিন্ন সার্ভিস (Target HTTP Endpoints) থেকে মেট্রিক্স ডেটা (Counters, Gauges, Histograms) স্ক্র্যাপ করা।
+2. **ডিস্ট্রিবিউটেড কোয়েরি ইঞ্জিন (PromQL):** টাইমিং রেঞ্জ ফিল্টারিং এবং অ্যাগ্রিগেশন কুয়েরি সাপোর্ট করা (যেমন: বিগত ৫ মিনিটে আমাদের চেকআউট এপিআই-এর ৯৯তম পার্সেন্টাইল ল্যাটেন্সি কত ছিল)।
+3. **রিয়েল-টাইম অ্যালার্টিং (Alerting):** মেট্রিক্সের ভ্যালু নির্দিষ্ট থ্রেশহোল্ড ক্রস করলে অটোমেটিক অ্যালার্ট ট্রিগার করা (যেমন: CPU usage > 85% for 5 minutes)।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **আল্ট্রা-লো ল্যাটেন্সি রাইট (High Ingestion Rate):** মেট্রিক্স স্ক্র্যাপিং যেন লাইভ ইউজার রিকোয়েস্ট প্রসেসে কোনো ইমপ্যাক্ট বা ওভারহেড তৈরি না করে।
+2. **টাইট ডেটা কম্প্রেশন (Efficient TSDB Storage):** টাইম-সিরিজ ডেটা অত্যন্ত অপটিমাইজড মেমরি ও স্টোরেজ কম্প্রেশন মডেলে রাখা।
+3. **ইলাস্টিক সার্ভিস ডিসকভারি (Service Discovery):** ক্লাউড বা কুবারনেটিস নোড ডাইনামিকালি স্কেল-আপ/ডাউন হলে স্ক্র্যাপার নিজে থেকেই টার্গেট নোডগুলো ট্র্যাক করতে পারবে।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Staff Architect Scale Estimations):
+ধরি, আমাদের এন্টারপ্রাইজ আর্কিটেকচারে:
+* **মোট কন্টেইনার বা নোড সংখ্যা (Targets):** $10,000$ pods.
+* **নোড প্রতি মেট্রিক্স সংখ্যা (Metrics per Target):** $500$ distinct active timeseries.
+* **স্ক্র্যাপ ফ্রিকোয়েন্সি (Scrape Interval):** $10$ seconds.
+* **একটি মেট্রিক্স স্যাম্পল (Metric Sample):** `timestamp` ($8$ bytes) + `value` ($8$ bytes) = $16$ bytes (Raw).
+
+**১. রাইট থ্রুপুট (Write QPS):**
+$$\text{QPS} = \frac{10,000 \text{ targets} \times 500 \text{ metrics}}{10 \text{ seconds}} = 500,000 \text{ samples/sec}$$
+
+**২. র-ডেটা ব্যান্ডউইথ ও মেমরি (Raw Bandwidth & Memory size):**
+$$\text{Raw Bandwidth} = 500,000 \times 16 \text{ bytes} = 8,000,000 \text{ bytes/sec} \approx 8 \text{ MB/sec}$$
+$$\text{Raw Storage per Day} = 8 \text{ MB/sec} \times 86,400 \text{ sec} \approx 691.2 \text{ GB/day}$$
+
+**৩. গরিলা ডাবল-ডেল্টা কম্প্রেশন ব্যান্ডউইথ (Gorilla Compression Engine - 1.37 bytes per sample):**
+রিয়েল-ওয়ার্ল্ড প্রোডাকশনে প্রমিথিউস **Gorilla Double-Delta Compression** ব্যবহার করে কাঁচা ১৬ বাইটের ডেতাকে গড়ে মাত্র **১.৩৭ বাইটে** নামিয়ে আনে!
+$$\text{Compressed Bandwidth} = 500,000 \times 1.37 \text{ bytes} = 685,000 \text{ bytes/sec} \approx 685 \text{ KB/sec}$$
+$$\text{Compressed Storage per Day} = 685 \text{ KB/sec} \times 86,400 \text{ sec} \approx 59.18 \text{ GB/day}$$
+$$\text{30-Day Retention Storage} = 59.18 \text{ GB} \times 30 \approx 1.77 \text{ TB}$$
+১.৭৭ টেরাবাইট এসএসডি স্টোরেজ ব্যবহার করে আমরা অনায়াসে ১০০০ কোটি স্যাম্পল ডেটা ব্যাকআপ রাখতে পারছি!
+
+---
+
+### ২. হাই-ফিডেলিটি সিস্টেম আর্কিটেকচার (High-Fidelity Observability Architecture)
+
+নিচের আর্কিটেকচারাল ডায়াগ্রামে প্রমিথিউস পুল-বেসড স্ক্র্যাপিং ফ্লো, dynamic service discovery, TSDB internals (Memory Chunk + WAL + Compacted Block) এবং কোয়েরি মেকানিজম দেখানো হলো:
+
+```mermaid
+graph TD
+    %% Service Discovery Layer
+    SD[Kubernetes API / Consul / DNS SD] -.->|Dynamically Discovers Targets| SM[Metrics Scrape Manager]
+
+    %% Target Services
+    subgraph Microservice Cluster [Target Nodes]
+        P1["Checkout API Pod (App Metrics /metrics)"]
+        P2["Payment Worker (JVM Metrics /metrics)"]
+        P3["Auth Service Pod (Go Collector /metrics)"]
+    end
+
+    %% Scraper Layer
+    SM -->|1. HTTP GET /metrics concurrently| P1
+    SM -->|1. HTTP GET /metrics concurrently| P2
+    SM -->|1. HTTP GET /metrics concurrently| P3
+
+    %% Ingestion Pipeline
+    SM -->|2. Ingest Raw Samples| TSDB[TSDB Engine]
+
+    %% TSDB Internals
+    subgraph TSDB [Time Series Database Internals]
+        WAL[(Write-Ahead Log - WAL on Disk)]
+        MemTable[In-Memory Head Block / Chunk]
+        Compactor[Background Compactor Engine]
+        DiskBlocks[(Compacted 2h Blocks on Disk - SSD)]
+
+        MemTable -->|Flushes every 2 hours| Compactor
+        Compactor -->|Downsampled & Chunk Compressed| DiskBlocks
+    end
+    SM -.->|Crash Recovery append| WAL
+    SM -->|Direct In-memory Append| MemTable
+
+    %% Query & Visualization Layer
+    Grafana[Grafana Dashboard] -->|3. PromQL HTTP Query| QE[PromQL Query Engine]
+    QE -->|4. Scan Memory Chunks| MemTable
+    QE -->|5. Scan Block Indexes| DiskBlocks
+
+    %% Alerting Layer
+    AlertManager[Alertmanager Engine] -->|6. Evaluating Rules| QE
+    AlertManager -->|7. Dispatches Trigger Alert| Slack["Slack / PagerDuty / Email Notifications"]
+
+    %% Styling
+    style SD fill:#ffebcc,stroke:#d68000,stroke-width:2px;
+    style SM fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    style TSDB fill:#f1f8e9,stroke:#558b2f,stroke-width:2px;
+    style DiskBlocks fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    style AlertManager fill:#ffebee,stroke:#c62828,stroke-width:2px;
+```
+
+---
+
+### ৩. ডিপ-ডাইভ কোর কনসেপ্টস (TSDB & Scraping Internals)
+
+#### ক. Pull-Based vs Push-Based Architecture:
+* **Pull-Based (Prometheus):** প্রমিথিউস নিজেই বিভিন্ন সার্ভিসকে পোল (HTTP GET) করে ডেটা নিয়ে আসে।
+  - *সুবিধা:* ডেটা কালেকশন রেট স্ক্র্যাপার নিজে কনট্রোল করতে পারে। কোনো সার্ভিস বেশি রিকোয়েস্ট স্পাইক করলেও মনিটরিং সিস্টেমের উপর অতিরিক্ত প্রেসার পড়ে ক্র্যাশ করার ভয় নেই (Decoupling & Self-Protection)।
+  - *অসুবিধা:* ডায়নামিক নোড ট্র্যাক করতে এন্টারপ্রাইজ লেভেল **Service Discovery** এবং ফায়ারওয়াল পোর্ট ওপেনিং প্রয়োজন।
+* **Push-Based (InfluxDB/StatsD):** বিভিন্ন মাইক্রোসার্ভিস নিজেরাই মেট্রিক্স জেনারেট করে সেন্ট্রাল মনিটরিং এপিআই-তে পুশ করে।
+  - *সুবিধা:* স্বল্পস্থায়ী সার্ভারলেস ফাংশন (উদা: AWS Lambda) মনিটর করতে এটি অসাধারণ, যা সার্ভার বন্ধ হওয়ার ঠিক আগে মেট্রিক্স পুশ করে দেয়।
+  - *অসুবিধা:* স্পাইক ট্রাফিকের সময় হাজার হাজার সার্ভিস একসাথে পুশ করলে সেন্ট্রাল মনিটরিং সিস্টেম ডাউন হতে পারে।
+
+#### খ. TSDB Gorilla XOR & Double-Delta Compression:
+১. **Timestamp Compression (Double-Delta):**
+   টাইমস্ট্যাম্প সাধারণত প্রতি ১০ সেকেন্ডে টিউনড থাকে। গিটস্ট্যাম্প র-ডেটা না রেখে সময়ের ডেল্টা (Delta: $T_n - T_{n-1}$) and তার ডেল্টা ডেল্টা (Delta-of-Delta: $D = (T_n - T_{n-1}) - (T_{n-1} - T_{n-2})$) ক্যালকুলেট করে। অধিকাংশ সময় ডেল্টা ডেল্টা জিরো ($0$) হয়, যা স্টোর করতে মাত্র **১ বিট (bit)** ডেটা লাগে!
+২. **Value Compression (XOR):**
+   ভাসমান সংখ্যা (Floating point values) স্টোর করতে গিটস্ট্যাম্প পূর্ববর্তী ভ্যালুর সাথে কারেন্ট ভ্যালুর XOR অপারেশন চালায়। যদি XOR এর মান ০ হয়, তবে মাত্র ১ বিট সেভ করে। মান আলাদা হলে এটি লিডিং ও ট্রেইলিং জিরো বিটস বাদ দিয়ে শুধুমাত্র ভিন্ন অংশটি স্টোর করে মেমরি ৯০% বাঁচায়।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা এবার নোড জেএস-এর জন্য একটি হাই-পারফরম্যান্স **Time Series Database (TSDB) Engine** তৈরি করব, যাতে রয়েছে গরিলা স্টাইলের টাইমস্ট্যাম্প ডেল্টা-কম্প্রেশন, রিয়েল-টাইম ডাইনামিক স্ক্র্যাপার এবং মেমরি বাঁচাতে ব্যাকগ্রাউন্ড **Metrics Downsampler Engine**:
+
+```typescript
+import axios from 'axios';
+
+// ============================================================================
+// ১. ডাটা টাইপ ডিফিনিশনস (Data Type Definitions)
+// ============================================================================
+export interface MetricSample {
+  timestamp: number; // Unix epoch ms
+  value: number;     // Metric float value
+}
+
+export interface MetricSeries {
+  labels: Record<string, string>; // e.g. { __name__: "http_requests", status: "200" }
+  samples: MetricSample[];
+  compressedBuffer?: string;     // Gorilla compressed binary mockup
+}
+
+// ============================================================================
+// ২. প্রমিথিউস-স্টাইল ইন-মেমোরি TSDB ইঞ্জিন
+// ============================================================================
+export class TSDBEngine {
+  private activeSeries: Map<string, MetricSeries> = new Map();
+  private retentionPeriodMs: number;
+
+  constructor(retentionDays: number = 7) {
+    this.retentionPeriodMs = retentionDays * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * একটি নির্দিষ্ট মেট্রিক্স সিরিজের ইউনিক আইডেন্টিফায়ার (Fingerprint) তৈরি করে
+   */
+  public generateFingerprint(labels: Record<string, string>): string {
+    const sortedKeys = Object.keys(labels).sort();
+    return sortedKeys.map(key => `${key}=${labels[key]}`).join(',');
+  }
+
+  /**
+   * TSDB-তে নতুন মেট্রিক স্যাম্পল ইনজেস্ট করে
+   */
+  public ingest(labels: Record<string, string>, timestamp: number, value: number): void {
+    const fingerprint = this.generateFingerprint(labels);
+    
+    if (!this.activeSeries.has(fingerprint)) {
+      this.activeSeries.set(fingerprint, {
+        labels,
+        samples: []
+      });
+    }
+
+    const series = this.activeSeries.get(fingerprint)!;
+    
+    // (আউট অফ অর্ডার প্রোটেকশন) নিশ্চিত করি যেন আগের টাইমস্ট্যাম্পের চেয়ে নতুন টাইমস্ট্যাম্প বড় হয়
+    if (series.samples.length > 0) {
+      const lastSample = series.samples[series.samples.length - 1];
+      if (timestamp <= lastSample.timestamp) {
+        console.warn(`[TSDB-Warning] Rejected out-of-order write for series ${fingerprint}. TS: ${timestamp}`);
+        return; 
+      }
+    }
+
+    series.samples.push({ timestamp, value });
+  }
+
+  /**
+   * PromQL কুয়েরি ড্রাইভার: লেবেল ম্যাচ ও টাইম রেঞ্জ ফিল্টার করে ডেটা রিটার্ন করে
+   */
+  public query(matchLabels: Record<string, string>, startMs: number, endMs: number): MetricSeries[] {
+    const results: MetricSeries[] = [];
+
+    for (const [_, series] of this.activeSeries.entries()) {
+      // লেবেল ম্যাচিং চেকার
+      const isMatch = Object.keys(matchLabels).every(key => series.labels[key] === matchLabels[key]);
+      
+      if (isMatch) {
+        const filteredSamples = series.samples.filter(
+          sample => sample.timestamp >= startMs && sample.timestamp <= endMs
+        );
+        
+        results.push({
+          labels: series.labels,
+          samples: filteredSamples
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * ব্যাকগ্রাউন্ড ডাউনস্যাম্পলার: পুরনো ডেটা অ্যাগ্রিগেট করে স্টোরেজ রিলিজ করে
+   */
+  public runDownsample(): void {
+    const now = Date.now();
+    const expiryLimit = now - this.retentionPeriodMs;
+
+    console.log(`[TSDB-Compactor] Running compaction & downsampling...`);
+
+    for (const [fingerprint, series] of this.activeSeries.entries()) {
+      const originalLength = series.samples.length;
+      if (originalLength === 0) continue;
+
+      // ১. রিটেনশন পিরিয়ডের বাইরের পুরনো ফাইল বা ডেটা রিমুভ করা
+      const activeSamples = series.samples.filter(s => s.timestamp >= expiryLimit);
+
+      // ২. ঐতিহাসিক পুরনো ডেটা (যেমন ১২ ঘণ্টার চেয়ে পুরনো) ১ মিনিটের ব্লকভারে ডাউনস্যাম্পল করা:
+      const oldSamples = series.samples.filter(s => s.timestamp < expiryLimit);
+      const downsampledSamples: MetricSample[] = [];
+
+      if (oldSamples.length > 0) {
+        console.log(`[TSDB-Compactor] Downsampling ${oldSamples.length} old samples for ${fingerprint}`);
+        
+        // ১ মিনিটের উইন্ডো ভিত্তিক অ্যাভারেজ ক্যালকুলেশন
+        const oneMinuteMs = 60 * 1000;
+        let currentWindowStart = oldSamples[0].timestamp;
+        let sum = 0;
+        let count = 0;
+
+        for (const sample of oldSamples) {
+          if (sample.timestamp < currentWindowStart + oneMinuteMs) {
+            sum += sample.value;
+            count++;
+          } else {
+            downsampledSamples.push({
+              timestamp: currentWindowStart,
+              value: sum / count // Average downsample
+            });
+            currentWindowStart = sample.timestamp;
+            sum = sample.value;
+            count = 1;
+          }
+        }
+        // শেষ অবশিষ্টাংশ পুশ
+        if (count > 0) {
+          downsampledSamples.push({ timestamp: currentWindowStart, value: sum / count });
+        }
+      }
+
+      // ৩. অ্যাক্টিভ মেমরিতে ডাউনস্যাম্পলড এবং কারেন্ট লাইভ স্যাম্পলস যুক্ত করা
+      series.samples = [...downsampledSamples, ...activeSamples];
+      
+      const compressedCount = originalLength - series.samples.length;
+      if (compressedCount > 0) {
+        console.log(`[TSDB-Compactor] Freed ${compressedCount} raw memory slots for ${fingerprint}`);
+      }
+    }
+  }
+
+  public getActiveSeriesCount(): number {
+    return this.activeSeries.size;
+  }
+}
+
+// ============================================================================
+// ৩. ডাইনামিক মেট্রিক্স স্ক্র্যাপ ম্যানেজার (Prometheus style pull scraper)
+// ============================================================================
+export class MetricsScraperManager {
+  private targets: Set<string> = new Set();
+  private tsdb: TSDBEngine;
+  private scrapeInterval: NodeJS.Timeout | null = null;
+
+  constructor(tsdb: TSDBEngine) {
+    this.tsdb = tsdb;
+  }
+
+  public registerTarget(url: string): void {
+    this.targets.add(url);
+    console.log(`[Scraper-ServiceDiscovery] Registered target endpoint: ${url}`);
+  }
+
+  public deregisterTarget(url: string): void {
+    this.targets.delete(url);
+    console.log(`[Scraper-ServiceDiscovery] Deregistered target: ${url}`);
+  }
+
+  /**
+   * সমস্ত টার্গেট নোড থেকে কনকারেন্টলি মেট্রিক্স স্ক্র্যাপ করা
+   */
+  public async scrapeAll(): Promise<void> {
+    console.log(`[Scraper] Initiating scrape cycle for ${this.targets.size} targets...`);
+    const timestamp = Date.now();
+
+    const scrapePromises = Array.from(this.targets).map(async (url) => {
+      try {
+        // (প্যারালাল HTTP GET) রিয়েল স্ক্র্যাপিং সিমুলেশন
+        // রিয়েল মনিটরিংয়ে এখানে প্রমিথিউস প্লেনটেক্সট বা প্রোফাইল ফরম্যাট পার্স করে
+        const response = await axios.get(url, { timeout: 3000 });
+        const metrics = response.data; // Expected JSON mockup for this demonstration
+
+        for (const metric of metrics) {
+          this.tsdb.ingest(metric.labels, timestamp, metric.value);
+        }
+        console.log(`[Scraper-Success] Scraped ${metrics.length} timeseries samples from ${url}`);
+      } catch (err: any) {
+        console.error(`[Scraper-Error] Failed to scrape ${url}: ${err.message}`);
+        // অ্যালার্ট ইঞ্জিনের জন্য স্ক্র্যাপ ফেইল মেট্রিক্স ডাউন করা
+        this.tsdb.ingest({ __name__: "up", instance: url }, timestamp, 0);
+      }
+    });
+
+    await Promise.all(scrapePromises);
+  }
+
+  public startScheduler(intervalMs: number = 10000): void {
+    this.scrapeInterval = setInterval(() => {
+      this.scrapeAll();
+    }, intervalMs);
+  }
+
+  public stopScheduler(): void {
+    if (this.scrapeInterval) {
+      clearInterval(this.scrapeInterval);
+    }
+  }
+}
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব প্রোডাকশনে মিলিয়ন QPS স্কেলিং করার সময় যে ৩টি জটিল ওভারহেড তৈরি হয় এবং তার সমাধান:
+
+#### ১. High Cardinality Explosion (মেমরির মরণফাঁদ)
+মেট্রিক্সের লেবেলে যদি অত্যন্ত পরিবর্তনশীল ডাটা (যেমন: ইউজারের `user_id` বা ট্রানজেকশন `order_id`) ট্যাগ করা হয়, তবে প্রতি সেকেন্ডে নতুন নতুন ইউনিক টাইম-সিরিজ তৈরি হতে থাকে। এর ফলে TSDB-র ইন-মেমোরি ইনডেক্স এবং ফিঙ্গারপ্রিন্ট হ্যাশ ম্যাপ কয়েক মিনিটে সম্পূর্ণ মেমরি গ্রাস করে OOM (Out Of Memory) ক্র্যাশ ঘটাবে।
+* **মিটিগেশন (Strict Label Sanitization & Drop Rules):** 
+  - **Relabeling Config:** আমাদের স্ক্র্যাপার লেয়ারে আমরা রেগুলার এক্সপ্রেশন দিয়ে `user_id` বা ডাইনামিক ইউআরআই ট্যাগগুলোকে পার্স করে একটি কমন জেনেরিক ক্যাটাগরিতে (যেমন `/api/v1/users/:id` -> `/api/v1/users/*`) কনভার্ট করব।
+  - **Metric Ingestion Limiters:** প্রজেক্ট প্রতি সর্বোচ্চ অ্যাক্টিভ টাইম-সিরিজের সংখ্যা লিমিট লক করে রাখা (উদা: max active series = 50,000)। এই লিমিট ক্রস করলে স্ক্র্যাপার অতিরিক্ত ডাইনামিক স্যাম্পল রিজেক্ট করে অ্যালার্ট ট্রিগার করবে।
+
+#### ২. Scraping Jitter & Micro-bursts (সিঙ্ক্রোনাইজড ট্রাফিক স্পাইক)
+যদি স্ক্র্যাপার ঠিক একই সময়ে (উদা: প্রতি ১০ম সেকেন্ডের মাথায়) ১০০০টি সার্ভিসে HTTP রিকোয়েস্ট পাঠায়, তবে তা নেটওয়ার্ক কার্ডে Micro-bursting জটলা তৈরি করবে। একই সাথে, সার্ভিসগুলো থেকে ডেটা স্ক্র্যাপ করতে গিয়ে CPU ও থ্রু-পুট হুট করে স্পাইক করবে।
+* **মিটিগেশন (Metrics Scraping Jitter):** 
+  - **Randomized Offset:** আমরা স্ক্র্যাপার ইঞ্জিনে একটি র্যান্ডম অফসেট (Jitter/Delay) ব্যবহার করব। ১০০০টি টার্গেটের স্ক্র্যাপ ডিস্ট্রিবিউট করা হবে ১ সেকেন্ডের উইন্ডোর মধ্যে ছড়িয়ে ছিটিয়ে (উদা: Pod A প্রতি ১০ম সেকেন্ডের ২য় মিলি-সেকেন্ডে, Pod B ৪র্থ মিলি-সেকেন্ডে)।
+  - **Keep-Alive Connections:** স্ক্র্যাপার টার্গেটগুলোর সাথে প্রমিথিউস HTTP Connection Pool এবং Keep-Alive মেকানিজম এনফোর্স করবে, যা প্রতি ১০ সেকেন্ড পর পর নতুন টিসিপি হ্যান্ডশেক এবং TLS নেগোশিয়েশন ওভারহেড সম্পূর্ণ বন্ধ রাখবে।
+
+#### ৩. Memory Blowout During Heavy Range Queries (গ্রাফানা ডেডলক)
+গ্রাফানা ড্যাশবোর্ড থেকে ইউজার যদি বিগত ৩০ দিনের র-মেট্রিক্স দেখতে চান এবং সেখানে মিলিয়ন মিলিয়ন ডেটাপয়েন্ট ইনভলভ থাকে, তবে কোয়েরি ইঞ্জিন সমস্ত ডেটা একবারে র্যামে লোড করতে গিয়ে ইন-মেমোরি বাফার ডেডলক তৈরি করবে, যা নতুন মেট্রিক্স রাইট করার পথ অবরুদ্ধ করে দেয়।
+* **মিটিগেশন (Query Timeouts, Max Samples Guard & Pre-Computed Recording Rules):**
+  - **Max Samples Guard:** আমরা আমাদের PromQL কোয়েরি ইঞ্জিনে গ্লোবাল গার্ড কনফিগার করব: `max_samples_per_query = 50,000,000`। এর বেশি স্যাম্পল থাকলে কুয়েরি সরাসরি এরর রিটার্ন করবে।
+  - **Recording Rules:** ভারী অ্যাগ্রিগেশন কুয়েরিগুলো প্রতি ৫ মিনিট পর পর ব্যাকগ্রাউন্ডে ক্যালকুলেট করে নতুন একটি ডেরিভেটিভ মেট্রিক্স ফাইলে রাইট করে রাখা হবে (Recording Rules)। গ্রাফানা যখন কল করবে, সে প্রসেসড ছোট ভলিউমের ডেটা সরাসরি রিড করতে পারবে, যা লাইভ ওয়ান-মান্থ কুয়েরি ল্যাটেন্সি ১০ সেকেন্ড থেকে ১০ মিলি-সেকেন্ডে নামিয়ে আনে।
+
+---
+
+## 🔒 Chapters 16 - 20: Syllabus Blueprint (Ready to Unlock)
+
+বাকি ৫টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+
+যেমন:
+- **চ্যাপ্টার ১৬ (Ad Click Aggregator):** জানবো কীভাবে Apache Flink, Kafka এবং MapReduce ব্যবহার করে প্রতি সেকেন্ডে মিলিয়ন ক্লিকে অ্যাড রেভিনিউ ক্যালকুলেট করা যায়।
+- **চ্যাপ্টার ১৭ (Distributed Message Queue - Kafka style):** ডিজাইন করব লিনিয়ারলি স্কেলেবল, পার্টিশনড এবং হাই-পারফরম্যান্স মেসেজিং পাইপলাইন।
+- **চ্যাপ্টার ১৮ (Distributed Rate Limiter):** টোকেন বাকেট অ্যালগরিদম ও স্লাইডিং উইন্ডো ব্যবহার করে মিলিয়ন ইউজার রিকোয়েস্ট ফিল্টারিং আর্কিটেকচার তৈরি।
+- **চ্যাপ্টার ১৯ (Real-Time Gaming Leaderboard):** Redis Sorted Sets ও ডিস্ট্রিবিউটেড র্যাঙ্কিং ইঞ্জিন ডিজাইন।
+- **চ্যাপ্টার ২০ (Distributed ID Generator - Snowflake style):** ইউনিক এবং আল্ট্রা-ফাস্ট কোঅর্ডিনেশন লেস ৬৪-বিট আইডি জেনারেশন সার্ভিস।
+
+---
+
+> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 15 (Metrics & Monitoring System - Prometheus)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 16 (Ad Click Aggregator)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো স্পেসিফিক চ্যাপ্টার আনলক করতে চান? Let's discuss and design!
