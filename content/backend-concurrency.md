@@ -1,35 +1,174 @@
 ---
-title: "Backend Engineering & Concurrency"
-description: "অ্যাসিনক্রোনাস I/O মডেল, ইভেন্ট লুপ, ব্যাকগ্রাউন্ড প্রসেসিং কিউ এবং ডিস্ট্রিবিউটেড রেট লিমিটিং অ্যালগরিদমের গভীর টেকনিক্যাল গাইড।"
+title: "Backend Engineering, Concurrency & Caching Masterclass"
+description: "ডিস্ট্রিবিউটেড ক্যাশিং, রেডিস ইন্টারনালস, অ্যাসিনক্রোনাস I/O মডেল, ইভেন্ট লুপ এবং ডিস্ট্রিবিউটেড রেট লিমিটিং অ্যালগরিদমের গভীর টেকনিক্যাল গাইড।"
 category: "Backend"
 ---
 
-# 🚀 Backend Engineering & Concurrency (গভীর টেকনিক্যাল গাইড)
+# 🚀 Backend Concurrency, Caching & Performance Masterclass
 
-আধুনিক হাই-স্কেল ব্যাকএন্ড আর্কিটেকচার ডিজাইন করার সময় সিস্টেমের কনকারেন্সি মডেল এবং I/O হ্যান্ডলিং অপ্টিমাইজেশন সবচেয়ে বড় চ্যালেঞ্জ হয়ে দাঁড়ায়। সিঙ্গেল-সার্ভারে লাখ লাখ রিকোয়েস্ট হ্যান্ডেল করা থেকে শুরু করে ডিস্ট্রিবিউটেড টাস্ক শিডিউলিং ও সিস্টেম থ্রোটলিং (Traffic Protection)-এর পেছনে অপারেটিং সিস্টেম, মেমরি এবং ডিস্ট্রিবিউটেড ডাটাবেজের সমন্বিত ইন্টারনালস কাজ করে।
+আধুনিক হাই-স্কেল ব্যাকএন্ড আর্কিটেকচার ডিজাইন করার সময় সিস্টেমের কনকারেন্সি মডেল, ডাটা ক্যাশিং এবং I/O হ্যান্ডলিং অপ্টিমাইজেশন সবচেয়ে বড় চ্যালেঞ্জ হয়ে দাঁড়ায়। সিঙ্গেল-সার্ভারে লাখ লাখ রিকোয়েস্ট হ্যান্ডেল করা থেকে শুরু করে ডিস্ট্রিবিউটেড টাস্ক শিডিউলিং, ক্যাশ ইনভ্যালিডেশন ও সিস্টেম থ্রোটলিং (Traffic Protection)-এর পেছনে অপারেটিং সিস্টেম, মেমরি এবং ডিস্ট্রিবিউটেড ডাটাবেজের সমন্বিত ইন্টারনালস কাজ করে।
 
-এই গাইডে আমরা ব্যাকএন্ড কনকারেন্সির তিনটি প্রধান স্তম্ভ—**High-Concurrency Models**, **Resilient Background Workers**, এবং **Distributed Rate Limiting**—নিয়ে ইন-ডেপ্থ আলোচনা করব।
+এই গাইডে আমরা ব্যাকএন্ড সিস্টেমের ৫টি প্রধান স্তম্ভ—**Distributed Caching & Redis**, **High-Concurrency Models**, **Resilient Background Workers**, **Traffic Shaping/Rate Limiting**, এবং **Staff Architect Design Patterns**—নিয়ে অত্যন্ত গভীর টেকনিক্যাল আলোচনা করব।
 
 ---
 
 ## 📌 চ্যাপ্টার ইনডেক্স ও নেভিগেশন (Table of Contents)
 
-নিচে চ্যাপ্টারের মূল ৪টি স্তম্ভ এবং তাদের অধীনস্থ লার্নিং মডিউলগুলোর একটি নেভিগেশন ম্যাপ দেওয়া হলো। যেকোনো মূল স্তম্ভে সরাসরি চলে যেতে লিঙ্কে ক্লিক করুন:
+নিচে চ্যাপ্টারের মূল ৫টি স্তম্ভ এবং তাদের অধীনস্থ লার্নিং মডিউলগুলোর একটি নেভিগেশন ম্যাপ দেওয়া হলো। যেকোনো মূল স্তম্ভে সরাসরি চলে যেতে লিঙ্কে ক্লিক করুন:
 
 | মূল চ্যাপ্টার ও প্রযুক্তিগত স্তম্ভ | কভার্ড অ্যাডভান্সড কনসেপ্টস | অ্যাকশন লিংক |
 | :--- | :--- | :--- |
-| **১. High-Concurrency & Asynchronous I/O** | OS threads, context switching overhead, Libuv Event Loop, epoll/kqueue, Go GMP scheduler internals, and Java Virtual Threads. | [**মডিউল ১-এ যান**](#highconcurrency-asynchronous-io-models) |
-| **২. Background Workers & Task Queues** | Queue architectures, Redis structures (ZSET, Hash, List), atomic Lua scripting, exponential backoff, DLQ, and TS custom worker code. | [**মডিউল ২-এ যান**](#background-workers-task-queue-internals) |
-| **৩. Rate Limiting & Traffic Shaping** | Token Bucket vs Leaky Bucket, Sliding Window Counter, Distributed rate limits with Redis Lua, and standard HTTP API Gateway headers. | [**মডিউল ৩-এ যান**](#rate-limiting-traffic-shaping) |
-| **৪. স্টাফ আর্কিটেক্ট সামারি গাইডলাইন** | Production design decisions, CPU-bound vs I/O-bound optimizations, queue fault tolerance, and custom outgoing traffic shaping advice. | [**সামারিতে যান**](#-) |
+| **১. Distributed Caching & Redis Internals** | Cache invalidation, Cache-Aside/Write-Through, Cache Stampede, Redis event loop, Linux Fork & COW persistence, Sentinel, and Consistent Hashing Cluster. | [**চ্যাপ্টার ১-এ যান**](#distributed-caching-redis-internals) |
+| **২. High-Concurrency & Asynchronous I/O** | OS threads, context switching overhead, Libuv Event Loop, epoll/kqueue, Go GMP scheduler internals, and Java Virtual Threads. | [**চ্যাপ্টার ২-এ যান**](#highconcurrency-asynchronous-io-models) |
+| **৩. Background Workers & Task Queues** | Queue architectures, Redis structures (ZSET, Hash, List), atomic Lua scripting, exponential backoff, DLQ, and TS custom worker code. | [**চ্যাপ্টার ৩-এ যান**](#background-workers-task-queue-internals) |
+| **४. Rate Limiting & Traffic Shaping** | Token Bucket vs Leaky Bucket, Sliding Window Counter, Distributed rate limits with Redis Lua, and standard HTTP API Gateway headers. | [**চ্যাপ্টার ৪-এ যান**](#rate-limiting-traffic-shaping) |
+| **৫. স্টাফ আর্কিটেক্ট সামারি গাইডলাইন** | Production design decisions, CPU-bound vs I/O-bound optimizations, queue fault tolerance, and custom outgoing traffic shaping advice. | [**সামারিতে যান**](#-) |
 
 ---
 
-## 🧩 ১. High-Concurrency & Asynchronous I/O Models
+## ⚡ ১. Distributed Caching & Redis Internals
+
+ডিস্ট্রিবিউটেড ক্যাশিং ব্যাকএন্ড ডাটাবেজের রিড-লেটেন্সি মিলিটিক্যাল রেঞ্জ থেকে মাইক্রো-সেকেন্ড রেঞ্জে নিয়ে আসে। তবে ভুল আর্কিটেকচারাল প্যাটার্ন পুরো সিস্টেমকে ডাউন করতে পারে।
+
+### ১.১ Cache Topologies & Strategy Selection
+
+ডাটা ক্যাশিং ও আপডেট করার ৪টি মূল প্রোডাকশন ডিজাইন প্যাটার্ন:
+
+```mermaid
+flowchart TD
+    subgraph CacheAside [Cache-Aside Pattern]
+        A[App Server] -->|1. Read| B{Cache}
+        B -->|Hit| Return[Return Data]
+        B -->|Miss| DB[(PostgreSQL)]
+        DB -->|2. Load| A
+        A -->|3. Write to Cache| B
+    end
+
+    subgraph WriteThrough [Write-Through Pattern]
+        App[App Server] -->|1. Write| C{Cache Store}
+        C -->|2. Sync Write| DB2[(PostgreSQL)]
+    end
+```
+
+#### ১. Cache-Aside (Lazy Loading)
+অ্যাপ্লিকেশন প্রথমে ক্যাশ চেক করে। ক্যাশে ডেটা থাকলে (Cache Hit) তা রিটার্ন করে। ক্যাশে না থাকলে (Cache Miss) ডাটাবেজ থেকে রিড করে ক্যাশ আপডেট করে দেয়।
+*   **Race Condition Risk:** থ্রেড A ডাটাবেজে আপডেট করল কিন্তু ক্যাশ ডিলেট করার ঠিক আগে থ্রেড B স্টেল (Stale) ডেটা রিড করে ক্যাশে আবার লিখে দিতে পারে। এটি এড়াতে সাধারণত ক্যাশের শর্ট TTL রাখা হয়।
+
+#### ২. Read-Through / Write-Through
+অ্যাপ্লিকেশন সরাসরি ক্যাশের সাথে কথা বলে। ক্যাশ ইন্টারনালি ডাটাবেজের সাথে সিঙ্ক করে রিড বা রাইট অপারেশন সম্পন্ন করে। এটি অ্যাপ্লিকেশনের কোড আর্কিটেকচার অত্যন্ত ক্লিন রাখে কিন্তু লেটেন্সি কিছুটা বাড়ায়।
+
+#### ৩. Write-Behind (Write-Back)
+অ্যাপ্লিকেশন অত্যন্ত দ্রুত ক্যাশে রাইট করে রেসপন্স রিটার্ন করে দেয়। ক্যাশ ব্যাকগ্রাউন্ডে অ্যাসিনক্রোনাস উপায়ে ব্যাচাকারে ডাটাবেজে রাইট রিকোয়েস্ট পুশ করে।
+*   **Caution:** রাইট স্পিড আকাশচুম্বী হলেও ক্যাশ নোড ক্র্যাশ করলে ডাটা চিরতরে হারিয়ে যাওয়ার ঝুঁকি থাকে।
+
+#### 🌋 Cache Stampede (Thundering Herd) & Mutex-locking
+যখন কোনো অত্যন্ত পপুলার কি (যেমন: ট্রেন্ডিং নিউজ) ক্যাশ থেকে এক্সপায়ার হয়ে যায়, তখন একসাথে হাজার হাজার সমবর্তী রিকোয়েস্ট ডাটাবেজে রিড প্রসেস করতে আঘাত হানে। এর ফলে ডাটাবেজ ক্র্যাশ করে। একে **Cache Stampede** বলে।
+
+এর সমাধান হলো **Mutex Locking** বা **Probabilistic Early Expiration (XFetch Algorithm)**। নিচে Mutex লকিং মেকানিজম দেখানো হলো:
+
+```typescript
+async function getWithMutex(key: string): Promise<string> {
+  let value = await cache.get(key);
+  if (!value) {
+    // Acquire distributed lock to prevent thundering herd
+    const lock = await acquireLock(key + ':lock', 5000); // 5 sec TTL
+    if (lock) {
+      try {
+        // Query database
+        value = await db.query("SELECT data FROM table WHERE id = ?", [key]);
+        await cache.set(key, value, 3600); // Cache for 1 hour
+      } finally {
+        await releaseLock(key + ':lock');
+      }
+    } else {
+      // Wait and retry querying cache
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return getWithMutex(key);
+    }
+  }
+  return value;
+}
+```
+
+---
+
+### ১.২ Redis Single-Threaded Core & High-Performance Event Loop
+
+রেডিস একটি সিঙ্গেল-থ্রেডেড প্রসেস হয়েও প্রতি সেকেন্ডে লাখ লাখ কমান্ড প্রসেস করতে পারে। এর কারণ ৩টি:
+1.  **Memory-Centric Access:** মেমরি এক্সেস টাইম ওএস থ্রেড কনটেক্সট সুইচিং থেকে অনেক দ্রুত।
+2.  **Epoll non-blocking socket loops:** এটি নেটওয়ার্ক ব্লকিং ছাড়া একটি লুপে হাজার হাজার ক্লায়েন্ট কানেকশন রিড-রাইট করে।
+3.  **No Mutex Overhead:** কোড সিঙ্গেল থ্রেডেড হওয়ায় ডাটা স্ট্রাকচারের ওপর কোনো লক বা মিউটেক্স ম্যানেজমেন্টের সিপিইউ ওভারহেড থাকে না।
+
+#### 📦 Simple Dynamic Strings (SDS) Internals
+রেডিস সি-ল্যাঙ্গুয়েজের ট্র্যাডিশনাল `char*` স্ট্রিং ব্যবহার করে না। এর বদলে ব্যবহার করে কাস্টম **SDS Struct**:
+
+```c
+struct sdshdr {
+    int len;     // O(1) strlen retrieval-এর জন্য স্ট্রিংয়ের দৈর্ঘ্য
+    int free;    // বাফার ওভারফ্লো ঠেকাতে ফাঁকা মেমরির সাইজ
+    char buf[];  // বাইনারি-সেফ ক্যারেক্টার এরে
+};
+```
+এটি রানটাইমে ওয়ান-ক্লিক মেমরি রি-অ্যালোকেশন অপ্টিমাইজ করতে এবং বাইনারি সেফটি (স্ট্রিংয়ের মাঝে `\0` নাল ক্যারেক্টার থাকলেও রিড করা) নিশ্চিত করতে সাহায্য করে।
+
+#### 🔄 Redis Incremental Rehashing
+রেডিসের হ্যাশ টেবিল যখন বড় হয়, তখন সিঙ্গেল-থ্রেডকে ব্লক হওয়া থেকে বাঁচাতে রেডিস **Incremental Rehashing** বা ধাপে ধাপে রিকম্পিউট ব্যবহার করে:
+*   রেডিস দুটি ডিকশনারি টেবিল রাখে: `ht[0]` (পুরানো) এবং `ht[1]` (নতুন)।
+*   প্রতিটি কমান্ড রিড/রাইট চলার সাথে সাথে রেডিস `ht[0]` থেকে কয়েকটি করে কি (Keys) `ht[1]`-এ মুভ করে। সম্পূর্ণ ডাটাবেজ একবারে রিহ্যাস না করায় সিস্টেম কোনো সময় হ্যাং হয় না।
+
+---
+
+### ১.৩ Linux Fork, Copy-On-Write, and Persistence (RDB/AOF)
+
+রেডিস রানিং ডাটা মেমরিতে রাখলেও স্টোরেজ ব্যাকআপ নিশ্চিত করতে ২টি মেকানিজম ব্যবহার করে।
+
+#### 💾 RDB (Redis Database Backup) via Linux Fork
+RDB তৈরির সময় রেডিস লিনাক্স কার্নেলের **`fork()`** সিস্টেম কলটি করে। কার্নেল তখন রেডিসের প্যারেন্ট প্রসেস ক্লোন করে একটি **Child Process** তৈরি করে।
+*   **Copy-On-Write (COW):** ক্লোন করার সময় কার্নেল মেমরির কোনো ফিজিক্যাল কপি করে না। প্যারেন্ট ও চাইল্ড প্রসেস একই মেমরি পেজগুলো রিড করে।
+*   যখন প্যারেন্ট প্রসেস কোনো নতুন রাইট রিকোয়েস্ট পায়, কার্নেল কেবল পরিবর্তিত মেমরি পেজটির (সাধারণত 4KB) একটি ফিজিক্যাল কপি তৈরি করে। চাইল্ড প্রসেসটি কোনো ডিস্টার্বেন্স ছাড়াই সম্পূর্ণ আইসোলেটেড পুরানো ডাটার স্ন্যাপশট ডিস্কে সেভ করতে পারে।
+
+```mermaid
+flowchart TD
+    subgraph MemorySpace [Linux Virtual Memory via COW]
+        Parent[Parent Redis Process] -->|Read| Page1[Page 1: Statically Shared]
+        Child[Child Backup Process] -->|Read| Page1
+        
+        Parent -->|Write Operation| Page2New[Page 2: Copied New Data]
+        Child -->|Read Old Data| Page2Old[Page 2: Original Data]
+    end
+    
+    style Page2New fill:#065f46,stroke:#10b981,stroke-width:2px,color:#fff
+    style Page2Old fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+```
+
+#### 📝 AOF (Append-Only File)
+প্রতিটি রাইট কমান্ড ফাইল এন্ডে অ্যাপেন্ড করা হয়। 
+*   **fsync() Strategies:** `fsync` সিস্টেম কল দিয়ে ওএস ডিস্ক বাফারের ডাটা ফিজিক্যালি রাইট করা হয়। অপশনগুলো হলো:
+    1.  `always`: প্রতি কমান্ডে fsync (অত্যন্ত স্লো)।
+    2.  `everysec`: প্রতি সেকেন্ডে fsync (প্রোডাকশন স্ট্যান্ডার্ড, সর্বোচ্চ ১ সেকেন্ডের ডাটা লস রিস্ক)।
+    3.  `no`: ওএস বাফারের ওপর ছেড়ে দেওয়া (লেটেন্সি নেই কিন্তু ডাটা লস রিস্ক বেশি)।
+
+---
+
+### ১.৪ High Availability & Distributed Redis (Sentinel & Cluster)
+
+#### 💂‍♂️ Redis Sentinel (Master-Slave Failover)
+Sentinel নোডগুলো রেডিসের মাস্টার ও স্লেভগুলোর ওপর ওয়ান-টু-মেনি পিং (Ping) মনিটর করে। যদি মাস্টার নোড ক্র্যাশ করে, তবে সেন্টিনেল নোডগুলো নিজেদের মধ্যে **Raft-like Consensus Voting** সম্পন্ন করে যোগ্য স্লেভকে মাস্টার নোড হিসেবে প্রোমোট করে এবং নতুন আইপি ক্লায়েন্ট গেটওয়েতে আপডেট করে।
+
+#### 🔀 Redis Cluster (Consistent Hashing)
+রেডিস ক্লাস্টার আর্কিটেকচারে কোনো একক সেন্টিনেল নোড থাকে না। এটি **Consistent Hashing** ব্যবহার করে ডাটা শার্ডিং (Sharding) করে।
+*   সম্পূর্ণ ক্লাস্টারে **১৬,৩৮৪টি হ্যাশ স্লট (Hash Slots)** রয়েছে।
+*   প্রতিটি কি-র হ্যাশ স্লট নির্ধারণ করার সূত্র:
+    $$\text{Slot} = \text{CRC16}(key) \pmod{16384}$$
+*   নোডগুলো নিজেদের মধ্যে গসিপ প্রোটোকল (Gossip Protocol) দিয়ে মেম্বারশিপ এবং স্লট ডিস্ট্রিবিউশন ম্যাপ শেয়ার করে। যদি কোনো ক্লায়েন্ট ভুল নোডে রিকোয়েস্ট পাঠায়, নোডটি ক্লায়েন্টকে **`-MOVED <slot> <ip>:<port>`** দিয়ে রিডাইরেক্ট করে দেয়।
+
+---
+
+## 🧩 ২. High-Concurrency & Asynchronous I/O Models
 
 কনকারেন্সি মডেলের গভীরে যাওয়ার আগে আমাদের বুঝতে হবে অপারেটিং সিস্টেম কীভাবে সিপিইউ এবং মেমরি লেভেলে কাজের সমন্বয় করে।
 
-### ১.১ OS-Level Concurrency Foundations: Process, Thread, and Coroutine
+### ২.১ OS-Level Concurrency Foundations: Process, Thread, and Coroutine
 
 কনকারেন্সির তিনটি মূল চালিকাশক্তির ফিজিক্যাল মেমরি এবং প্রসেসিং ওভারহেড কস্টের তুলনামূলক চিত্র নিচে দেওয়া হলো:
 
@@ -47,7 +186,7 @@ category: "Backend"
 
 ---
 
-### ১.২ The Event Loop & Non-Blocking I/O (Node.js/Libuv)
+### ২.২ The Event Loop & Non-Blocking I/O (Node.js/Libuv)
 
 কার্নেল থ্রেডের কনটেক্সট সুইচিং এড়াতে ইভেন্ট-ড্রিভেন এবং নন-ব্লকিং I/O আর্কিটেকচার তৈরি করা হয়েছে। এর মূলে রয়েছে **OS-Level I/O Multiplexing**।
 
@@ -80,7 +219,7 @@ flowchart TD
 
 ---
 
-### ১.৩ Go Concurrency Internals (The GMP Scheduler)
+### ২.৩ Go Concurrency Internals (The GMP Scheduler)
 
 Go-তে ট্র্যাডিশনাল থ্রেড বাদ দিয়ে **Goroutines** ব্যবহার করা হয়, যা লিনাক্স কার্নেল নয়, বরং Go Runtime দ্বারা পরিচালিত হয়। একে শিডিউল করার জন্য **GMP Model** কাজ করে।
 
@@ -105,14 +244,14 @@ flowchart LR
 ```
 
 #### 🛡️ Work-Stealing Algorithm
-যখন কোনো প্রসেসর `P` তার নিজের **Local Run Queue**-এর সমস্ত Goroutine এক্সিকিউট করে শেষ করে ফেলে, তখন সে অন্য কোনো `P`-এর লোকাল কিউ থেকে অর্ধেক Goroutine চুরি করে নিজের কাছে নিয়ে আসে। যদি অন্য কোথাও কাজ না থাকে, তবে সে **Global Run Queue** চেক করে।
+when কোনো প্রসেসর `P` তার নিজের **Local Run Queue**-এর সমস্ত Goroutine এক্সিকিউট করে শেষ করে ফেলে, তখন সে অন্য কোনো `P`-এর লোকাল কিউ থেকে অর্ধেক Goroutine চুরি করে নিজের কাছে নিয়ে আসে। যদি অন্য কোথাও কাজ না থাকে, তবে সে **Global Run Queue** চেক করে।
 
 #### 🛑 Blocking Syscall Handling
 যখন কোনো Goroutine `G1` একটি ব্লকিং সিস্টেম কল (যেমন ফাইল রিড) করে, তখন Go runtime প্রসেসর `P` থেকে কার্নেল থ্রেড `M` কে ডিটাচ (Detach) করে দেয়। `M` কার্নেল স্পেসের ব্লকিং কল নিয়ে কাজ করতে থাকে এবং `P` অন্য একটি সচল বা নতুন `M2` থ্রেডের সাথে যুক্ত হয়ে বাকি Goroutine-গুলোর এক্সিকিউশন সচল রাখে।
 
 ---
 
-### ১.৪ Java Virtual Threads (Project Loom)
+### ২.৪ Java Virtual Threads (Project Loom)
 
 জাভা ২১ থেকে যুক্ত হওয়া **Virtual Threads (Project Loom)** ব্যাকএন্ড কনকারেন্সিতে নতুন বিপ্লব এনেছে।
 
@@ -122,11 +261,11 @@ flowchart LR
 
 ---
 
-## ⚙️ ২. Background Workers & Task Queue Internals
+## ⚙️ ৩. Background Workers & Task Queue Internals
 
 অন-ডিমান্ড রিকোয়েস্ট-রেসপন্স সাইকেলকে ফাস্ট রাখতে ভারী এবং সময়সাপেক্ষ কাজগুলোকে (যেমন ইমেইল পাঠানো, পিডিএফ জেনারেট করা) ব্যাকগ্রাউন্ড কিউ-তে পাঠিয়ে দেওয়া হয়।
 
-### ২.১ Distributed Queue Architecture
+### ৩.১ Distributed Queue Architecture
 
 একটি নির্ভরযোগ্য ডিস্ট্রিবিউটেড কিউ আর্কিটেকচার সাধারণত নিচের ৩টি লেয়ারে বিভক্ত থাকে:
 
@@ -142,7 +281,7 @@ flowchart LR
     style RedisContainer fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
 ```
 
-### ২.২ Redis-based Queues: Data Structure Design (BullMQ Internals)
+### ৩.২ Redis-based Queues: Data Structure Design (BullMQ Internals)
 
 উচ্চ পারফরম্যান্সের ব্যাকগ্রাউন্ড কিউ ডিজাইনে Redis-এর ডাটা স্ট্রাকচারগুলো নিচের নিয়মে সাজানো হয়:
 
@@ -173,7 +312,7 @@ return jobs
 
 ---
 
-### ২.৩ Fault-Tolerance & Resilience Patterns
+### ৩.৩ Fault-Tolerance & Resilience Patterns
 
 #### 🔁 Exponential Backoff with Jitter
 যখন কোনো ব্যাকগ্রাউন্ড জব ফেইল করে (যেমন পেমেন্ট গেটওয়ে ডাউন থাকা), তখন সাথে সাথে পুনরায় রিট্রাই না করে একটি এক্সপোনেনশিয়াল সমীকরণ এবং র‍্যান্ডম ভ্যারিয়েশন (Jitter) যোগ করে রিট্রাই করতে হয়।
@@ -284,14 +423,14 @@ export class TaskQueueWorker {
 
 ---
 
-## 🚦 ৩. Rate Limiting & Traffic Shaping
+## 🚦 ৪. Rate Limiting & Traffic Shaping
 
 রেট লিমিটিং কেবল রিকোয়েস্ট আটকানোর জন্য নয়, বরং ডিস্ট্রিবিউটেড সিস্টেমের ক্যাস্কেডিং ফেইলিউর (একটির পতনে পুরো সিস্টেম ডাউন হওয়া) ঠেকানোর সবচেয়ে শক্তিশালী আর্কিটেকচার।
 
-### ৩.১ Rate Limiting Algorithms Deep-Dive
+### ৪.১ Rate Limiting Algorithms Deep-Dive
 
 #### ১. Token Bucket Algorithm
-*   **মেকানিজম:** একটি বালতি বা বাকেট কল্পনা করুন যার সর্বোচ্চ ধারণক্ষমতা $B$ এবং প্রতি সেকেন্ডে $R$ হারে নতুন টোকেন রিফিল হয়। প্রতি রিকোয়েস্ট আসার পর বাকেট থেকে একটি টোকেন বিয়োগ করা হয়। যদি বাকেটে টোকেন না থাকে, রিকোয়েস্ট রিজেক্ট করা হয়।
+*   **মেকানিজম:** একটি বালতি বা বাকেট কল্পনা করুন যার সর্বোচ্চ ধারণক্ষমতা $B$ এবং প্রতি সেকেন্ডে $R$ হারে নতুন টোকেন রিফিল হয়। প্রতি রিকোয়েস্ট আসার পর বাকেট থেকে একটি টোকেন বিয়োগ করা হয়। যদি বাকেটে টোকেন না থাকে, রিকোজেস্ট রিজেক্ট করা হয়।
 *   **সুবিধা:** এটি খুব দক্ষতার সাথে ক্ষণস্থায়ী ব্রুস্ট ট্রাফিক (Bursty Traffic) হ্যান্ডেল করতে পারে এবং ওয়ান-টাইম প্রসেসিং অত্যন্ত ফাস্ট।
 
 #### ২. Leaky Bucket Algorithm
@@ -316,7 +455,7 @@ flowchart TD
 
 ---
 
-### ৩.২ Distributed Rate Limiting with Redis
+### ৪.২ Distributed Rate Limiting with Redis
 
 ডিস্ট্রিবিউটেড আর্কিটেকচারে প্রতি সেকেন্ডে প্রতি আইপি থেকে রিকোয়েস্ট রেট নির্ধারণ করতে আমরা **Sliding Window Counter** অ্যালগরিদম ব্যবহার করি। মেমরির সর্বোচ্চ সাশ্রয় এবং রেস কন্ডিশন এড়ানোর জন্য এটি নিচে দেওয়া Lua Script দিয়ে পারমাণবিক ব্লকে এক্সিকিউট করা হয়:
 
@@ -351,7 +490,7 @@ end
 
 ---
 
-### ৩.৩ HTTP API Gateway Integration Standards
+### ৪.৩ HTTP API Gateway Integration Standards
 
 একটি স্ট্যান্ডার্ড প্রোডাকশন গেটওয়েতে রেট লিমিট অতিক্রম করা রিকোয়েস্টগুলোর জন্য নিচের হেডারগুলো সহ **HTTP 429 Too Many Requests** স্ট্যাটাস রিটার্ন করা উচিত:
 
@@ -375,8 +514,9 @@ Retry-After: 35
 
 ---
 
-## 💡 স্টাফ আর্কিটেক্ট সামারি গাইডলাইন
+## 💡 ৫. স্টাফ আর্কিটেক্ট সামারি গাইডলাইন
 
-১. **I/O Models:** যদি আপনার টাস্ক বেশি ডেটাবেজ ও I/O বাউন্ডেড হয়, তবে Node.js-এর মতো সিঙ্গেল-থ্রেডেড নন-ব্লকিং সিস্টেম বা Java Virtual Threads অত্যন্ত কার্যকরী। কিন্তু হাই-সিপিইউ ম্যাথমেটিক্যাল ক্যালকুলেশনের ক্ষেত্রে Go-এর GMP মডেল চালিত Goroutines সবচেয়ে বেশি নির্ভরযোগ্য।
-২. **Background Queues:** প্রোডাকশনে ব্যাকগ্রাউন্ড কিউ ব্যবহারের সময় অবশ্যই `brPopLPush` (বা `RPOPLPUSH`) ব্যবহার করবেন। এটি একটি প্রসেসিং কিউ সংরক্ষণ করে, যার ফলে প্রসেস ক্র্যাশ করলেও কাজ হারিয়ে না গিয়ে পুনরুদ্ধার করা যায় (At-Least-Once Delivery)।
-৩. **Traffic Shaping:** আপনার সিস্টেমে যদি থার্ড-পার্টি এপিআই কল করার নির্দিষ্ট লিমিট থাকে, তবে সর্বদা **Leaky Bucket** ব্যবহার করুন যাতে আউটগোয়িং ট্রাফিক একদম সমান গতিতে ফ্লো হতে পারে। আর সিস্টেমের সুরক্ষায় ব্রুস্ট ট্রাফিক ঠেকাতে **Token Bucket** বা **Sliding Window Counter** ব্যবহার করুন।
+১.  **Caching Overheads:** সিস্টেমে ক্যাশিং বসানোর পূর্বে তার ফাটলগুলো চিন্তা করবেন। ক্যাশ মেমরির এক্সপায়ারড সময়ে যাতে ডাটাবেজ কলাপ্স না করে, তার জন্য অবশ্যই এপিআই স্তরে **XFetch** বা **Distributed Locks (Redlock)** ব্যবহার করবেন।
+২.  **I/O Models:** যদি আপনার টাস্ক বেশি ডেটাবেজ ও I/O বাউন্ডেড হয়, তবে Node.js-এর মতো সিঙ্গেল-থ্রেডেড নন-ব্লকিং সিস্টেম বা Java Virtual Threads অত্যন্ত কার্যকরী। কিন্তু হাই-সিপিইউ ম্যাথমেটিক্যাল ক্যালকুলেশনের ক্ষেত্রে Go-এর GMP মডেল চালিত Goroutines সবচেয়ে বেশি নির্ভরযোগ্য।
+৩.  **Background Queues:** প্রোডাকশনে ব্যাকগ্রাউন্ড কিউ ব্যবহারের সময় অবশ্যই `brPopLPush` (বা `RPOPLPUSH`) ব্যবহার করবেন। এটি একটি প্রসেসিং কিউ সংরক্ষণ করে, যার ফলে প্রসেস ক্র্যাশ করলেও কাজ হারিয়ে না গিয়ে পুনরুদ্ধার করা যায় (At-Least-Once Delivery)।
+৪.  **Traffic Shaping:** আপনার সিস্টেমে যদি থার্ড-পার্টি এপিআই কল করার নির্দিষ্ট লিমিট থাকে, তবে সর্বদা **Leaky Bucket** ব্যবহার করুন যাতে আউটগোয়িং ট্রাফিক একদম সমান গতিতে ফ্লো হতে পারে। আর সিস্টেমের সুরক্ষায় ব্রুস্ট ট্রাফিক ঠেকাতে **Token Bucket** বা **Sliding Window Counter** ব্যবহার করুন।
