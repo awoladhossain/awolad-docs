@@ -12,6 +12,19 @@ category: "Backend"
 
 ---
 
+## 📌 চ্যাপ্টার ইনডেক্স ও নেভিগেশন (Table of Contents)
+
+নিচে চ্যাপ্টারের মূল ৪টি স্তম্ভ এবং তাদের অধীনস্থ লার্নিং মডিউলগুলোর একটি নেভিগেশন ম্যাপ দেওয়া হলো। যেকোনো মূল স্তম্ভে সরাসরি চলে যেতে লিঙ্কে ক্লিক করুন:
+
+| মূল চ্যাপ্টার ও প্রযুক্তিগত স্তম্ভ | কভার্ড অ্যাডভান্সড কনসেপ্টস | অ্যাকশন লিংক |
+| :--- | :--- | :--- |
+| **১. High-Concurrency & Asynchronous I/O** | OS threads, context switching overhead, Libuv Event Loop, epoll/kqueue, Go GMP scheduler internals, and Java Virtual Threads. | [**মডিউল ১-এ যান**](#highconcurrency-asynchronous-io-models) |
+| **২. Background Workers & Task Queues** | Queue architectures, Redis structures (ZSET, Hash, List), atomic Lua scripting, exponential backoff, DLQ, and TS custom worker code. | [**মডিউল ২-এ যান**](#background-workers-task-queue-internals) |
+| **৩. Rate Limiting & Traffic Shaping** | Token Bucket vs Leaky Bucket, Sliding Window Counter, Distributed rate limits with Redis Lua, and standard HTTP API Gateway headers. | [**মডিউল ৩-এ যান**](#rate-limiting-traffic-shaping) |
+| **৪. স্টাফ আর্কিটেক্ট সামারি গাইডলাইন** | Production design decisions, CPU-bound vs I/O-bound optimizations, queue fault tolerance, and custom outgoing traffic shaping advice. | [**সামারিতে যান**](#-) |
+
+---
+
 ## 🧩 ১. High-Concurrency & Asynchronous I/O Models
 
 কনকারেন্সি মডেলের গভীরে যাওয়ার আগে আমাদের বুঝতে হবে অপারেটিং সিস্টেম কীভাবে সিপিইউ এবং মেমরি লেভেলে কাজের সমন্বয় করে।
