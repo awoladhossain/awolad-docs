@@ -68,15 +68,15 @@ flowchart LR
 | **12** | [Airbnb (Hotel/Home Booking)](#-chapter-12-airbnb-hotelhome-booking) | 🟢 **Active** | Double Booking Prevention, Temporal Querying, Geo-search |
 | **13** | [Robinhood / Stock Trading Engine](#-chapter-13-robinhood--stock-trading-engine) | 🟢 **Active** | Matching Engine, LMAX Disruptor, In-memory State, Low Latency |
 | **14** | [Distributed Cache (Redis Internals)](#-chapter-14-distributed-cache-redis-internals) | 🟢 **Active** | Replication, Sentinel, Clustering & Partitioning, Eviction (LRU) |
-| **15** | Metrics & Monitoring System (Prometheus) | 🔒 *Locked* | Time Series DB (TSDB), Pull vs Push, Metrics Aggregation |
-| **16** | Ad Click Aggregator | 🔒 *Locked* | Real-time Streaming, Apache Flink, Kafka, MapReduce |
-| **17** | Auto-complete / Typeahead Search | 🔒 *Locked* | Trie Data Structure, Frequency Aggregation, Cache Optimization |
-| **18** | Tinder / Geosocial Matchmaker | 🔒 *Locked* | Recommendation Engines, Geopoint Queries, Profile Caching |
-| **19** | Distributed Unique ID Generator | 🔒 *Locked* | Snowflake Algorithm, Ticket Server, UUID Collisions |
-| **20** | Stripe-like Payment Integration Engine | 🔒 *Locked* | Ledger Reconciliation, Retry Policies, Double Entry Bookkeeping |
+| **15** | [Metrics & Monitoring System (Prometheus)](#-chapter-15-metrics-monitoring-system-time-series-database-pullbased-architecture) | 🟢 **Active** | Time Series DB (TSDB), Gorilla Compression, WAL, Scrape Engine |
+| **16** | [Ad Click Aggregator](#-chapter-16-ad-click-aggregator-big-data-stream-processing-aggregation) | 🟢 **Active** | Real-time Streaming, Sliding Window Aggregates, MapReduce, Gorilla Engine |
+| **17** | [Distributed Message Queue (Kafka-style)](#-chapter-17-distributed-message-queue-kafkastyle) | 🟢 **Active** | Commit Log, Segment Indices, Zero-Copy sendfile, KRaft Controller |
+| **18** | [Distributed Rate Limiter](#-chapter-18-distributed-rate-limiter) | 🟢 **Active** | Token Bucket, Weighted Sliding Counter, Redis Lua, Clock Drift |
+| **19** | [Real-Time Gaming Leaderboard](#-chapter-19-realtime-gaming-leaderboard) | 🟢 **Active** | Redis Skip Lists, ZSET, Secondary Tie-Breaker Sorting, Write Deduplication |
+| **20** | [Distributed ID Generator (Snowflake-style)](#-chapter-20-distributed-id-generator-snowflakestyle) | 🟢 **Active** | Snowflake 64-bit Assembly, Bitwise Shift, Worker ID Leasing, Clock Drift |
 
 > [!TIP]
-> আমরা প্রথম ৩টি কোর চ্যাপ্টার সম্পূর্ণ প্রডাকশন-গ্রেড আর্কিটেকচার ও কোডসহ বিস্তারিত নিচে যুক্ত করেছি। পরবর্তী চ্যাপ্টারগুলো আমরা একের পর এক রিয়েল-টাইম আলোচনা করে এবং রিকোয়ারমেন্ট কাস্টমাইজ করে আনলক করবো!
+> আমরা হ্যান্ডবুকের ২০টি চ্যাপ্টারই সম্পূর্ণ প্রডাকশন-গ্রেড আর্কিটেকচার, ব্যাক-অফ-দ্য-এনভেলপ ক্যাপাসিটি ক্যালকুলেশন, মারমেইড ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ সফলভাবে সম্পন্ন করেছি!
 
 ---
 
@@ -2497,14 +2497,1965 @@ export class DistributedLRUCache<K, V> {
 
 ---
 
-## 🔒 Chapters 15 - 20: Syllabus Blueprint (Ready to Unlock)
+## 📊 Chapter 15: Metrics & Monitoring System (Time Series Database & Pull-Based Architecture)
 
-বাকি ৬টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিংয়ের জন্য সাজানো হয়েছে। আপনি যে টপিকটি শিখতে চান, জাস্ট আমাকে মেনশন করলেই আমরা সেটির রিকোয়ারমেন্ট অ্যানালাইসিস, ক্যাপাসিটি ক্যালকুলেশন, মারমেইড আর্কিটেকচার ডায়াগ্রাম এবং প্র্যাক্টিক্যাল কোডসহ ডিপ-ডাইভ করে চ্যাপ্টারটি আনলক করে ফেলবো!
+একটি এন্টারপ্রাইজ ডিস্ট্রিবিউটেড মাইক্রোসার্ভিস আর্কিটেকচারে হাজার হাজার নোড, কন্টেইনার এবং সার্ভিস প্রতি মিলি-সেকেন্ডে হাজার হাজার রিকোয়েস্ট প্রসেস করে। এই বিশাল সিস্টেমের স্বাস্থ্য (Health), পারফরম্যান্স (Throughput/Latency), এবং এরর রেট ট্র্যাক করার জন্য একটি আল্ট্রা-হাই থ্রুপুট মনিটরিং ও মেট্রিক্স কালেকশন সিস্টেমের প্রয়োজন হয়। 
 
-যেমন:
-- **চ্যাপ্টার ১৫ (Metrics & Monitoring System - Prometheus):** বুঝবো কীভাবে TSDB (Time Series DB) ব্যবহার করে পিক আওয়ারে রিয়েল-টাইম মেট্রিক্স স্ক্র্যাপ ও মনিটর করতে হয়।
-- **চ্যাপ্টার ১৬ (Ad Click Aggregator):** জানবো কীভাবে Apache Flink, Kafka এবং MapReduce ব্যবহার করে প্রতি সেকেন্ডে মিলিয়ন ক্লিকে অ্যাড রেভিনিউ ক্যালকুলেট করা যায়।
+এই চ্যাপ্টারে আমরা ডিজাইন করব **Prometheus**-এর মতো একটি হাই-পারফরম্যান্স **Pull-Based Metrics Collection System** এবং এর ব্যাকএন্ড স্টোরেজ **Time Series Database (TSDB)**-এর ইন্টারনাল মেকানিজম।
 
 ---
 
-> **💡 পরবর্তী অ্যাকশন:** অভিনন্দন, আমরা সফলভাবে **Chapter 14 (Distributed Cache - Redis Internals)** আনলক করে ফেলেছি! আমরা কি এখন আমাদের রোডম্যাপ অনুযায়ী **Chapter 15 (Metrics & Monitoring System - Prometheus)** নিয়ে ডিপ-ডাইভ শুরু করবো, নাকি এর বাইরে অন্য কোনো টপিক আনলক করতে চান? Let's discuss and design!
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **মেট্রিক্স স্ক্র্যাপিং (Ingestion):** নির্দিষ্ট ইন্টারভালে বিভিন্ন সার্ভিস (Target HTTP Endpoints) থেকে মেট্রিক্স ডেটা (Counters, Gauges, Histograms) স্ক্র্যাপ করা।
+2. **ডিস্ট্রিবিউটেড কোয়েরি ইঞ্জিন (PromQL):** টাইমিং রেঞ্জ ফিল্টারিং এবং অ্যাগ্রিগেশন কুয়েরি সাপোর্ট করা (যেমন: বিগত ৫ মিনিটে আমাদের চেকআউট এপিআই-এর ৯৯তম পার্সেন্টাইল ল্যাটেন্সি কত ছিল)।
+3. **রিয়েল-টাইম অ্যালার্টিং (Alerting):** মেট্রিক্সের ভ্যালু নির্দিষ্ট থ্রেশহোল্ড ক্রস করলে অটোমেটিক অ্যালার্ট ট্রিগার করা (যেমন: CPU usage > 85% for 5 minutes)।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **আল্ট্রা-লো ল্যাটেন্সি রাইট (High Ingestion Rate):** মেট্রিক্স স্ক্র্যাপিং যেন লাইভ ইউজার রিকোয়েস্ট প্রসেসে কোনো ইমপ্যাক্ট বা ওভারহেড তৈরি না করে।
+2. **টাইট ডেটা কম্প্রেশন (Efficient TSDB Storage):** টাইম-সিরিজ ডেটা অত্যন্ত অপটিমাইজড মেমরি ও স্টোরেজ কম্প্রেশন মডেলে রাখা।
+3. **ইলাস্টিক সার্ভিস ডিসকভারি (Service Discovery):** ক্লাউড বা কুবারনেটিস নোড ডাইনামিকালি স্কেল-আপ/ডাউন হলে স্ক্র্যাপার নিজে থেকেই টার্গেট নোডগুলো ট্র্যাক করতে পারবে।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Staff Architect Scale Estimations):
+ধরি, আমাদের এন্টারপ্রাইজ আর্কিটেকচারে:
+* **মোট কন্টেইনার বা নোড সংখ্যা (Targets):** $10,000$ pods.
+* **নোড প্রতি মেট্রিক্স সংখ্যা (Metrics per Target):** $500$ distinct active timeseries.
+* **স্ক্র্যাপ ফ্রিকোয়েন্সি (Scrape Interval):** $10$ seconds.
+* **একটি মেট্রিক্স স্যাম্পল (Metric Sample):** `timestamp` ($8$ bytes) + `value` ($8$ bytes) = $16$ bytes (Raw).
+
+**১. রাইট থ্রুপুট (Write QPS):**
+* `Write QPS = (10,000 targets * 500 metrics) / 10 seconds =` **500,000 samples/sec**
+
+**২. র-ডেটা ব্যান্ডউইথ ও মেমরি (Raw Bandwidth & Memory size):**
+* `Raw Bandwidth = 500,000 samples/sec * 16 bytes = 8,000,000 bytes/sec ≈` **8 MB/sec** (or **7.63 MiB/sec**)
+* `Raw Storage per Day = 8,000,000 bytes/sec * 86,400 sec = 691,200,000,000 bytes/day ≈` **691.2 GB/day** (or **643.7 GiB/day**)
+
+**৩. গরিলা ডাবল-ডেল্টা কম্প্রেশন ব্যান্ডউইথ (Gorilla Compression Engine - 1.37 bytes per sample):**
+রিয়েল-ওয়ার্ল্ড প্রোডাকশনে প্রমিথিউস **Gorilla Double-Delta Compression** ব্যবহার করে কাঁচা ১৬ বাইটের ডেতাকে গড়ে মাত্র **১.৩৭ বাইটে** নামিয়ে আনে!
+* `Compressed Bandwidth = 500,000 samples/sec * 1.37 bytes = 685,000 bytes/sec ≈` **685 KB/sec** (or **669 KiB/sec**)
+* `Compressed Storage per Day = 685,000 bytes/sec * 86,400 sec = 59,184,000,000 bytes/day ≈` **59.18 GB/day** (or **55.12 GiB/day**)
+* `30-Day Retention Storage = 59.18 GB/day * 30 days = 1,775.4 GB ≈` **1.77 TB** (or **1.61 TiB**)
+১.৭৭ টেরাবাইট (বা ১.৬১ টিআইবি) এসএসডি স্টোরেজ ব্যবহার করে আমরা অনায়াসে ১.২৯৬ ট্রিলিয়ন (১,২৯,৬০০ কোটি) স্যাম্পল ডেটা ব্যাকআপ রাখতে পারছি!
+
+---
+
+### ২. হাই-ফিডেলিটি সিস্টেম আর্কিটেকচার (High-Fidelity Observability Architecture)
+
+নিচের আর্কিটেকচারাল ডায়াগ্রামে প্রমিথিউস পুল-বেসড স্ক্র্যাপিং ফ্লো, dynamic service discovery, TSDB internals (Memory Chunk + WAL + Compacted Block) এবং কোয়েরি মেকানিজম দেখানো হলো:
+
+```mermaid
+graph TD
+    %% Service Discovery Layer
+    SD[Kubernetes API / Consul / DNS SD] -.->|Dynamically Discovers Targets| SM[Metrics Scrape Manager]
+
+    %% Target Services
+    subgraph Microservice Cluster [Target Nodes]
+        P1["Checkout API Pod (App Metrics /metrics)"]
+        P2["Payment Worker (JVM Metrics /metrics)"]
+        P3["Auth Service Pod (Go Collector /metrics)"]
+    end
+
+    %% Scraper Layer
+    SM -->|1. HTTP GET /metrics concurrently| P1
+    SM -->|1. HTTP GET /metrics concurrently| P2
+    SM -->|1. HTTP GET /metrics concurrently| P3
+
+    %% Ingestion Pipeline
+    SM -->|2. Ingest Raw Samples| TSDB[TSDB Engine]
+
+    %% TSDB Internals
+    subgraph TSDB [Time Series Database Internals]
+        WAL[(Write-Ahead Log - WAL on Disk)]
+        MemTable[In-Memory Head Block / Chunk]
+        Compactor[Background Compactor Engine]
+        DiskBlocks[(Compacted 2h Blocks on Disk - SSD)]
+
+        MemTable -->|Flushes every 2 hours| Compactor
+        Compactor -->|Downsampled & Chunk Compressed| DiskBlocks
+    end
+    SM -.->|Crash Recovery append| WAL
+    SM -->|Direct In-memory Append| MemTable
+
+    %% Query & Visualization Layer
+    Grafana[Grafana Dashboard] -->|3. PromQL HTTP Query| QE[PromQL Query Engine]
+    QE -->|4. Scan Memory Chunks| MemTable
+    QE -->|5. Scan Block Indexes| DiskBlocks
+
+    %% Alerting Layer
+    AlertManager[Alertmanager Engine] -->|6. Evaluating Rules| QE
+    AlertManager -->|7. Dispatches Trigger Alert| Slack["Slack / PagerDuty / Email Notifications"]
+
+    %% Styling
+    style SD fill:#ffebcc,stroke:#d68000,stroke-width:2px;
+    style SM fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    style TSDB fill:#f1f8e9,stroke:#558b2f,stroke-width:2px;
+    style DiskBlocks fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    style AlertManager fill:#ffebee,stroke:#c62828,stroke-width:2px;
+```
+
+---
+
+### ৩. ডিপ-ডাইভ কোর কনসেপ্টস (TSDB & Scraping Internals)
+
+#### ক. Pull-Based vs Push-Based Architecture:
+* **Pull-Based (Prometheus):** প্রমিথিউস নিজেই বিভিন্ন সার্ভিসকে পোল (HTTP GET) করে ডেটা নিয়ে আসে।
+  - *সুবিধা:* ডেটা কালেকশন রেট স্ক্র্যাপার নিজে কনট্রোল করতে পারে। কোনো সার্ভিস বেশি রিকোয়েস্ট স্পাইক করলেও মনিটরিং সিস্টেমের উপর অতিরিক্ত প্রেসার পড়ে ক্র্যাশ করার ভয় নেই (Decoupling & Self-Protection)।
+  - *অসুবিধা:* ডায়নামিক নোড ট্র্যাক করতে এন্টারপ্রাইজ লেভেল **Service Discovery** এবং ফায়ারওয়াল পোর্ট ওপেনিং প্রয়োজন।
+* **Push-Based (InfluxDB/StatsD):** বিভিন্ন মাইক্রোসার্ভিস নিজেরাই মেট্রিক্স জেনারেট করে সেন্ট্রাল মনিটরিং এপিআই-তে পুশ করে।
+  - *সুবিধা:* স্বল্পস্থায়ী সার্ভারলেস ফাংশন (উদা: AWS Lambda) মনিটর করতে এটি অসাধারণ, যা সার্ভার বন্ধ হওয়ার ঠিক আগে মেট্রিক্স পুশ করে দেয়।
+  - *অসুবিধা:* স্পাইক ট্রাফিকের সময় হাজার হাজার সার্ভিস একসাথে পুশ করলে সেন্ট্রাল মনিটরিং সিস্টেম ডাউন হতে পারে।
+
+#### খ. TSDB Gorilla XOR & Double-Delta Compression:
+১. **Timestamp Compression (Double-Delta):**
+   টাইমস্ট্যাম্প সাধারণত প্রতি ১০ সেকেন্ডে টিউনড (Tuned) থাকে। গরিলা ইঞ্জিন (Gorilla Engine) র-ডেটা না রেখে সময়ের ডেল্টা (`Delta: T_n - T_{n-1}`) এবং তার ডেল্টা-ডেল্টা (`Delta-of-Delta: D = (T_n - T_{n-1}) - (T_{n-1} - T_{n-2})`) ক্যালকুলেট করে। অধিকাংশ সময় ডেল্টা-ডেল্টা জিরো (`0`) হয়, যা স্টোর করতে মাত্র **১ বিট (bit)** মেমরি লাগে!
+২. **Value Compression (XOR):**
+   ভাসমান সংখ্যা (Floating point values) স্টোর করতে গরিলা ইঞ্জিন পূর্ববর্তী ভ্যালুর সাথে কারেন্ট ভ্যালুর XOR অপারেশন চালায়। যদি XOR-এর মান `0` হয়, তবে মাত্র **১ বিট** সেভ করে। মান আলাদা হলে এটি লিডিং ও ট্রেইলিং জিরো বিটস বাদ দিয়ে শুধুমাত্র ভিন্ন অংশটি স্টোর করে মেমরি **৯০%** বাঁচায়।
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা এবার নোড জেএস-এর জন্য একটি হাই-পারফরম্যান্স **Time Series Database (TSDB) Engine** তৈরি করব, যাতে রয়েছে গরিলা স্টাইলের টাইমস্ট্যাম্প ডেল্টা-কম্প্রেশন, রিয়েল-টাইম ডাইনামিক স্ক্র্যাপার এবং মেমরি বাঁচাতে ব্যাকগ্রাউন্ড **Metrics Downsampler Engine**:
+
+```typescript
+import axios from 'axios';
+
+// ============================================================================
+// ১. ডাটা টাইপ ডিফিনিশনস (Data Type Definitions)
+// ============================================================================
+export interface MetricSample {
+  timestamp: number; // Unix epoch ms
+  value: number;     // Metric float value
+}
+
+export interface MetricSeries {
+  labels: Record<string, string>; // e.g. { __name__: "http_requests", status: "200" }
+  samples: MetricSample[];
+  compressedBuffer?: string;     // Gorilla compressed binary mockup
+}
+
+// ============================================================================
+// ২. প্রমিথিউস-স্টাইল ইন-মেমোরি TSDB ইঞ্জিন
+// ============================================================================
+export class TSDBEngine {
+  private activeSeries: Map<string, MetricSeries> = new Map();
+  private retentionPeriodMs: number;
+
+  constructor(retentionDays: number = 7) {
+    this.retentionPeriodMs = retentionDays * 24 * 60 * 60 * 1000;
+  }
+
+  /**
+   * একটি নির্দিষ্ট মেট্রিক্স সিরিজের ইউনিক আইডেন্টিফায়ার (Fingerprint) তৈরি করে
+   */
+  public generateFingerprint(labels: Record<string, string>): string {
+    const sortedKeys = Object.keys(labels).sort();
+    return sortedKeys.map(key => `${key}=${labels[key]}`).join(',');
+  }
+
+  /**
+   * TSDB-তে নতুন মেট্রিক স্যাম্পল ইনজেস্ট করে
+   */
+  public ingest(labels: Record<string, string>, timestamp: number, value: number): void {
+    const fingerprint = this.generateFingerprint(labels);
+    
+    if (!this.activeSeries.has(fingerprint)) {
+      this.activeSeries.set(fingerprint, {
+        labels,
+        samples: []
+      });
+    }
+
+    const series = this.activeSeries.get(fingerprint)!;
+    
+    // (আউট অফ অর্ডার প্রোটেকশন) নিশ্চিত করি যেন আগের টাইমস্ট্যাম্পের চেয়ে নতুন টাইমস্ট্যাম্প বড় হয়
+    if (series.samples.length > 0) {
+      const lastSample = series.samples[series.samples.length - 1];
+      if (timestamp <= lastSample.timestamp) {
+        console.warn(`[TSDB-Warning] Rejected out-of-order write for series ${fingerprint}. TS: ${timestamp}`);
+        return; 
+      }
+    }
+
+    series.samples.push({ timestamp, value });
+  }
+
+  /**
+   * PromQL কুয়েরি ড্রাইভার: লেবেল ম্যাচ ও টাইম রেঞ্জ ফিল্টার করে ডেটা রিটার্ন করে
+   */
+  public query(matchLabels: Record<string, string>, startMs: number, endMs: number): MetricSeries[] {
+    const results: MetricSeries[] = [];
+
+    for (const [_, series] of this.activeSeries.entries()) {
+      // লেবেল ম্যাচিং চেকার
+      const isMatch = Object.keys(matchLabels).every(key => series.labels[key] === matchLabels[key]);
+      
+      if (isMatch) {
+        const filteredSamples = series.samples.filter(
+          sample => sample.timestamp >= startMs && sample.timestamp <= endMs
+        );
+        
+        results.push({
+          labels: series.labels,
+          samples: filteredSamples
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * ব্যাকগ্রাউন্ড ডাউনস্যাম্পলার: পুরনো ডেটা অ্যাগ্রিগেট করে স্টোরেজ রিলিজ করে
+   */
+  public runDownsample(): void {
+    const now = Date.now();
+    const expiryLimit = now - this.retentionPeriodMs;
+
+    console.log(`[TSDB-Compactor] Running compaction & downsampling...`);
+
+    for (const [fingerprint, series] of this.activeSeries.entries()) {
+      const originalLength = series.samples.length;
+      if (originalLength === 0) continue;
+
+      // ১. রিটেনশন পিরিয়ডের বাইরের পুরনো ফাইল বা ডেটা রিমুভ করা
+      const activeSamples = series.samples.filter(s => s.timestamp >= expiryLimit);
+
+      // ২. ঐতিহাসিক পুরনো ডেটা (যেমন ১২ ঘণ্টার চেয়ে পুরনো) ১ মিনিটের ব্লকভারে ডাউনস্যাম্পল করা:
+      const oldSamples = series.samples.filter(s => s.timestamp < expiryLimit);
+      const downsampledSamples: MetricSample[] = [];
+
+      if (oldSamples.length > 0) {
+        console.log(`[TSDB-Compactor] Downsampling ${oldSamples.length} old samples for ${fingerprint}`);
+        
+        // ১ মিনিটের উইন্ডো ভিত্তিক অ্যাভারেজ ক্যালকুলেশন
+        const oneMinuteMs = 60 * 1000;
+        let currentWindowStart = oldSamples[0].timestamp;
+        let sum = 0;
+        let count = 0;
+
+        for (const sample of oldSamples) {
+          if (sample.timestamp < currentWindowStart + oneMinuteMs) {
+            sum += sample.value;
+            count++;
+          } else {
+            downsampledSamples.push({
+              timestamp: currentWindowStart,
+              value: sum / count // Average downsample
+            });
+            currentWindowStart = sample.timestamp;
+            sum = sample.value;
+            count = 1;
+          }
+        }
+        // শেষ অবশিষ্টাংশ পুশ
+        if (count > 0) {
+          downsampledSamples.push({ timestamp: currentWindowStart, value: sum / count });
+        }
+      }
+
+      // ৩. অ্যাক্টিভ মেমরিতে ডাউনস্যাম্পলড এবং কারেন্ট লাইভ স্যাম্পলস যুক্ত করা
+      series.samples = [...downsampledSamples, ...activeSamples];
+      
+      const compressedCount = originalLength - series.samples.length;
+      if (compressedCount > 0) {
+        console.log(`[TSDB-Compactor] Freed ${compressedCount} raw memory slots for ${fingerprint}`);
+      }
+    }
+  }
+
+  public getActiveSeriesCount(): number {
+    return this.activeSeries.size;
+  }
+}
+
+// ============================================================================
+// ৩. ডাইনামিক মেট্রিক্স স্ক্র্যাপ ম্যানেজার (Prometheus style pull scraper)
+// ============================================================================
+export class MetricsScraperManager {
+  private targets: Set<string> = new Set();
+  private tsdb: TSDBEngine;
+  private scrapeInterval: NodeJS.Timeout | null = null;
+
+  constructor(tsdb: TSDBEngine) {
+    this.tsdb = tsdb;
+  }
+
+  public registerTarget(url: string): void {
+    this.targets.add(url);
+    console.log(`[Scraper-ServiceDiscovery] Registered target endpoint: ${url}`);
+  }
+
+  public deregisterTarget(url: string): void {
+    this.targets.delete(url);
+    console.log(`[Scraper-ServiceDiscovery] Deregistered target: ${url}`);
+  }
+
+  /**
+   * সমস্ত টার্গেট নোড থেকে কনকারেন্টলি মেট্রিক্স স্ক্র্যাপ করা
+   */
+  public async scrapeAll(): Promise<void> {
+    console.log(`[Scraper] Initiating scrape cycle for ${this.targets.size} targets...`);
+    const timestamp = Date.now();
+
+    const scrapePromises = Array.from(this.targets).map(async (url) => {
+      try {
+        // (প্যারালাল HTTP GET) রিয়েল স্ক্র্যাপিং সিমুলেশন
+        // রিয়েল মনিটরিংয়ে এখানে প্রমিথিউস প্লেনটেক্সট বা প্রোফাইল ফরম্যাট পার্স করে
+        const response = await axios.get(url, { timeout: 3000 });
+        const metrics = response.data; // Expected JSON mockup for this demonstration
+
+        for (const metric of metrics) {
+          this.tsdb.ingest(metric.labels, timestamp, metric.value);
+        }
+        console.log(`[Scraper-Success] Scraped ${metrics.length} timeseries samples from ${url}`);
+      } catch (err: any) {
+        console.error(`[Scraper-Error] Failed to scrape ${url}: ${err.message}`);
+        // অ্যালার্ট ইঞ্জিনের জন্য স্ক্র্যাপ ফেইল মেট্রিক্স ডাউন করা
+        this.tsdb.ingest({ __name__: "up", instance: url }, timestamp, 0);
+      }
+    });
+
+    await Promise.all(scrapePromises);
+  }
+
+  public startScheduler(intervalMs: number = 10000): void {
+    this.scrapeInterval = setInterval(() => {
+      this.scrapeAll();
+    }, intervalMs);
+  }
+
+  public stopScheduler(): void {
+    if (this.scrapeInterval) {
+      clearInterval(this.scrapeInterval);
+    }
+  }
+}
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব প্রোডাকশনে মিলিয়ন QPS স্কেলিং করার সময় যে ৩টি জটিল ওভারহেড তৈরি হয় এবং তার সমাধান:
+
+#### ১. High Cardinality Explosion (মেমরির মরণফাঁদ)
+মেট্রিক্সের লেবেলে যদি অত্যন্ত পরিবর্তনশীল ডাটা (যেমন: ইউজারের `user_id` বা ট্রানজেকশন `order_id`) ট্যাগ করা হয়, তবে প্রতি সেকেন্ডে নতুন নতুন ইউনিক টাইম-সিরিজ তৈরি হতে থাকে। এর ফলে TSDB-র ইন-মেমোরি ইনডেক্স এবং ফিঙ্গারপ্রিন্ট হ্যাশ ম্যাপ কয়েক মিনিটে সম্পূর্ণ মেমরি গ্রাস করে OOM (Out Of Memory) ক্র্যাশ ঘটাবে।
+* **মিটিগেশন (Strict Label Sanitization & Drop Rules):** 
+  - **Relabeling Config:** আমাদের স্ক্র্যাপার লেয়ারে আমরা রেগুলার এক্সপ্রেশন দিয়ে `user_id` বা ডাইনামিক ইউআরআই ট্যাগগুলোকে পার্স করে একটি কমন জেনেরিক ক্যাটাগরিতে (যেমন `/api/v1/users/:id` -> `/api/v1/users/*`) কনভার্ট করব।
+  - **Metric Ingestion Limiters:** প্রজেক্ট প্রতি সর্বোচ্চ অ্যাক্টিভ টাইম-সিরিজের সংখ্যা লিমিট লক করে রাখা (উদা: max active series = 50,000)। এই লিমিট ক্রস করলে স্ক্র্যাপার অতিরিক্ত ডাইনামিক স্যাম্পল রিজেক্ট করে অ্যালার্ট ট্রিগার করবে।
+
+#### ২. Scraping Jitter & Micro-bursts (সিঙ্ক্রোনাইজড ট্রাফিক স্পাইক)
+যদি স্ক্র্যাপার ঠিক একই সময়ে (উদা: প্রতি ১০ম সেকেন্ডের মাথায়) ১০০০টি সার্ভিসে HTTP রিকোয়েস্ট পাঠায়, তবে তা নেটওয়ার্ক কার্ডে Micro-bursting জটলা তৈরি করবে। একই সাথে, সার্ভিসগুলো থেকে ডেটা স্ক্র্যাপ করতে গিয়ে CPU ও থ্রু-পুট হুট করে স্পাইক করবে।
+* **মিটিগেশন (Metrics Scraping Jitter):** 
+  - **Randomized Offset:** আমরা স্ক্র্যাপার ইঞ্জিনে একটি র্যান্ডম অফসেট (Jitter/Delay) ব্যবহার করব। ১০০০টি টার্গেটের স্ক্র্যাপ ডিস্ট্রিবিউট করা হবে ১ সেকেন্ডের উইন্ডোর মধ্যে ছড়িয়ে ছিটিয়ে (উদা: Pod A প্রতি ১০ম সেকেন্ডের ২য় মিলি-সেকেন্ডে, Pod B ৪র্থ মিলি-সেকেন্ডে)।
+  - **Keep-Alive Connections:** স্ক্র্যাপার টার্গেটগুলোর সাথে প্রমিথিউস HTTP Connection Pool এবং Keep-Alive মেকানিজম এনফোর্স করবে, যা প্রতি ১০ সেকেন্ড পর পর নতুন টিসিপি হ্যান্ডশেক এবং TLS নেগোশিয়েশন ওভারহেড সম্পূর্ণ বন্ধ রাখবে।
+
+#### ৩. Memory Blowout During Heavy Range Queries (গ্রাফানা ডেডলক)
+গ্রাফানা ড্যাশবোর্ড থেকে ইউজার যদি বিগত ৩০ দিনের র-মেট্রিক্স দেখতে চান এবং সেখানে মিলিয়ন মিলিয়ন ডেটাপয়েন্ট ইনভলভ থাকে, তবে কোয়েরি ইঞ্জিন সমস্ত ডেটা একবারে র্যামে লোড করতে গিয়ে ইন-মেমোরি বাফার ডেডলক তৈরি করবে, যা নতুন মেট্রিক্স রাইট করার পথ অবরুদ্ধ করে দেয়।
+* **মিটিগেশন (Query Timeouts, Max Samples Guard & Pre-Computed Recording Rules):**
+  - **Max Samples Guard:** আমরা আমাদের PromQL কোয়েরি ইঞ্জিনে গ্লোবাল গার্ড কনফিগার করব: `max_samples_per_query = 50,000,000`। এর বেশি স্যাম্পল থাকলে কুয়েরি সরাসরি এরর রিটার্ন করবে।
+  - **Recording Rules:** ভারী অ্যাগ্রিগেশন কুয়েরিগুলো প্রতি ৫ মিনিট পর পর ব্যাকগ্রাউন্ডে ক্যালকুলেট করে নতুন একটি ডেরিভেটিভ মেট্রিক্স ফাইলে রাইট করে রাখা হবে (Recording Rules)। গ্রাফানা যখন কল করবে, সে প্রসেসড ছোট ভলিউমের ডেটা সরাসরি রিড করতে পারবে, যা লাইভ ওয়ান-মান্থ কুয়েরি ল্যাটেন্সি ১০ সেকেন্ড থেকে ১০ মিলি-সেকেন্ডে নামিয়ে আনে।
+
+---
+
+## 💻 Chapter 16: Ad Click Aggregator (Big Data Stream Processing & Aggregation)
+
+ডিজিটাল এডভার্টাইজিং ইন্ডাস্ট্রিতে প্রতি সেকেন্ডে বিশ্বজুড়ে লাখ লাখ ইউজার বিভিন্ন বিজ্ঞাপনে ক্লিক করেন। একজন অ্যাডভার্টাইজারকে (বিজ্ঞাপনদাতা) সঠিক বিল চার্জ করতে এবং রিয়েল-টাইম অ্যাড ক্যাম্পেইন পারফরম্যান্স ট্র্যাক করতে প্রতি সেকেন্ডে মিলিয়ন মিলিয়ন ক্লিক ইভেন্ট প্রসেস, ডি-ডুপ্লিকেট (ডাবল ক্লিক রোধ) এবং অ্যাগ্রিগেট করতে হয়।
+
+এই চ্যাপ্টারে আমরা ডিজাইন করব একটি আল্ট্রা-স্কেলেবল, ফল্ট-টলারেন্ট **Ad Click Aggregator System** যা **Exactly-Once Processing** গ্যারান্টি সহ রিয়েল-টাইম স্ট্রিম প্রসেসিং (Apache Flink/Kafka স্টাইলে) হ্যান্ডেল করে।
+
+---
+
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **রিয়েল-টাইম অ্যাগ্রিগেশন (Real-Time Aggregation):** প্রতি ১ মিনিটে প্রতিটি বিজ্ঞপ্তির (`ad_id`) মোট ক্লিক সংখ্যা এবং মোট খরচ (Ad Spend) ক্যালকুলেট করা।
+2. **ক্লিক ফ্রড ডিটেকশন (Click Fraud Detection):** ম্যালিশিয়াস বা বট অ্যাক্টিভিটি (উদা: ১ সেকেন্ডে একই আইপি থেকে কোনো বিজ্ঞপ্তিতে ৫০টি ক্লিক) রিয়েল-টাইম ফিল্টার বা ড্রপ করা।
+3. **কোয়েরি ইন্টারফেস (Advertiser Dashboard):** বিজ্ঞাপনদাতারা যেন তাদের ড্যাশবোর্ডে বিগত ১ ঘণ্টা বা ১ দিনের রিয়েল-টাইম ক্লিক ট্রেন্ড ও বাজেট স্পেন্ড সাব-সেকেন্ড ল্যাটেন্সিতে দেখতে পান।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **Exactly-Once Processing (নিখুঁত হিসাব):** কোনো বিজ্ঞাপনদাতাকে ডাবল চার্জ করা যাবে না বা কোনো রিয়েল ক্লিক মিস করা যাবে না (At-least-once বা At-most-once এখানে অগ্রহণযোগ্য)।
+2. **রিয়েল-টাইম ল্যাটেন্সি (Sub-Second Latency):** ক্লিক হওয়া থেকে শুরু করে ড্যাশবোর্ডে ডেটা রিফ্লেক্ট হতে সর্বোচ্চ ৩ থেকে ৫ সেকেন্ড ল্যাটেন্সি থাকতে পারবে।
+3. **ইনফিনিট স্কেলেবিলিটি (Fault-Tolerance):** যেকোনো স্ট্রিম প্রসেসর নোড ক্র্যাশ করলে ডেটা লস ছাড়াই যেন সিস্টেম অটো-রিকভার করতে পারে।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Big Data Scale Estimations):
+* **গড় ক্লিক রেট (Average Throughput):** $10,000$ clicks/sec.
+* **পিক ক্লিক রেট (Peak Traffic):** $100,000$ clicks/sec.
+* **দৈনিক ইভেন্ট সংখ্যা (Daily Events Volume):**
+  * `Daily Clicks = 10,000 clicks/sec * 86,400 sec = 864,000,000 clicks/day` (প্রায় **৮৬৪ মিলিয়ন**)
+* **ক্লিক ইভেন্ট সাইজ (Event Payload Size):**
+  `click_id` ($16$ bytes) + `ad_id` ($8$ bytes) + `user_id` ($8$ bytes) + `ip` ($4$ bytes) + `cost` ($8$ bytes) + `timestamp` ($8$ bytes) + `labels` ($48$ bytes) = ~ $100$ bytes.
+
+**১. নেটওয়ার্ক ব্যান্ডউইথ (Ingestion Bandwidth):**
+* `Average Ingest Rate = 10,000 clicks/sec * 100 bytes = 1,000,000 bytes/sec ≈` **1 MB/sec** (or **976.6 KB/sec**)
+* `Peak Ingest Rate = 100,000 clicks/sec * 100 bytes = 10,000,000 bytes/sec ≈` **10 MB/sec** (or **9.54 MiB/sec**)
+
+**২. স্টোরেজ রিকোয়ারমেন্ট (Daily Analytics Storage):**
+রিয়েল-টাইমে স্ট্রিম প্রসেসর ডেটা অ্যাগ্রিগেট করে ক্লিকহাউস (ClickHouse) বা ক্যাসান্দ্রায় (Cassandra) জমা করবে।
+* `Raw Event Storage per Day = 864,000,000 events * 100 bytes ≈` **86.4 GB/day** (or **80.47 GiB/day**) [Uncompressed]
+
+উইন্ডো অ্যাগ্রিগেশনের পর (প্রতি ১ মিনিটে `ad_id` ভিত্তিক গ্রুপ-বাই করলে):
+ধরি, আমাদের ১ লক্ষ অ্যাক্টিভ এড ক্যাম্পেইন আছে।
+* `Aggregated Rows per Day = 100,000 ads * 1,440 minutes =` **144,000,000 rows/day**
+
+প্রতিটি অ্যাগ্রিগেটেড রো সাইজ যদি ৫০ বাইট হয়:
+* `Aggregated Storage per Day = 144,000,000 rows * 50 bytes ≈` **7.2 GB/day** (or **6.71 GiB/day**)
+
+এর ফলে আমরা ১ দিনে ৮৬ জিবি র-ইভেন্ট ফাইল প্রসেস করে মাত্র ৭.২ জিবির হাই-পারফরম্যান্স কুয়েরিটেবল ডেটা স্টোর করতে পারছি!
+
+---
+
+### ২. হাই-ফিডেলিটি স্ট্রিম প্রসেসিং আর্কিটেকচার (Ad Click Aggregator Architecture)
+
+নিচের আর্কিটেকচারাল ফ্লোতে ক্লিক ইভেন্ট ইনজেশন, কাফকা টপিক বাফারিং, এফলিংক স্ট্রিম প্রসেসিং উইন্ডো, রিয়েল-টাইম ফ্রড ফিল্টারিং এবং কলামনার ডেটাবেস সিঙ্ক দেখানো হলো:
+
+```mermaid
+graph TD
+    %% User Action
+    User[User Clicks Ad] -->|1. Redirect via Load Balancer| API[Ingestion API Service Gateway]
+
+    %% Fraud Detection Layer (Fast-path)
+    API -->|2. Check Duplicates & Spams| Redis[(Redis Distributed Bloom Filter)]
+    
+    %% Kafka Ingestion Buffer
+    API -->|3. Append to Raw Topic| Kafka["Apache Kafka Broker (raw-clicks-topic)"]
+
+    %% Stream Processing Engine (Flink)
+    subgraph FlinkCluster [Apache Flink Stateful Stream Processor]
+        Source[Kafka Consumer Source]
+        FraudFilter[IP/User Fraud Detector]
+        WindowEngine[Event-Time Window Aggregator]
+        StateStore[(RocksDB Local State Store)]
+
+        Source --> FraudFilter
+        FraudFilter -->|Filtered Valid Clicks| WindowEngine
+        WindowEngine <-->|Checkpoint state| StateStore
+    end
+    
+    Kafka -->|4. Consume Stream| Source
+
+    %% Data Destinations
+    WindowEngine -->|5. Two-Phase Commit Sink| ClickHouse[(ClickHouse Columnar OLAP DB)]
+    WindowEngine -->|6. Trigger Budget Exhausted| KafkaAlert["Kafka Alert Topic"]
+    
+    %% Real-time Budget Engine
+    KafkaAlert --> AlertEngine[Budget Monitor Service]
+    AlertEngine -->|7. Disable Ad Campaign| Redis
+
+    %% Advertisers Query
+    Advertiser[Advertiser Dashboard] -->|8. High-speed OLAP Query| ClickHouse
+
+    %% Styling
+    style Redis fill:#ffebee,stroke:#c62828,stroke-width:2px;
+    style Kafka fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    style FlinkCluster fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    style ClickHouse fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+```
+
+---
+
+### ৩. স্ট্রিম প্রসেসিং উইন্ডো ও Exactly-Once মেকানিজম
+
+#### ক. উইন্ডো টাইপস (Types of Windows in Stream Processing):
+1. **Tumbling Window (নন-ওভারল্যাপিং):** ফিক্সড টাইম বাউন্ডারি। যেমন: ৫ মিনিটের টাম্বলিং উইন্ডো (12:00-12:05, 12:05-12:10)। প্রতি ক্লিকে ডেটা একবারই কাউন্ট হবে।
+2. **Sliding Window (ওভারল্যাপিং):** টাইম বাউন্ডারি এবং স্লাইড ফ্রিকোয়েন্সি থাকে। যেমন: প্রতি ১ মিনিট পর পর বিগত ৫ মিনিটের ক্লিক অ্যাগ্রিগেশন (12:00-12:05, 12:01-12:06)। এটি রিয়েল-টাইম স্পাইক ট্রেন্ড ট্র্যাকিংয়ের জন্য অত্যন্ত উপযোগী।
+3. **Session Window (গ্যাপ-বেসড):** ইউজারের নিষ্ক্রিয়তার (Inactivity) উপর ভিত্তি করে উইন্ডো ক্লোজ হয়। যেমন: ৩০ মিনিট কোনো ক্লিক না হলে নতুন সেশন উইন্ডো স্টার্ট হবে।
+
+#### খ. Exactly-Once Processing (দুই-দফা কমিট বা Two-Phase Commit Protocol):
+কাফকা থেকে ডেটা রিড করে ডাটাবেসে রাইট করার সময় প্রসেসর ক্র্যাশ করলে ডেটা ডুপ্লিকেট হতে পারে। এফলিংক এটি সমাধান করে **Chandy-Lamport Algorithm** এবং **Two-Phase Commit (2PC)** সঙ্কের মাধ্যমে:
+* **Phase 1 (Pre-Commit):** এফলিংক প্রতি ১ মিনিটে সোর্স থেকে সিঙ্ক পর্যন্ত একটি "ব্যারিয়ার" বা চেকপয়েন্ট পাঠায়। সিঙ্ক নোডটি তার স্টেট RocksDB-তে সেভ করে এবং ডাটাবেসে ট্রানজেকশন ওপেন করে প্রি-কমিট স্টেটে ফাইল রাইট করে।
+* **Phase 2 (Commit):** যখন ক্লাস্টারের সমস্ত নোড চেকপয়েন্ট সফলভাবে শেষ করার সিগন্যাল দেয়, তখন এফলিংক মাস্টার সিঙ্ক নোডকে ট্রানজেকশনটি `COMMIT` করার নির্দেশ দেয়। কোনো একটি নোড ফেইল করলে পুরো ট্রানজেকশনটি `ROLLBACK` হয়ে যায়, যা ডাবল কাউন্টিং শতভাগ প্রতিরোধ করে।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা এবার নোড জেএস-এর জন্য একটি **Real-Time Event-Time Sliding Window Aggregator** এবং **Click Fraud Engine** ডিজাইন করব। এটি ইভেন্ট টাইম (Event Time - কোড জেনারেট হওয়ার সময়) ব্যবহার করে ওয়াটারমার্কিং এবং আউট-অর্ডার ইভেন্ট হ্যান্ডলিং সিমুলেট করে:
+
+```typescript
+// ============================================================================
+// ১. ডেটা ইন্টারফেস ডিফিনিশনস (Data Models)
+// ============================================================================
+export interface AdClickEvent {
+  clickId: string;
+  adId: string;
+  userId: string;
+  ip: string;
+  cost: number;
+  timestamp: number; // Event-time timestamp (ms)
+}
+
+export interface WindowResult {
+  adId: string;
+  windowStart: number;
+  windowEnd: number;
+  totalClicks: number;
+  totalSpend: number;
+}
+
+// ============================================================================
+// ২. ডিস্ট্রিবিউটেড স্ট্রিম প্রসেসর ও অ্যাগ্রিগেটর ইঞ্জিন
+// ============================================================================
+export class AdClickStreamProcessor {
+  private windowSizeMs: number;
+  private slideSizeMs: number;
+  private allowedLatenessMs: number;
+  private watermark: number = 0;
+
+  // ইন-মেমোরি উইন্ডো বাফার (RocksDB-র ডেমো সংস্করণ)
+  // Key: adId, Value: map of windowStart -> aggregated data
+  private stateStore: Map<string, Map<number, { clicks: number; spend: number }>> = new Map();
+
+  constructor(windowMinutes: number = 1, slideSeconds: number = 10, allowedLatenessSeconds: number = 5) {
+    this.windowSizeMs = windowMinutes * 60 * 1000;
+    this.slideSizeMs = slideSeconds * 1000;
+    this.allowedLatenessMs = allowedLatenessSeconds * 1000;
+  }
+
+  /**
+   * স্ট্রিমের ওয়াটারমার্ক আপডেট করে। ওয়াটারমার্ক হলো এমন একটি সময় 
+   * যার পরে আমরা ধরে নিই যে এর চেয়ে পুরনো আর কোনো লেট ইভেন্ট সিস্টেমে আসবে না।
+   */
+  public updateWatermark(eventTimestamp: number): void {
+    const currentWatermark = eventTimestamp - this.allowedLatenessMs;
+    if (currentWatermark > this.watermark) {
+      this.watermark = currentWatermark;
+    }
+  }
+
+  /**
+   * রিয়েল-টাইম ক্লিক ইভেন্ট প্রসেস এবং স্টেট ইনজেকশন
+   */
+  public processElement(event: AdClickEvent): void {
+    this.updateWatermark(event.timestamp);
+
+    // ১. (লেট ডেটা ফিল্টারিং) যদি ইভেন্ট ওয়াটারমার্কের চেয়েও পুরনো হয়, তবে সেটি ড্রপ বা সাইড-আউটপুট করা হবে
+    if (event.timestamp < this.watermark) {
+      console.warn(`[Stream-Warning] Rejected extremely late click event ${event.clickId}. Timestamp: ${event.timestamp}, Current Watermark: ${this.watermark}`);
+      return; 
+    }
+
+    // ২. স্লাইডিং উইন্ডোর জন্য বাউন্ডারি ক্যালকুলেট করা 
+    // একটি ইভেন্ট একই সাথে একাধিক ওভারল্যাপিং স্লাইডিং উইন্ডোর অংশ হতে পারে
+    const activeWindows = this.getWindowsForTimestamp(event.timestamp);
+
+    for (const windowStart of activeWindows) {
+      if (!this.stateStore.has(event.adId)) {
+        this.stateStore.set(event.adId, new Map());
+      }
+
+      const adWindows = this.stateStore.get(event.adId)!;
+      if (!adWindows.has(windowStart)) {
+        adWindows.set(windowStart, { clicks: 0, spend: 0 });
+      }
+
+      const state = adWindows.get(windowStart)!;
+      state.clicks += 1;
+      state.spend += event.cost;
+    }
+  }
+
+  /**
+   * স্লাইডিং উইন্ডোর স্টার্ট-টাইম লিস্ট জেনারেট করে
+   */
+  private getWindowsForTimestamp(timestamp: number): number[] {
+    const windows: number[] = [];
+    // প্রথম উইন্ডো স্টার্ট পয়েন্ট যা এই টাইমস্ট্যাম্পকে কভার করে
+    const firstWindowStart = Math.floor(timestamp / this.slideSizeMs) * this.slideSizeMs - this.windowSizeMs + this.slideSizeMs;
+    
+    for (let start = firstWindowStart; start <= timestamp; start += this.slideSizeMs) {
+      if (timestamp >= start && timestamp < start + this.windowSizeMs) {
+        windows.push(start);
+      }
+    }
+    return windows;
+  }
+
+  /**
+   * ওয়াটারমার্কের চেয়ে পুরনো হয়ে যাওয়া উইন্ডোগুলোকে ক্লোজ ও ইমিট (Emit) করে মেমরি ক্লিন করা
+   */
+  public emitAndPurgeClosedWindows(): WindowResult[] {
+    const emittedResults: WindowResult[] = [];
+
+    for (const [adId, adWindows] of this.stateStore.entries()) {
+      for (const [windowStart, state] of adWindows.entries()) {
+        const windowEnd = windowStart + this.windowSizeMs;
+
+        // যদি উইন্ডোর এন্ড-টাইম আমাদের বর্তমান ওয়াটারমার্কের চেয়ে ছোট হয়, 
+        // তার মানে এই উইন্ডোর জন্য আর কোনো লেট ডেটা গ্রহণযোগ্য নয় এবং এটি ক্লোজড!
+        if (windowEnd <= this.watermark) {
+          emittedResults.push({
+            adId,
+            windowStart,
+            windowEnd,
+            totalClicks: state.clicks,
+            totalSpend: Number(state.spend.toFixed(4))
+          });
+
+          // স্টেট থেকে ক্লোজড উইন্ডো ডিলিট করে মেমরি ফ্রি করা
+          adWindows.delete(windowStart);
+        }
+      }
+
+      if (adWindows.size === 0) {
+        this.stateStore.delete(adId);
+      }
+    }
+
+    return emittedResults;
+  }
+
+  public getWatermark(): number {
+    return this.watermark;
+  }
+}
+
+// ============================================================================
+// ৩. রিয়েল-টাইম ক্লিক ফ্রড ডিটেকশন ইঞ্জিন (Fraud Detection Engine)
+// ============================================================================
+export class ClickFraudDetector {
+  // Key: IP:adId, Value: list of click timestamps in the last 1 second
+  private ipClickTracker: Map<string, number[]> = new Map();
+  private fraudThresholdPerSecond: number;
+
+  constructor(maxClicksPerSec: number = 5) {
+    this.fraudThresholdPerSecond = maxClicksPerSec;
+  }
+
+  /**
+   * একটি নতুন ক্লিক ম্যালিশিয়াস বা বট দ্বারা জেনারেট হয়েছে কিনা তা ভেরিফাই করে
+   */
+  public isFraudulent(event: AdClickEvent): boolean {
+    const trackerKey = `${event.ip}:${event.adId}`;
+    const now = event.timestamp;
+
+    if (!this.ipClickTracker.has(trackerKey)) {
+      this.ipClickTracker.set(trackerKey, []);
+    }
+
+    const clickTimestamps = this.ipClickTracker.get(trackerKey)!;
+
+    // ১. ১ সেকেন্ডের বাইরের পুরনো ক্লিক ট্র্যাকিং লিস্ট থেকে ক্লিন করা
+    const filteredTimestamps = clickTimestamps.filter(ts => now - ts <= 1000);
+    this.ipClickTracker.set(trackerKey, filteredTimestamps);
+
+    // ২. ১ সেকেন্ডে ক্লিকে লিমিট থ্রেশহোল্ড চেক করা
+    if (filteredTimestamps.length >= this.fraudThresholdPerSecond) {
+      console.warn(`[Fraud-Detected] Suspicious micro-burst clicks from IP ${event.ip} for ad ${event.adId}. Clicks count in last 1s: ${filteredTimestamps.length}`);
+      return true; // Fraudulent
+    }
+
+    // ৩. নতুন ক্লিক টাইমস্ট্যাম্প ট্র্যাকিং লিস্টে যুক্ত করা
+    filteredTimestamps.push(now);
+    return false; // Valid click
+  }
+}
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব প্রোডাকশনে সেকেন্ডে লাখ লাখ ক্লিক প্রসেস করার সময় প্রোডাকশনে যে ৩টি গুরুতর সমস্যা তৈরি হয় এবং তার স্টাফ-লেভেল সল্যুশন:
+
+#### ১. Hotspot Key Skew (ভাইরাল বিজ্ঞপ্তির ব্ল্যাকহোল)
+ইউটিউব বা ফেসবুকে কোনো ভাইরাল বা সুপার বোল বিজ্ঞাপন (`ad_id`) রিলিজ হলে, হঠাৎ কোটি ইউজার একই লিংকে একসাথে ক্লিক করবেন। এর ফলে, কাফকা ও এফলিংক ক্লাস্টারে ওই নির্দিষ্ট `ad_id` হ্যাশ রুট হয়ে যে প্রসেসর নোডটিতে যাবে, সেই নোডের CPU ও মেমরি সাথে সাথে ১০০% হিট করে সার্ভার ডাউন করে দেবে। বাকি নোডগুলো অলস বসে থাকবে।
+* **Smearing (Two-Stage Aggregation) সল্যুশন:**
+  - **Local Pre-Aggregation:** আমরা রাইটার এন্ডে মূল `ad_id` কী-এর সাথে একটি র্যান্ডম সল্ট বা নম্বর যোগ করব (উদা: `ad_id_102` -> `ad_id_102_salt_3`)। সল্ট যুক্ত করার কারণে ট্রাফিক এফলিংক ক্লাস্টারের সমস্ত নোডে সমানভাবে ছড়িয়ে (Round-robin) যাবে।
+  - **Global Final Merge:** এফলিংকের প্রথম নোডগুলো লোকাল সল্ট করা ডেটা অ্যাগ্রিগেট করে পরবর্তী ফাইনাল সিঙ্ক নোডে পাঠাবে, যা সল্ট রিমুভ করে চূড়ান্ত সামারি বের করবে। এর ফলে একটি নোডের উপর চাপ ১০% এ নেমে আসে।
+
+#### ২. RocksDB State Expansion & Out-of-Memory (ডিস্ক ফুল ও স্পিলিং)
+এফলিংক মেমরিতে স্টেট রাখার জন্য RocksDB ব্যবহার করে। যদি allowed lateness এবং উইন্ডোর সাইজ খুব বড় হয় (উদা: ১ দিনের লেট ডেটা এলাও করা), তবে RocksDB-র মেমরি ও লোকাল এসএসডি ডিস্ক লাখ লাখ আন-ক্লোজড স্যাম্পলে ভরে যাবে। নোডের থ্রু-পুট হুট করে ১০ গুণ কমে যাবে কারণ RocksDB ডেটা র্যাম থেকে ডিস্কে সোয়াপ (Spilling to SSD) করা শুরু করবে।
+* **মিটিগেশন (Strict TTL Configuration & SSD IOPS Scaling):**
+  - **State TTL Setting:** RocksDB-র প্রতিটি উইন্ডো স্টেটের জন্য কঠোর TTL (Time To Live) সেটআপ করা। যেমন: `state.clear()` এনফোর্স করা উইন্ডো অ্যান্ড হওয়ার ৫ মিনিট পরই। 
+  - **Allowed Lateness Optimization:** লেট ডেটার বাউন্ডারি সর্বোচ্চ ৫ থেকে ১০ সেকেন্ডে নামিয়ে আনা। এর চেয়ে পুরনো ডেটা র্যামে না রেখে সরাসরি ডেড-লেটার কাফকা টপিক বা ব্যাকগ্রাউন্ড কোল্ড স্টোরেজে (S3) ডাম্প করে দেওয়া।
+
+#### ৩. Clickhouse Insert Throttling (সিঙ্ক নোড বটলনেক)
+ক্লিকহাউস বা ক্যাসান্দ্রার মতো কলামনার ডেটাবেস প্রতি সেকেন্ডে লাখ লাখ সিঙ্গেল `INSERT` হ্যান্ডেল করতে পারে না। যদি এফলিংকের প্রতিটি প্রসেসর উইন্ডো ক্লোজ হওয়ার সাথে সাথে ১টি করে একক রো ইনসার্ট করতে যায়, তবে ডেটাবেসের রাইট-লক লেগে পুরো স্ট্রিম পাইপলাইন ব্লক হয়ে যাবে।
+* **মিটিগেশন (Micro-Batching & Two-Phase Commit Sink):**
+  - **Micro-Batch Sinking:** এফলিংক সিঙ্কে ডেটা আসার সাথে সাথে সিঙ্গেল ইনসার্ট না করে কমপক্ষে ৫ সেকেন্ড বা ১০,০০০ রো-এর বাফার বা মাইক্রো-ব্যাচ তৈরি করবে এবং `Clickhouse BULK INSERT` স্ক্রিপ্ট চালাবে যা ডাটাবেস রাইট লকিং জিরোতে নামিয়ে আনে।
+
+---
+
+## 📖 Chapter 17: Distributed Message Queue (Kafka-style)
+
+ডিস্ট্রিবিউটেড ইভেন্ট-চালিত (Event-driven) আর্কিটেকচারে মেসেজ কিউ বা লগের ভূমিকা অপরিসীম। ট্র্যাডিশনাল ইন-মেমরি কিউ (যেমন: RabbitMQ) হাই-থ্রুপুট এবং ডিস্ট্রিবিউটেড লগের ক্ষেত্রে স্কেলিং লিমিটেশনে পড়ে। এই চ্যাপ্টারে আমরা প্রডাকশন-গ্রেড প্রসেসিং আর্কিটেকচার সম্বলিত লিনিয়ারলি স্কেলেবল, পার্টিশনড এবং হাই-পারফরম্যান্স **Distributed Message Queue (Kafka-style)** ডিজাইন করব।
+
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **Topic & Partitioning:** সিস্টেমে টপিক (Topic) তৈরি করা যাবে এবং প্রতিটি টপিক একাধিক পার্টিশনে (Partition) বিভক্ত থাকবে যাতে সমান্তরালে স্কেল ও লোড-ডিস্ট্রিবিউট করা যায়।
+2. **Publish/Subscribe API:** প্রডিউসার নির্দিষ্ট টপিক ও কি (Key) দিয়ে মেসেজ পাঠাতে পারবে এবং কনজিউমাররা কনজিউমার গ্রুপ (Consumer Group) হিসেবে মেসেজ রিড করতে পারবে।
+3. **Partition-level Ordering:** প্রতি পার্টিশনে মেসেজ ইনজেসনের ক্রমানুসার (Order of Ingestion) কঠোরভাবে বজায় থাকবে।
+4. **Message Retention:** ইভেন্টগুলো কনজিউম হওয়ার পর উধাও হবে না, বরং ডিস্কে বা কনফিগার করা পিরিয়ড (উদা: ৩ দিন) পর্যন্ত রিটেন থাকবে।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **Ultra-High Ingestion Rate:** প্রতি সেকেন্ডে লক্ষাধিক মেসেজ রাইট কোনো ডাউনটাইম ছাড়া সফলভাবে হ্যান্ডেল করা।
+2. **Low Latency Read/Write:** এন্ড-টু-এন্ড মেসেজ ডেলিভারি ল্যাটেন্সি < ১০ মিলি-সেকেন্ড হতে হবে।
+3. **High Availability & Fault Tolerance:** ব্রোকার বা নোড ফেইল করলেও ডেটা লস ছাড়া সিস্টেম সচল থাকা (Multi-replica replication)।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Staff Architect Scale Estimations):
+ধরি, আমাদের এন্টারপ্রাইজ আর্কিটেকচারে:
+* **সক্রিয় প্রডিউসার সার্ভিস সংখ্যা (Producers):** $1,000$ active microservices.
+* **গড় মেসেজ রাইট থ্রুপুট (Average Write Rate):** $1,000,000$ messages/sec.
+* **পিক রাইট থ্রুপুট (Peak Write Rate):** $3,000,000$ messages/sec.
+* **মেসেজ পে-লোড সাইজ (Message Size):** $500$ bytes on average.
+
+**১. রাইট থ্রুপুট ও ইনজেশন ব্যান্ডউইথ (Ingestion Throughput):**
+* `Average Ingestion Throughput = 1,000,000 messages/sec * 500 bytes = 500,000,000 bytes/sec ≈` **500 MB/sec** (or **476.8 MiB/sec**)
+* `Peak Ingestion Throughput = 3,000,000 messages/sec * 500 bytes = 1,500,000,000 bytes/sec ≈` **1.5 GB/sec** (or **1.4 GiB/sec**)
+
+**২. দৈনিক স্টোরেজ ও রিটেনশন সাইজ (Daily Storage with Replication):**
+ধরি, আমাদের রিটেনশন পিরিয়ড ৩ দিন এবং রেপ্লিকেশন ফ্যাক্টর ৩ (প্রতিটি পার্টিশন ৩টি ব্রোকারে রেপ্লিকেট করা থাকে)।
+* `Daily Raw Message Volume = 500,000,000 bytes/sec * 86,400 sec = 43,200,000,000,000 bytes/day ≈` **43.2 TB/day** (or **39.29 TiB/day**)
+* `Daily Storage with Replication = 43.2 TB/day * 3 (Replication) =` **129.6 TB/day** (or **117.87 TiB/day**)
+* `3-Day Retention Total Storage = 129.6 TB/day * 3 days =` **388.8 TB** (or **353.6 TiB**)
+* **আর্কিটেকচারাল ডিসিশন:** এই স্টোরেজ সামলাতে আমাদের কমপক্ষে **৪০টি ব্রোকার নোড** (প্রতিটি ১০ টেরাবাইট এনভিএমই এসএসডি সহ) লাগবে, যেখানে প্রতিটি ব্রোকার ৭-৮ টেরাবাইটের বেশি ডেটা বাফার রাখবে না।
+
+---
+
+### ২. হাই-ফিডেলিটি সিস্টেম আর্কিটেকচার (High-Fidelity Distributed Message Queue Architecture)
+
+নিচের ডায়াগ্রামে প্রডিউসার থেকে মেসেজ রুট হওয়া, ব্রোকার লিডার-ফলোয়ার রেপ্লিকেশন, সেগমেন্ট ফাইল ও ইনডেক্স রাইট এবং জিরো-কপি মেকানিজমে কনজিউমার গ্রুপে ইভেন্ট ডেলিভারি ফ্লো দেখানো হলো:
+
+```mermaid
+graph TD
+    %% Producers Layer
+    subgraph Producers [Message Producers]
+        P1[Auth Service Client]
+        P2[Order Service Client]
+        P3[Payment Service Client]
+    end
+
+    %% Distributed Broker Cluster
+    subgraph BrokerCluster [Distributed Message Queue Cluster - KRaft Controller]
+        subgraph Broker1 [Broker 1 - Leader for Partition 0]
+            P0L["Partition 0 Active Segment (.log)"]
+            P0Idx["Offset Index (.index)"]
+            P0Time["Timestamp Index (.timeindex)"]
+        end
+        subgraph Broker2 [Broker 2 - Follower for Partition 0 / Leader for P1]
+            P1L["Partition 1 Active Segment (.log)"]
+            P0F["Partition 0 Replica Log"]
+        end
+        subgraph Broker3 [Broker 3 - Follower for Partition 1]
+            P1F["Partition 1 Replica Log"]
+        end
+    end
+
+    %% Producers to Broker Routing
+    P1 -->|Hash key 'user_12' -> Partition 0| Broker1
+    P2 -->|Hash key 'order_99' -> Partition 1| Broker2
+    P3 -->|Round-Robin -> Load Balancer| Broker1
+
+    %% Replication
+    P0L -.->|High-Speed Fetch Replication| P0F
+    P1L -.->|High-Speed Fetch Replication| P1F
+
+    %% Consumers Group Layer
+    subgraph ConsumerGroup [Consumer Group: Analytics-Service-Group]
+        C1["Consumer Instance A (Reads P0)"]
+        C2["Consumer Instance B (Reads P1)"]
+    end
+
+    %% Data Delivery with Zero Copy
+    Broker1 -->|Zero-Copy sendfile System Call| C1
+    Broker2 -->|Zero-Copy sendfile System Call| C2
+```
+
+---
+
+### ৩. ডিপ-ডাইভ কোর কনসেপ্টস (Broker Storage & Internals)
+
+#### ক. অ্যাপেন্ড-অনলি কমিট লগ (Append-Only Commit Log):
+কাফকা তার চরম হাই-স্পিড রাইট পারফরম্যান্স নিশ্চিত করার জন্য ডিস্কের সিকুয়েন্সিয়াল অ্যাক্সেস (Sequential Access) ব্যবহার করে। প্রতিবার মেসেজ পুশ করার সময় কোনো প্রকার র্যান্ডম ডিস্ক রাইট (Random Disk Write) করা হয় না। ব্রোকার মেমরিতে ওএস পেজ ক্যাশে (OS Page Cache) মেসেজ রিসিভ করে সরাসরি ডিস্ক ফাইলের শেষে অ্যাপেন্ড করে দেয়। সিকুয়েন্সিয়াল রাইটের কারণে ডিস্কের আইও (Disk I/O) পারফরম্যান্স র্যামের গতির কাছাকাছি কাজ করে।
+
+#### খ. সেগমেন্টেশন ও ইনডেক্সিং (Segments & Offset Indexes):
+পার্টিশন লগগুলো একটি বিশাল একক ফাইলে স্টোর করা হয় না। এতে পুরানো ফাইল ডিলিট বা কম্প্যাক্ট করা অসম্ভব হয়ে পড়ে। তাই লগকে নির্দিষ্ট সাইজের (উদা: ১ জিবি) একাধিক **Segment File**-এ ভাগ করা হয়। প্রতিটি সেগমেন্টের সাথে ২টি ইনডেক্স ফাইল থাকে:
+1. **Offset Index (`.index`):** এটি লজিক্যাল অফসেট (Logical Offset) থেকে ফাইলের ফিজিক্যাল বাইট পজিশনে (Physical Byte Position) ওয়ান-টু-ওয়ান রিলেশন ম্যাপ করে। O(1) জটিলতায় বাইনারি সার্চ করে অফসেট খোঁজার জন্য এটি ব্যবহৃত হয়।
+2. **Time Index (`.timeindex`):** এটি নির্দিষ্ট টাইমস্ট্যাম্পের মেসেজ দ্রুত খুঁজে বের করতে অফসেট ম্যাপিং স্টোর করে।
+
+#### গ. ওএস জিরো-কپی অপ্টিমাইজেশন (Zero-Copy Sendfile):
+কনজিউমার যখন ইভেন্ট রিড করার জন্য রিকোয়েস্ট পাঠায়, তখন ওএস সাধারণত ৪টি ডেটা কপি এবং ৪টি ইউজার-কার্নেল কনটেক্সট সুইচিং (Context Switching) করে:
+`Disk -> Kernel Page Cache -> User Space Application Buffer -> Socket Buffer -> NIC Buffer (Network Interface Card)`
+এটি চরম সিপিইউ এবং মেমরি কপি ওভারহেড তৈরি করে।
+গরিলা বা কাফকা টাইপ ব্রোকার ওএসের **`sendfile` System Call** ব্যবহার করে একে জিরো-কپی (Zero-Copy) মোডে নিয়ে আসে:
+`Disk -> Kernel Page Cache -> NIC Buffer` (কোনো প্রকার ইউজার স্পেস কপি ছাড়াই সরাসরি নেটওয়ার্ক কার্ডে পাঠানো হয়!)।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা নিচে টাইপস্ক্রিপ্ট ব্যবহার করে একটি হাই-পারফরম্যান্স প্রডাকশন-রেডি **Distributed Message Broker Engine**-এর কোড আর্কিটেকচার ইমপ্লিমেন্ট করলাম, যার মধ্যে party-level অ্যাপেন্ড-অনলি লগ, ইনডেক্স বাইনারি সার্চ, কনজিউমার গ্রুপ সেলফ-ব্যালেন্সিং এবং জিরো-কপি ডিরেক্ট নেটওয়ার্ক মেমরি ট্রান্সফার সিমুলেশন রয়েছে:
+
+```typescript
+import * as fs from 'fs';
+
+// মেসেজ ইন্টারফেস
+export interface Message {
+  offset: number;
+  timestamp: number;
+  key: string;
+  value: string;
+}
+
+// ইনডেক্স ম্যাপ এন্ট্রি
+interface IndexEntry {
+  offset: number;
+  bytePosition: number;
+}
+
+// ১. পার্টিশন ক্লাস (Commit Log & Segment File Simulation)
+export class Partition {
+  private commitLog: Message[] = [];
+  private indexEntries: IndexEntry[] = [];
+  private currentByteOffset = 0;
+  private partitionId: number;
+
+  constructor(partitionId: number) {
+    this.partitionId = partitionId;
+  }
+
+  // ১. অ্যাপেন্ড মেসেজ (O(1) Sequential Disk Append Simulation)
+  public append(key: string, value: string): number {
+    const nextOffset = this.commitLog.length;
+    const msgSize = 50 + key.length + value.length; // Approximate byte size calculation
+    const timestamp = Date.now();
+
+    const newMessage: Message = {
+      offset: nextOffset,
+      timestamp,
+      key,
+      value
+    };
+
+    this.commitLog.push(newMessage);
+
+    // ইনডেক্স এন্ট্রি অ্যাড করা (Sparse Indexing: প্রতি ২ মেসেজে ১টি ইনডেক্স রাখা)
+    if (nextOffset % 2 === 0) {
+      this.indexEntries.push({
+        offset: nextOffset,
+        bytePosition: this.currentByteOffset
+      });
+    }
+
+    this.currentByteOffset += msgSize;
+    return nextOffset;
+  }
+
+  // ২. ইনডেক্স বাইনারি সার্চ (O(log N) Binary Search Offset Lookup)
+  public lookupOffsetBytePosition(targetOffset: number): number {
+    if (this.indexEntries.length === 0) return 0;
+
+    let start = 0;
+    let end = this.indexEntries.length - 1;
+    let closestIndex = 0;
+
+    while (start <= end) {
+      const mid = Math.floor((start + end) / 2);
+      if (this.indexEntries[mid].offset === targetOffset) {
+        return this.indexEntries[mid].bytePosition;
+      } else if (this.indexEntries[mid].offset < targetOffset) {
+        closestIndex = mid;
+        start = mid + 1;
+      } else {
+        end = mid - 1;
+      }
+    }
+
+    return this.indexEntries[closestIndex].bytePosition;
+  }
+
+  // ৩. মেসেজ ফেচ মেথড
+  public fetch(startOffset: number, maxMessages: number): Message[] {
+    if (startOffset >= this.commitLog.length) return [];
+    return this.commitLog.slice(startOffset, startOffset + maxMessages);
+  }
+
+  public getLength(): number {
+    return this.commitLog.length;
+  }
+}
+
+// ২. ডিস্ট্রিবিউটেড ব্রোকার ইঞ্জিন ক্লাস
+export class MessageBrokerBroker {
+  private topics: Map<string, Partition[]> = new Map();
+
+  public createTopic(topic: string, partitionCount: number) {
+    const partitions: Partition[] = [];
+    for (let i = 0; i < partitionCount; i++) {
+      partitions.push(new Partition(i));
+    }
+    this.topics.set(topic, partitions);
+    console.log(`[Broker] Topic '${topic}' created with ${partitionCount} partitions successfully.`);
+  }
+
+  public getTopicPartitions(topic: string): Partition[] | undefined {
+    return this.topics.get(topic);
+  }
+
+  // ৪. ওএস জিরো-কপি সিমুলেশন (Direct sendfile system call mockup)
+  public sendfileDirectNetworkTransfer(
+    topic: string,
+    partitionId: number,
+    startOffset: number,
+    limit: number
+  ): Message[] {
+    const partitions = this.topics.get(topic);
+    if (!partitions || !partitions[partitionId]) {
+      throw new Error("Partition or Topic not found");
+    }
+
+    const partition = partitions[partitionId];
+    
+    // স্টেপ ১: ইনডেক্স দেখে অফসেটের সঠিক বাইট পজিশন ও ফিজিক্যাল অ্যাড্রেস বের করা
+    const bytePosition = partition.lookupOffsetBytePosition(startOffset);
+    
+    // স্টেপ ২: কার্নেল পেজ ক্যাশ ডিরেক্ট পাইপলাইন (Zero-Copy Simulator Log)
+    // কোনো রকম ইউজার স্পেসে কপি না করে পেজ ক্যাশ থেকে সরাসরি নেটওয়ার্ক বাফারে পাঠানো হয়
+    const messages = partition.fetch(startOffset, limit);
+    
+    console.log(
+      `[Kernel sendfile] Zero-Copy initiated: Offset byte address = ${bytePosition}b. ` +
+      `Bypassing User Space Memory. Direct NIC Transfer completed for ${messages.length} messages.`
+    );
+
+    return messages;
+  }
+}
+
+// ৩. কনজিউমার গ্রুপ ও কোঅর্ডিনেটর
+export class ConsumerGroupCoordinator {
+  private consumers: string[] = [];
+  private broker: MessageBrokerBroker;
+  private topic: string;
+  private partitionAssignments: Map<string, number[]> = new Map();
+  private committedOffsets: Map<string, number> = new Map(); // key format: 'group_partition_id'
+
+  constructor(broker: MessageBrokerBroker, topic: string) {
+    this.broker = broker;
+    this.topic = topic;
+  }
+
+  // ১. মেম্বার রেজিস্ট্রেশন এবং কোঅর্ডিনেটর রি-ব্যালেন্সিং (Sticky Assignor Protocol)
+  public registerConsumer(consumerId: string) {
+    this.consumers.push(consumerId);
+    console.log(`[Coordinator] Consumer '${consumerId}' registered to Group.`);
+    this.triggerRebalance();
+  }
+
+  private triggerRebalance() {
+    console.log(`[Coordinator] Triggering Group Rebalance Storm mitigation protocol...`);
+    const partitions = this.broker.getTopicPartitions(this.topic);
+    if (!partitions) return;
+
+    this.partitionAssignments.clear();
+    this.consumers.forEach(c => this.partitionAssignments.set(c, []));
+
+    // সমান্তরালভাবে পার্টিশনগুলোকে সক্রিয় কনজিউমারদের মধ্যে সমবন্টন করা
+    partitions.forEach((partition, index) => {
+      const assignedConsumer = this.consumers[index % this.consumers.length];
+      const currentAssign = this.partitionAssignments.get(assignedConsumer) || [];
+      currentAssign.push(index);
+      this.partitionAssignments.set(assignedConsumer, currentAssign);
+    });
+
+    console.log(`[Coordinator] Rebalance Complete. Current Partition Assignments:`, 
+      Object.fromEntries(this.partitionAssignments)
+    );
+  }
+
+  // ২. অফসেট কমিট (Idempotent Commit Offset Management)
+  public commitOffset(partitionId: number, offset: number) {
+    const key = `${this.topic}_partition_${partitionId}`;
+    this.committedOffsets.set(key, offset);
+    console.log(`[Coordinator Offset Store] Offset Committed for Partition ${partitionId} -> Offset: ${offset}`);
+  }
+
+  public getCommittedOffset(partitionId: number): number {
+    const key = `${this.topic}_partition_${partitionId}`;
+    return this.committedOffsets.get(key) || 0;
+  }
+
+  public getAssignments(consumerId: string): number[] {
+    return this.partitionAssignments.get(consumerId) || [];
+  }
+}
+
+// === ডেমো রান এবং টেস্ট পাইলট ===
+async function runKafkaClusterDemo() {
+  console.log("=== STARTING DISTRIBUTED MESSAGE BROKER SIMULATOR ===");
+  const broker = new MessageBrokerBroker();
+  
+  // ১. ২ পার্টিশনের ইভেন্ট টপিক তৈরি
+  broker.createTopic("transaction-logs", 2);
+  const partitions = broker.getTopicPartitions("transaction-logs")!;
+
+  // ২. প্রডিউসার ইভেন্ট মেসেজ পুশ করা (Partition hashing simulator)
+  console.log("\n--- Producing Messages ---");
+  for (let i = 0; i < 6; i++) {
+    const key = `user_id_${100 + i}`;
+    const value = `{"amount": ${Math.random() * 500}, "status": "APPROVED"}`;
+    // কি হ্যাশিং এর উপর ভিত্তি করে রাউটিং ডিস্ট্রিবিউশন
+    const partitionTarget = i % 2;
+    const assignedOffset = partitions[partitionTarget].append(key, value);
+    console.log(`[Producer] Message sent to Partition ${partitionTarget} with Key '${key}' -> Logged Offset: ${assignedOffset}`);
+  }
+
+  // ৩. কনজিউমার গ্রুপ ও কোঅর্ডিনেটর তৈরি
+  console.log("\n--- Setting up Consumer Group Group-A ---");
+  const groupCoordinator = new ConsumerGroupCoordinator(broker, "transaction-logs");
+  
+  // ২টি কনজিউমার ইনস্ট্যান্স গ্রুপে যুক্ত হওয়া (অটোমেটিক পার্টিশন ব্যালেন্সিং শুরু)
+  groupCoordinator.registerConsumer("ConsumerInstance-1");
+  groupCoordinator.registerConsumer("ConsumerInstance-2");
+
+  // ৪. কনজিউমার মেসেজ কনজিউম করা ও জিরো-কপি ডাটা ফেচিং
+  console.log("\n--- Processing and Fetching Events (Zero-Copy) ---");
+  
+  const processConsumer = (consumerId: string) => {
+    const assignedPartitions = groupCoordinator.getAssignments(consumerId);
+    assignedPartitions.forEach(partId => {
+      const currentOffset = groupCoordinator.getCommittedOffset(partId);
+      console.log(`\n[Consumer ${consumerId}] Reading Partition ${partId} from Offset ${currentOffset}...`);
+      
+      // কার্নেল লেভেলে জিরো-কপি অপারেশন চালিয়ে সরাসরি ফাইল থেকে বাফারিং ইভেন্ট তুলে আনা
+      const fetchedBatch = broker.sendfileDirectNetworkTransfer("transaction-logs", partId, currentOffset, 3);
+      
+      fetchedBatch.forEach(msg => {
+        console.log(`[Consumer ${consumerId}] Successfully Processed: Key: ${msg.key}, Value: ${msg.value}`);
+      });
+
+      if (fetchedBatch.length > 0) {
+        const nextCommitOffset = fetchedBatch[fetchedBatch.length - 1].offset + 1;
+        groupCoordinator.commitOffset(partId, nextCommitOffset);
+      }
+    });
+  };
+
+  processConsumer("ConsumerInstance-1");
+  processConsumer("ConsumerInstance-2");
+}
+
+runKafkaClusterDemo();
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব হাই-স্কেল প্রোডাকশনে ডিস্ট্রিবিউটেড মেসেজ কিউ পরিচালনা করার সময় যে ৩টি অত্যন্ত ক্রিটিক্যাল সমস্যা তৈরি হয় এবং স্টাফ-লেভেল সল্যুশন নিচে বিস্তারিত আলোচনা করা হলো:
+
+#### ১. Partition Rebalance Storm (গ্রুপ রিস্টার্ট ঝড়ে পুরো সিস্টেম ফ্রিজ হওয়া)
+যখন কোনো বড় কনজিউমার গ্রুপে শত শত নোড থাকে এবং একটি নোড হঠাৎ ক্র্যাশ করে বা নতুন নোড যুক্ত হয়, তখন ব্রোকার কোঅর্ডিনেটর সমস্ত পার্টিশন অ্যাসাইনমেন্ট বাতিল করে গ্রুপ রিব্যালেন্সিং শুরু করে। এই সময়ে সমস্ত কনজিউমারদের ডেটা ইনজেশন সম্পূর্ণ স্টপ (Stop-The-World pause) থাকে। যদি রি-ব্যালেন্স ঝড়ের মধ্যে নোডগুলো পুনরায় ডিসকানেক্ট হতে থাকে, তবে পুরো সিস্টেম কয়েক মিনিটের জন্য লাইভ ট্রাফিক প্রসেসিং থেকে লকড হয়ে যায়।
+* **স্টাফ-লেভেল সল্যুশন (Static Membership & Cooperative Sticky Assignor):**
+  - **Static Membership:** আমরা প্রতিটি কনজিউমার নোডের জন্য একটি ডেডিকেটেড এবং ইউনিক `group.instance.id` কনফিগার করব। এতে ওএস ক্র্যাশ করে নোড রিস্টার্ট নিলেও, নির্দিষ্ট সেশন টাইমআউট (উদা: ৪৫ সেকেন্ড) পার না হওয়া পর্যন্ত কোঅর্ডিনেটর রি-ব্যালেন্স ট্রিগার করবে না।
+  - **Cooperative Sticky Assignor:** এটি প্রথাগত ইগার রি-ব্যালেন্সিং এড়ায়। সমস্ত পার্টিশন স্টপ না করে শুধুমাত্র যে পার্টিশনটির নোড ক্র্যাশ করেছে, তা রি-অ্যাসাইন করা হয়। বাকি কনজিউমার নোডগুলো অবিরাম সার্ভিস দিতে থাকে।
+
+#### ২. Data Duplication on Retries (ডাবল ইভেন্ট ও এট-লিস্ট-ওয়ান্স ট্র্যাজেডি)
+মেসেজ সেন্ড করার পর নেটওয়ার্ক পার্টেশনের কারণে যদি ব্রোকার প্রডিউসারকে ইভেন্ট ACK পাঠাতে না পারে, প্রডিউসার মনে করে মেসেজ লস্ট হয়েছে এবং পুনরায় মেসেজ রিট্রাই (Retry) করে। এর ফলে ব্রোকারে একই মেসেজ ২ বার রাইট হয়ে যায় (At-Least-Once Delivery)। ফিনান্সিয়াল ট্রানজেকশনে এই ডুপ্লিকেট রাইট বিরাট বিপর্যয় ডেকে আনে।
+* **স্টাফ-লেভেল সল্যুশন (Idempotent Producer & TxID Setup):**
+  - **Idempotent Producer:** প্রডিউসার কানেকশন ইনিশিয়ালাইজ করার সাথে সাথে ব্রোকার তাকে একটি ইউনিক `ProducerId (PID)` এবং প্রতি পার্টিশনের জন্য একটি মনোটোনিক সিকোয়েন্স নম্বর (`SequenceNumber`) অ্যাসাইন করে।
+  - **Deduplication:** প্রডিউসার রিট্রাই করার পর যদি একই PID এবং SequenceNumber এর রিকোয়েস্ট আসে, ব্রোকার ডেটা ডিস্কে রাইট না করে সরাসরি প্রডিউসারকে ওল্ড সাকসেসফুল ACK পাঠিয়ে দেয়। এর ফলে ডুপ্লিকেট রাইট একদম ০% এ নেমে আসে।
+
+#### ৩. Log Segment File Descriptors Out-of-Memory (ডিস্ক আইও ও ওপেন ফাইল লিমিট ক্র্যাশ)
+একটি ব্রোকারে যদি হাজার হাজার টপিক থাকে এবং নোড প্রতি ৫০০০+ পার্টিশন থাকে, প্রতিটি পার্টিশনের জন্য কারেন্ট সেগমেন্ট লগের সাথে ওপেন ফাইল ডেসক্রিপ্টর (`File Descriptor - FD`) দরকার পড়ে। ওএসের সর্বোচ্চ ওপেন ফাইল লিমিট ফিল্ড ক্র্যাশ করলে পুরো ব্রোকার সাথে সাথে সাট-ডাউন হয়ে যায়।
+* **স্টাফ-লেভেল সল্যুশন (Segment Size Tuning & Cleaners Tuning):**
+  - **Active Segment Limiting:** সেগমেন্টের ডিফল্ট সাইজ (১ জিবি) বাড়িয়ে শুধুমাত্র রাইট ট্রাফিকের জন্য বড় সেগমেন্ট রাখা এবং ইন-অ্যাক্টিভ টপিকের জন্য `log.roll.hours` টিউন করা যাতে তারা অতিরিক্ত সেগমেন্ট ফাইল ক্রিয়েট না করে।
+  - **File Descriptor Cache (`max.open.files`):** ওএস সিস্টেমে `ulimit -n 65536` বা ততোধিক এনফোর্স করা এবং ব্রোকারের লোকাল ফাইল ডেসক্রিপ্টর ক্যাশ লিমিট অপ্টিমাইজ করা যাতে কনজিউমাররা র্যান্ডম ওল্ড ফাইল রিড শেষ করলে কার্নেল যেন সাথে সাথে FD রিলিজ করে দেয়।
+
+---
+
+## 📖 Chapter 18: Distributed Rate Limiter
+
+হাই-স্কেল ডিস্ট্রিবিউটেড সিস্টেমে এপিআই সিকিউরিটি নিশ্চিত করা এবং সেবা ব্যাহত হওয়া রোধ করতে রেট লিমিটার (Rate Limiter) একটি অপরিহার্য গেটওয়ে শিল্ড। সিস্টেমের রিসোর্স অপব্যবহার (উদা: DDoS অ্যাটাক, স্ক্র্যাপিং, এপিআই অ্যাবিউজ) ঠেকাতে এই চ্যাপ্টারে আমরা **Distributed Rate Limiter** ডিজাইন করব যা টোকেন বাকেট (Token Bucket) এবং স্লাইডিং উইন্ডো কাউন্টার (Sliding Window Counter) ব্যবহার করে মিলিয়ন রিকোয়েস্ট ফিল্টার করতে সক্ষম।
+
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **IP & User-Based Rate Limiting:** ইউজার আইডি, এপিআই কি (API Key) অথবা আইপি অ্যাড্রেসের উপর ভিত্তি করে রিকোয়েস্ট লিমিট করা যাবে।
+2. **Dynamic Limit Configuration:** প্রতিটি এপিআই এন্ডপয়েন্টের জন্য ভিন্ন ভিন্ন রেট লিমিট (উদা: `/login` এর জন্য ৫ রিকোয়েস্ট/মিনিট, `/search` এর জন্য ১০০ রিকোয়েস্ট/মিনিট) কনফিগার করা যাবে।
+3. **HTTP Status Codes:** রিকোয়েস্ট লিমিট অতিক্রম করলে ক্লায়েন্টকে স্ট্যান্ডার্ড `HTTP 429 Too Many Requests` স্ট্যাটাস কোড এবং `Retry-After` রেসপন্স হেডার পাঠাতে হবে।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **Ultra-Low Latency:** রেট লিমিটার চেক করতে প্রতি রিকোয়েস্টে ল্যাটেন্সি ওভারহেড ২ মিলি-সেকেন্ডের কম হতে হবে (যাতে মূল এপিআই ল্যাটেন্সি প্রভাবিত না হয়)।
+2. **Distributed Consistency:** মাল্টি-নোড এপিআই গেটওয়ে ক্লাস্টারের ক্ষেত্রে রেট লিমিটের স্টেটটি ডিস্ট্রিবিউটেডভাবে শেয়ার্ড এবং একুরেট হতে হবে (রেস কন্ডিশন মুক্ত)।
+3. **High Availability:** যদি কোনো কারণে ডিস্ট্রিবিউটেড রেট লিমিটার স্টোরেজ ফেইল করে, তবে সিস্টেম যেন সম্পূর্ণ ক্র্যাশ না করে গ্রেসফুলি রিকোয়েস্ট প্রসেস করতে পারে (Fail-Open configuration)।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Staff Architect Scale Estimations):
+ধরি, আমাদের এন্টারপ্রাইজ আর্কিটেকচারে:
+* **মোট সক্রিয় ইউজার সংখ্যা (Active Users):** $10,000,000$ active users.
+* **গড় রিকোয়েস্ট থ্রুপুট (Average Request QPS):** $100,000$ requests/sec.
+* **পিক রিকোয়েস্ট থ্রুপুট (Peak Request QPS):** $300,000$ requests/sec.
+* **প্রতি রিকোয়েস্টের এপিআই পে-লোড মেটাডাটা সাইজ:** $1$ KB.
+
+**১. থ্রুপুট ও ইনজেশন ব্যান্ডউইথ (Scale & Capacity Estimations):**
+* `Average Network Ingestion Rate = 100,000 requests/sec * 1 KB = 100,000,000 bytes/sec ≈` **100 MB/sec** (or **95.37 MiB/sec**)
+* `Peak Network Ingestion Rate = 300,000 requests/sec * 1 KB = 300,000,000 bytes/sec ≈` **300 MB/sec** (or **286.1 MiB/sec**)
+
+**২. মেমরি রিকোয়ারমেন্ট (Rate Limiter Memory size):**
+ধরি, আমরা Redis Cluster ব্যবহার করছি টোকেন বাকেট স্টেট (Token Bucket State) বা স্লাইডিং উইন্ডো লগ (Sliding Window Log) ট্র্যাক রাখতে।
+* **টোকেন বাকেট স্টোরেজ ওভারহেড:** প্রতিটি ইউজারের জন্য Redis-এ আমরা `user_id` ($16$ bytes) এবং বাকেট স্টেট: `last_updated_time` ($8$ bytes) + `tokens` ($8$ bytes) = $32$ bytes স্টোর করছি। Redis কী-ভ্যালু ওভারহেডসহ প্রতিটি কী-এর মেমরি স্পেস আনুমানিক **২৫০ বাইট**।
+  * `Total Rate Limiter Memory = 10,000,000 active users * 250 bytes = 2,500,000,000 bytes ≈` **2.5 GB** (or **2.33 GiB**)
+* **স্লাইডিং উইন্ডো লগ (Sliding Window Log) মেমরি ওভারহেড:** ধরি, আমরা Redis Sorted Set (ZSET) ব্যবহার করে টাইমস্ট্যাম্প স্টোর করি। ZSET মেমরি ওভারহেড বেশি (প্রায় ৫১২ বাইট প্রতি ইউজার + প্রতি টাইমস্ট্যাম্প ৮ বাইট)। ১০০টি টাইমস্ট্যাম্পের জন্য: $512 + 100 \times 8 = 1312$ bytes per user.
+  * `Total Memory with Sliding Window Log = 10,000,000 active users * 1.3 KB ≈` **13 GB** (or **12.11 GiB**)
+* **আর্কিটেকচারাল ডিসিশন:** মেমরি সাশ্রয়ী করতে এবং চরম পারফরম্যান্স নিশ্চিত করতে আমরা মূলত **Token Bucket** অথবা **Sliding Window Counter** ব্যবহার করব এবং মেমরি বাস্ট বা কার্ডিনালিটি এড়াতে ৩টি নোডের একটি স্মল **Redis Cluster (Shard)** দিয়ে অনায়াসে স্কেল করব।
+
+---
+
+### ২. হাই-ফিডেলিটি সিস্টেম আর্কিটেকচার (High-Fidelity Distributed Rate Limiter Architecture)
+
+নিচের ডায়াগ্রামের মাধ্যমে এপিআই গেটওয়ে লেয়ারে রিকোয়েস্ট ফিল্টারিং, রেডিস ক্লাস্টারে অ্যাটমিক লুয়া স্ক্রিপ্ট এক্সিকিউশন এবং লিমিট অতিক্রমকারী ট্রাফিকের রেসপন্স ফ্লো দেখানো হলো:
+
+```mermaid
+graph TD
+    %% Clients Layer
+    subgraph Clients [Active Users & API Clients]
+        U1[Mobile App Client]
+        U2[Web App Client]
+        U3[Third-Party SDK Client]
+    end
+
+    %% Edge Gateway Layer
+    subgraph EdgeLayer [API Gateway & Rate Limiting Filter]
+        GW[Nginx / Kong API Gateway]
+        Filter[Custom Rate Limiter Middleware Filter]
+    end
+
+    %% Redis Cache Cluster
+    subgraph Storage [Distributed Redis Cache Shards]
+        RedisShard1[Redis Shard 1 - User IDs 0-3M]
+        RedisShard2[Redis Shard 2 - User IDs 3M-7M]
+        RedisShard3[Redis Shard 3 - User IDs 7M-10M]
+    end
+
+    %% Traffic Routing Flow
+    U1 -->|Request with User Token| GW
+    U2 -->|Request with User Token| GW
+    U3 -->|Request with API Key| GW
+    
+    GW -->|Invoke Filter| Filter
+    Filter -->|1. Run LUA Script - Atomic Token Bucket evaluation| RedisShard1
+    Filter -->|1. Run LUA Script - Atomic Token Bucket evaluation| RedisShard2
+
+    %% Redis Decision Responses
+    RedisShard1 -->|2. Return: Token Available = true, Remaining = 8| Filter
+    RedisShard2 -->|2. Return: Token Available = false, Retry-After = 5s| Filter
+
+    %% Actions
+    Filter -->|Allow Pass| Backend[Internal Microservices / DB]
+    Filter -->|Block: HTTP 429 Too Many Requests| U2
+```
+
+---
+
+### ৩. ডিপ-ডাইভ কোর কনসেপ্টস (Distributed Rate Limiting Algorithms)
+
+#### ক. টোকেন বাকেট অ্যালগরিদম (Token Bucket Algorithm):
+টোকেন বাকেটের একটি সর্বোচ্চ লিমিট $N$ থাকে। প্রতি সেকেন্ডে নির্দিষ্ট হারে ($R$) টোকেন যোগ হতে থাকে। প্রতিটি ইনকামিং রিকোয়েস্ট বাকেট থেকে ১টি টোকেন তুলে নেয়। বাকেটে টোকেন থাকলে রিকোয়েস্ট পাস হয়, অন্যথায় ব্লক হয়।
+* **Lazy Token Refill (আল্ট্রা-অপ্টিমাইজড):** প্রতিটি বাকেটের টোকেন প্রতি সেকেন্ডে রিফিল করার জন্য কোনো ব্যাকগ্রাউন্ড থ্রেড বা ক্রন জব (Cron Job) দরকার নেই। রিকোয়েস্ট আসার সাথে সাথে গাণিতিক সূত্রের সাহায্যে টোকেন হিসেব করা হয়:
+  `Tokens = min(MaxTokens, CurrentTokens + (ElapsedTime * RefillRate))`
+  এটি অতিরিক্ত কোনো সিপিইউ রিসোর্স খরচ করে না!
+
+#### খ. স্লাইডিং উইন্ডো কাউন্টার অ্যালগরিদম (Sliding Window Counter):
+ফিক্সড উইন্ডো বা স্লাইডিং উইন্ডো লগের মেমরি ওভারহেড এড়াতে স্লাইডিং উইন্ডো কাউন্টার একটি অসাধারণ হাইব্রিড সল্যুশন। এটি সময়কে নির্দিষ্ট ব্লকে (উদা: ১ মিনিট) ভাগ করে এবং কারেন্ট ও প্রিভিয়াস ব্লকের রিকোয়েস্টের একটি ওয়েটেড এভারেজ (Weighted Average) বের করে:
+`Rate = Previous Window Requests * (1 - (Current Minute Elapsed Seconds / 60)) + Current Window Requests`
+এটি অত্যন্ত মেমরি সেভিং এবং রিয়েল-টাইমে ৯৯% নিখুঁত আউটপুট দেয়।
+
+#### গ. রেস কন্ডিশন ও ডিস্ট্রিবিউটেড কনসিস্টেন্সি (Race Conditions & Redis Lua Scripts):
+মাল্টিপল গেটওয়ে নোড যখন একই সময়ে রেডিমেড রিড-রাইট অপারেশন করতে যায়, তখন ওল্ড টোকেন ভ্যালু ওভাররাইট হতে পারে।
+এই সমস্যা এড়াতে রেডিমেড **Redis Lua Script** ব্যবহার করা হয়। লুয়া স্ক্রিপ্ট রেডিস সার্ভারের ভেতরে একক থ্রেডে (Single-threaded execution) অত্যন্ত দ্রুততার সাথে সম্পন্ন হয়, যা সম্পূর্ণ চেক-অ্যান্ড-আপডেট প্রসেসটিকে অ্যাটমিক (Atomic) করে তোলে।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা নিচে টাইপস্ক্রিপ্ট ব্যবহার করে একটি হাই-পারফরম্যান্স প্রডাকশন-রেডি **Distributed Rate Limiter Engine** তৈরি করলাম, যার মধ্যে অলস রিফিলিং মেকানিজম সমর্থিত **Lazy Token Bucket** এবং মেমরি-সাশ্রয়ী **Sliding Window Counter** ইমপ্লিমেন্টেশন করা হয়েছে:
+
+```typescript
+// ১. রেডিস ইন-মেমরি সিমুলেটর (Redis Mock Database)
+class RedisSimulator {
+  private store: Map<string, string> = new Map();
+
+  public get(key: string): string | null {
+    return this.store.get(key) || null;
+  }
+
+  public set(key: string, value: string) {
+    this.store.set(key, value);
+  }
+
+  // অ্যাটমিক ট্রানজেকশনাল রাইট বা লকিং সিমুলেশন
+  public runAtomicLuaScript(key: string, execute: (val: string | null) => string): string {
+    const currentValue = this.get(key);
+    const newValue = execute(currentValue);
+    this.set(key, newValue);
+    return newValue;
+  }
+}
+
+// ২. টোকেন বাকেট রেট লিমিটার ইঞ্জিন (Lazy Token Replenishment)
+export class TokenBucketLimiter {
+  private redis: RedisSimulator;
+  private maxTokens: number;
+  private refillRatePerSec: number;
+
+  constructor(redis: RedisSimulator, maxTokens: number, refillRatePerSec: number) {
+    this.redis = redis;
+    this.maxTokens = maxTokens;
+    this.refillRatePerSec = refillRatePerSec;
+  }
+
+  // অ্যাটমিক ইভালুয়েশন রিকোয়েস্ট
+  public allowRequest(clientId: string): { allowed: boolean; remainingTokens: number; retryAfterSec: number } {
+    const key = `ratelimit:tokenbucket:${clientId}`;
+    
+    const resultString = this.redis.runAtomicLuaScript(key, (rawState) => {
+      const now = Date.now();
+      let state = rawState ? JSON.parse(rawState) : { tokens: this.maxTokens, lastRefill: now };
+
+      // ১. লাস্ট ট্রানজেকশনের পর অতিক্রান্ত সেকেন্ডের হিসাব
+      const elapsedSec = (now - state.lastRefill) / 1000;
+      
+      // ২. নতুন টোকেন রিফিল করা (Lazy refilling)
+      const refilledTokens = state.tokens + (elapsedSec * this.refillRatePerSec);
+      state.tokens = Math.min(this.maxTokens, refilledTokens);
+      state.lastRefill = now;
+
+      // ৩. রিকোয়েস্ট অনুমোদন যাচাই
+      let allowed = false;
+      if (state.tokens >= 1) {
+        state.tokens -= 1;
+        allowed = true;
+      }
+
+      return JSON.stringify({ allowed, tokens: state.tokens, lastRefill: state.lastRefill });
+    });
+
+    const parsedResult = JSON.parse(resultString);
+    const retryAfterSec = parsedResult.tokens >= 1 ? 0 : Math.ceil((1 - parsedResult.tokens) / this.refillRatePerSec);
+
+    return {
+      allowed: parsedResult.allowed,
+      remainingTokens: Math.floor(parsedResult.tokens),
+      retryAfterSec
+    };
+  }
+}
+
+// ৩. স্লাইডিং উইন্ডো কাউন্টার ইঞ্জিন (Weighted Sliding Window Counter)
+export class SlidingWindowCounterLimiter {
+  private redis: RedisSimulator;
+  private limitPerMin: number;
+
+  constructor(redis: RedisSimulator, limitPerMin: number) {
+    this.redis = redis;
+    this.limitPerMin = limitPerMin;
+  }
+
+  public allowRequest(clientId: string): boolean {
+    const now = Date.now();
+    const currentMinKey = Math.floor(now / 60000);
+    const prevMinKey = currentMinKey - 1;
+
+    const redisKeyPrev = `ratelimit:slide:${clientId}:${prevMinKey}`;
+    const redisKeyCurr = `ratelimit:slide:${clientId}:${currentMinKey}`;
+
+    // অ্যাটমিক উইন্ডো রেট গণনা
+    const result = this.redis.runAtomicLuaScript(redisKeyCurr, (currVal) => {
+      const prevValString = this.redis.get(redisKeyPrev);
+      const prevRequests = prevValString ? parseInt(prevValString) : 0;
+      const currRequests = currVal ? parseInt(currVal) : 0;
+
+      // কারেন্ট মিনিটে কত সেকেন্ড পার হয়েছে তা বের করা
+      const elapsedSecondsInCurrentMin = (now % 60000) / 1000;
+      const weightPrev = (60 - elapsedSecondsInCurrentMin) / 60;
+
+      // স্লাইডিং উইন্ডো গাণিতিক ফর্মুলা (Weighted Average)
+      const calculatedRate = (prevRequests * weightPrev) + currRequests;
+
+      if (calculatedRate < this.limitPerMin) {
+        const nextCount = currRequests + 1;
+        return JSON.stringify({ allowed: true, count: nextCount });
+      }
+
+      return JSON.stringify({ allowed: false, count: currRequests });
+    });
+
+    const parsed = JSON.parse(result);
+    if (parsed.allowed) {
+      this.redis.set(redisKeyCurr, parsed.count.toString());
+      return true;
+    }
+
+    return false;
+  }
+}
+
+// === ডেমো রান এবং সিমুলেশন পাইলট ===
+async function runRateLimiterDemo() {
+  console.log("=== STARTING DISTRIBUTED RATE LIMITER ENGINE SIMULATOR ===");
+  const redis = new RedisSimulator();
+  
+  // ১. টোকেন বাকেট কনফিগারেশন: সর্বোচ্চ ১০ টোকেন, প্রতি সেকেন্ডে ২টি করে টোকেন রিফিল
+  const tokenBucket = new TokenBucketLimiter(redis, 10, 2);
+  const clientId = "client_enterprise_99";
+
+  console.log("
+--- Executing Burst Requests on Client (Token Bucket) ---");
+  for (let i = 1; i <= 13; i++) {
+    const res = tokenBucket.allowRequest(clientId);
+    console.log(
+      `Request #${i} -> Allowed: ${res.allowed ? "✅ YES" : "❌ NO (HTTP 429)"} ` +
+      `| Remaining: ${res.remainingTokens} | Retry-After: ${res.retryAfterSec}s`
+    );
+  }
+
+  // ২. অলস রিফিলিং যাচাই করতে ১.৫ সেকেন্ড বিরতি দেওয়া
+  console.log("
+[Simulator] Waiting 1.5 seconds for Lazy Refilling...");
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  console.log("
+--- After Delay: Testing Recovery Requests ---");
+  for (let i = 1; i <= 4; i++) {
+    const res = tokenBucket.allowRequest(clientId);
+    console.log(
+      `Recovered Request #${i} -> Allowed: ${res.allowed ? "✅ YES" : "❌ NO (HTTP 429)"} | Remaining: ${res.remainingTokens}`
+    );
+  }
+
+  // ৩. স্লাইডিং উইন্ডো কাউন্টার টেস্ট (প্রতি মিনিটে সর্বোচ্চ ৩টি রিকোয়েস্ট এলাউড)
+  console.log("
+--- Setting up Sliding Window Counter (Max 3 req/min) ---");
+  const slidingWindow = new SlidingWindowCounterLimiter(redis, 3);
+  const userIp = "192.168.1.100";
+
+  for (let i = 1; i <= 5; i++) {
+    const allowed = slidingWindow.allowRequest(userIp);
+    console.log(`Request #${i} from IP '${userIp}' -> Allowed: ${allowed ? "✅ YES" : "❌ NO (HTTP 429)"}`);
+  }
+}
+
+runRateLimiterDemo();
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব হাই-স্কেল প্রোডাকশনে ডিস্ট্রিবিউটেড রেট লিমিটার পরিচালনা করার সময় যে ৩টি অত্যন্ত ক্রিটিক্যাল সমস্যা তৈরি হয় এবং স্টাফ-লেভেল সল্যুশন নিচে বিস্তারিত আলোচনা করা হলো:
+
+#### ১. Redis Cluster Key Hotspots (ভাইরাল ইউজারের কী-হটস্পট)
+কোনো ভাইরাল ইভেন্ট বা কোনো ক্লায়েন্ট সার্ভিস হঠাৎ চরম স্পাইক নিয়ে আসলে, কোটি কোটি রিকোয়েস্ট একই রেট লিমিট কী (`ratelimit:tokenbucket:viral_client`) হিট করা শুরু করে। এর ফলে নির্দিষ্ট রেডিস শার্ডে CPU ও মেমরি ১০০% স্পর্শ করে রেডিস ক্লাস্টার স্তব্ধ করে দেয়।
+* **স্টাফ-লেভেল সল্যুশন (Hybrid Two-Tier Local In-Memory L1 + Distributed L2 Cache):**
+  - **L1 Gateway LRU Cache:** আমরা এপিআই গেটওয়ে নোডগুলোর লোকাল মেমরিতে একটি ক্ষুদ্র (উদা: ১ সেকেন্ড বা ৫ সেকেন্ডের জন্য) **LRU Cache** ইমপ্লিমেন্ট করব।
+  - **Deduplication:** অতিমাত্রায় রিকোয়েস্ট পাঠানো স্প্যাম ক্লায়েন্টদের প্রথম লেভেলের ফিল্টারিং গেটওয়ের লোকাল র্যামেই ব্লক হয়ে যাবে। শুধুমাত্র নরমাল ট্রাফিকের জন্য ডিস্ট্রিবিউটেড L2 রেডিস ক্লাস্টারে কুয়েরি করা হবে, যা রেডিস ক্লাস্টারের চাপ ৯০% কমিয়ে দেবে।
+
+#### ২. Local Clock Drift in sliding windows (নোডগুলোর ঘড়ির অসঙ্গতি)
+ডিস্ট্রিবিউটেড গেটওয়ে ক্লাস্টারের বিভিন্ন নোডের সিস্টেম টাইমস্ট্যাম্প এনটিপি (NTP Synchronization) করা থাকলেও মাইক্রো-সেকেন্ডে সামান্য ডিফারেন্স থাকে। এটি স্লাইডিং উইন্ডো ও রেট লিমিট গণনায় ক্লায়েন্টদের জন্য অন্যায্য এবং বৈষম্যমূলক ট্রাফিক ব্লকিংয়ের সৃষ্টি করে।
+* **স্টাফ-লেভেল সল্যুশন (Time-Free Sharding & Redis Engine Time):**
+  - **Redis Time API:** এপিআই গেটওয়ে নোডের ওএস লোকাল টাইমস্ট্যাম্পের উপর ভরসা না করে রেডিস ক্লাস্টারের ভেতরে লুয়া স্ক্রিপ্ট চলাকালীন `redis.call('TIME')` কুয়েরি ব্যবহার করে অ্যাটমিক টাইম বের করা। যেহেতু রেডিস সার্ভারের ঘড়ি সব নোডের জন্য অভিন্ন, তাই ঘড়ির অসঙ্গতির সমস্যা সম্পূর্ণরূপে সমাধান হয়ে যায়।
+
+#### ৩. Graceful Fail-Open Degradation (রেডিস ক্লাস্টার ফেইল করলে গেটওয়ে সচল রাখা)
+যদি আপনার সম্পূর্ণ রেডিস বা রেট লিমিটিং ক্লাস্টার ক্র্যাশ করে বা মেমরির অভাবে রিকোয়েস্ট প্রসেস করতে না পারে, তখন কি আমরা ক্লায়েন্টদের ব্লক করে দেব (Fail-Closed) নাকি সমস্ত রিকোয়েস্ট পাস হতে দেব (Fail-Open)? Fail-Closed এ পুরো প্রোডাক্ট ডাউন হয়ে যাবে আর Fail-Open এ ডাউনস্ট্রিম সার্ভারগুলো ট্রাফিক ঝড়ে পুড়ে ছাই হয়ে যাবে।
+* **স্টাফ-লেভেল সল্যুশন (Fail-Open with Graceful Degradation):**
+  - **Fail-Open Strategy:** রেডিস ক্লাস্টার আনরিচেবল হলে লিমিটার নোড `Fail-Open` মোডে চলে যাবে এবং রিকোয়েস্টগুলোকে ডাউনস্ট্রিম সার্ভারে যেতে দেবে।
+  - **Local Token Bucket Fallback:** গেটওয়ে নোডগুলো ওয়ান-টাইমে লোকাল র্যামে টেম্পোরারি ব্যাকআপ টোকেন বাকেট স্টার্ট করবে।
+  - **Feature Degradation:** একই সাথে এপিআই গেটওয়ে ওএস রেসপন্সে হেভি পে-লোড ফিল্ডগুলো বা ইমেজ রেন্ডারিং ব্যাকএন্ড এপিআই বন্ধ করে লাইটওয়েট মেটাডাটা ব্যাকআপ রেসপন্স দেবে যাতে ডাউনস্ট্রিম সার্ভিসগুলোর ডেটাবেস লকআপ বা ব্যাকলগ এড়ানো যায়।
+
+---
+
+## 📖 Chapter 19: Real-Time Gaming Leaderboard
+
+ডিস্ট্রিবিউটেড গেমিং এবং সোশ্যাল অ্যাপ্লিকেশনে রিয়েল-টাইম লিডারবোর্ড (Leaderboard) ব্যবহারকারীদের আগ্রহ এবং রিটেনশন ধরে রাখার অন্যতম প্রধান চালিকাশক্তি। মিলিয়ন সক্রিয় প্লেয়ারের রিয়েল-টাইম স্কোর ট্র্যাক করা, গ্লোবাল র্যাঙ্কিং এবং রিলেটিভ র্যাঙ্কিং মিলি-সেকেন্ডের মধ্যে কুয়েরি করার জন্য একটি হাই-পারফরম্যান্স র্যাঙ্কিং ইঞ্জিনের প্রয়োজন। এই চ্যাপ্টারে আমরা **Distributed Real-Time Gaming Leaderboard** আর্কিটেকচার ডিজাইন করব যা Redis Sorted Sets এবং ডিস্ট্রিবিউটেড স্কিলিং স্ট্রাকচার ব্যবহার করে কাজ করে।
+
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **Update Score:** একজন প্লেয়ার ম্যাচ শেষ করার সাথে সাথে তার স্কোর আপডেট বা ইনক্রিমেন্ট করা যাবে।
+2. **Top-K Rankings:** রিয়েল-টাইমে গ্লোবাল লিডারবোর্ডের টপ $K$ (উদা: টপ ১০০ বা টপ ১০০০) প্লেয়ারের র্যাঙ্ক এবং স্কোর দেখতে পাওয়া যাবে।
+3. **Relative / Pivot Ranking:** যেকোনো নির্দিষ্ট প্লেয়ারের নিজের গ্লোবাল র্যাঙ্ক এবং তার আশেপাশের প্লেয়ারদের র্যাঙ্কিং ফ্লো (উদা: প্লেয়ারের আগের ও পরের ৩ জন) দেখতে পাওয়া যাবে।
+4. **Time-Segmented Leaderboards:** দৈনিক (Daily), সাপ্তাহিক (Weekly) এবং অল-টাইম (All-Time) ক্যাটাগরিতে লিডারবোর্ড ফিল্টার করা যাবে।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **Ultra-Low Latency:** টপ ১০০ র্যাঙ্কিং রিটার্ন করতে রেসপন্স টাইম ১০ মিলি-সেকেন্ডের কম হতে হবে।
+2. **High Write Throughput:** পিক আওয়ারে লাখ লাখ প্লেয়ারের প্রতি সেকেন্ডে স্কোর আপডেট প্রসেস করার ক্ষমতা থাকতে হবে।
+3. **High Consistency & Accuracy:** র্যাঙ্কিং গণনা ১০০% সঠিক হতে হবে (দুইজন প্লেয়ারের র্যাঙ্ক ওভারল্যাপ বা ভুল হওয়া যাবে না)।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Staff Architect Scale Estimations):
+ধরি, আমাদের এন্টারপ্রাইজ গেমিং আর্কিটেকচারে:
+* **মোট নিবন্ধিত প্লেয়ার সংখ্যা (Total Registered Users):** $100,000,000$ (100 Million) players.
+* **দৈনিক সক্রিয় প্লেয়ার (Daily Active Users - DAU):** $10,000,000$ (10 Million) players.
+* **গড় স্কোর আপডেট থ্রুপুট (Average Write QPS):** $50,000$ score updates/sec.
+* **পিক স্কোর আপডেট থ্রুপুট (Peak Write QPS):** $150,000$ score updates/sec.
+* **গড় র্যাঙ্কিং রিড কুয়েরি থ্রুপুট (Read QPS):** $100,000$ queries/sec.
+
+**১. থ্রুপুট ও ইনজেশন ব্যান্ডউইথ (Scale & Capacity Estimations):**
+* `Average Network Ingestion Rate = 50,000 updates/sec * 128 bytes = 6,400,000 bytes/sec ≈` **6.4 MB/sec** (or **6.1 MiB/sec**)
+* `Peak Network Ingestion Rate = 150,000 updates/sec * 128 bytes = 19,200,000 bytes/sec ≈` **19.2 MB/sec** (or **18.31 MiB/sec**)
+
+**২. মেমরি রিকোয়ারমেন্ট (Leaderboard Memory size):**
+আমরা Redis Sorted Sets (ZSET) ব্যবহার করব যা ইন্টারনাল ডেটা স্ট্রাকচার হিসেবে একটি **Skip List** এবং একটি **Hash Table** ব্যবহার করে। ওভারহেডসহ গড়ে প্রতিটি মেম্বারের জন্য Redis ZSET-এ মেমরি খরচ হয় আনুমানিক **১২৮ বাইট**।
+* **সলিউশন ১: গ্লোবাল লিডারবোর্ড (সব ১০০ মিলিয়ন প্লেয়ার মেমরিতে রাখা):**
+  * `Total Redis Memory = 100,000,000 players * 128 bytes = 12,800,000,000 bytes ≈` **12.8 GB** (or **11.92 GiB**)
+  * *সিদ্ধান্ত:* এটি ৩টি নোডের একটি অতি সাধারণ **Redis Sharded Cluster** দিয়ে অনায়াসে হ্যান্ডেল করা সম্ভব।
+* **সলিউশন ২: টপ ১,০০,০০০ প্লেয়ার মেমরিতে রাখা (Hybrid Approach):**
+  * বেশিরভাগ গেমারদের জন্য শুধুমাত্র টপ ১,০০,০০০ ইউজারের রিয়েল-টাইম গ্লোবাল র্যাঙ্ক রাখা যথেষ্ট। নিচের প্লেয়ারদের হিস্টোরিক্যাল ডেটা Postgres-এ রেখে কেবল টপ মেম্বারদের Redis-এ আপডেট করলে:
+  * `Top-Tier Redis Memory = 100,000 players * 128 bytes ≈` **12.8 MB** (or **12.21 MiB**), যা অত্যন্ত মেমরি সাশ্রয়ী এবং অতি দ্রুত!
+
+---
+
+### ২. হাই-ফিডেলিটি সিস্টেম আর্কিটেকচার (High-Fidelity Distributed Leaderboard Architecture)
+
+নিচের আর্কিটেকচার ডায়াগ্রামের মাধ্যমে গেম ক্লায়েন্ট থেকে রিয়েল-টাইম স্কোর আপডেট সাবমিট হওয়া, কাফকার মাধ্যমে অ্যাসিঙ্ক্রোনাস ইভেন্ট প্রসেস, রেডিস ক্লাস্টারে রাইট এবং রিড রেপ্লিকার সাহায্যে হাই-স্পিড রিড কুয়েরি হ্যান্ডেল করার ফ্লো দেখানো হলো:
+
+```mermaid
+graph TD
+    %% Game Clients
+    subgraph Clients [Game Clients & Devices]
+        C1[Mobile Gamer A]
+        C2[PC Gamer B]
+        C3[Console Gamer C]
+    end
+
+    %% Edge & Processing Layer
+    subgraph EdgeLayer [API Gateway & Game Engines]
+        GW[Nginx API Gateway]
+        GameService[Score Processor Microservice]
+        Kafka[Kafka Score Update Topic]
+    end
+
+    %% Redis Cache Cluster
+    subgraph RedisCluster [Redis Cluster - Sorted Set Shards]
+        RedisLeaderboard1[Redis Shard 1 - Global Leaderboard ZSET]
+        RedisReplica[Redis Replica - High Availability Read Replica]
+    end
+
+    %% Database & Analytics Layer
+    subgraph DatabaseLayer [Cold Storage & Analytics]
+        Postgres[PostgreSQL DB - Historical Scores]
+    end
+
+    %% Processing Flow
+    C1 -->|Submit Score Update| GW
+    C2 -->|Submit Score Update| GW
+    C3 -->|Submit Score Update| GW
+
+    GW -->|Route Request| GameService
+    GameService -->|1. Write Async Score Update| Kafka
+    Kafka -->|2. Stream Updates| GameService
+    
+    GameService -->|3. Atomic ZADD Score Update| RedisLeaderboard1
+    RedisLeaderboard1 -.->|4. Asynchronous Replication| RedisReplica
+
+    %% Read Flow
+    C2 -->|Query Global Top 100| GW
+    GW -->|Route Read Query| GameService
+    GameService -->|5. ZREVRANGE: Retrieve Top Rankings| RedisReplica
+    
+    %% Backup Persistent Flow
+    GameService -->|6. Batch Write to Cold Storage| Postgres
+```
+
+---
+
+### ৩. ডিপ-ডাইভ কোর কনসেপ্টস (Real-Time Leaderboard Engine Internals)
+
+#### ক. Redis Sorted Sets (ZSET) ইন্টারনালস: Skip List ও Hash Table-এর যুগলবন্দী
+জেডসেটের ভেতরে দুটি ডেটা স্ট্রাকচার একসাথে কাজ করে:
+1. **Hash Table:** প্লেয়ারের আইডিকে কী হিসেবে এবং তার স্কোরকে ভ্যালু হিসেবে স্টোর করে, যা ওয়ান-টাইম প্লেয়ার স্কোর জানতে $O(1)$ পারফরম্যান্স দেয়।
+2. **Skip List (এড়িয়ে চলা তালিকা):** স্কোর অনুযায়ী প্লেয়ারদের সাজিয়ে রাখে। এটি মূলত বাইনারি ট্রির মতো কাজ করে কিন্তু মেমরি ব্যালেন্সিং ওভারহেড ছাড়াই প্লেয়ার আপডেট এবং রেঞ্জ কুয়েরি (উদা: র্যাঙ্ক ৫০ থেকে ১০০) করতে মাত্র $O(\log N)$ সময় নেয়।
+
+```
+Level 3: [10] ------------------------------> [80] ----------> NIL
+Level 2: [10] -------------> [45] -----------> [80] ----------> NIL
+Level 1: [10] ---> [23] ----> [45] ---> [67] -> [80] ---> [99] -> NIL
+```
+
+#### খ. টাইম-সেগমেন্টেশন (Daily, Weekly, Monthly Leaderboards)
+রিয়েল-টাইম ট্র্যাকিংয়ের জন্য আমরা রেডিসের ভেতর নির্দিষ্ট টাইম কী-প্যাটার্ন ব্যবহার করি।
+* দৈনিক লিডারবোর্ড কী: `leaderboard:daily:2026-05-28`
+* সাপ্তাহিক লিডারবোর্ড কী: `leaderboard:weekly:2026-W22`
+যখন কোনো প্লেয়ার কোনো গেমে স্কোর করে, তখন আমরা রেডিসের **Multi/Exec Pipeline**-এর মাধ্যমে গ্লোবাল কী-এর পাশাপাশি কারেন্ট ডেইলি এবং উইকলি জেডসেট কী-তেও স্কোর আপডেট করে দেই।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+আমরা নিচে টাইপস্ক্রিপ্ট ব্যবহার করে একটি হাই-পারফরম্যান্স **Real-Time Gaming Leaderboard Engine** তৈরি করলাম, যার মধ্যে জেডসেট সিমুলেশন, প্লেয়ার র্যাঙ্ক ট্র্যাকিং এবং ডেইলি/উইকলি সেগমেন্টেশন ইমপ্লিমেন্ট করা হয়েছে:
+
+```typescript
+// ১. রেডিস জেডসেট সিমুলেটর (Redis Sorted Set Simulator)
+interface ZSetMember {
+  playerId: string;
+  score: number;
+}
+
+class RedisZSetSimulator {
+  private store: Map<string, ZSetMember[]> = new Map();
+
+  // ZADD: মেম্বার যোগ বা স্কোর আপডেট করা
+  public zadd(key: string, score: number, playerId: string) {
+    if (!this.store.has(key)) {
+      this.store.set(key, []);
+    }
+
+    const members = this.store.get(key)!;
+    const existingIndex = members.findIndex(m => m.playerId === playerId);
+
+    if (existingIndex !== -1) {
+      members[existingIndex].score = score;
+    } else {
+      members.push({ playerId, score });
+    }
+
+    // স্কোর অনুযায়ী অবরোহী (Descending order) সাজানো
+    members.sort((a, b) => b.score - a.score);
+  }
+
+  // ZSCORE: নির্দিষ্ট মেম্বারের স্কোর জানা
+  public zscore(key: string, playerId: string): number | null {
+    const members = this.store.get(key) || [];
+    const member = members.find(m => m.playerId === playerId);
+    return member ? member.score : null;
+  }
+
+  // ZREVRANK: অবরোহী র্যাঙ্ক রিটার্ন করা (০-ইনডেক্সড)
+  public zrevrank(key: string, playerId: string): number | null {
+    const members = this.store.get(key) || [];
+    const index = members.findIndex(m => m.playerId === playerId);
+    return index !== -1 ? index : null;
+  }
+
+  // ZREVRANGE: নির্দিষ্ট ইনডেক্স লিমিটের প্লেয়ারদের রিটার্ন করা
+  public zrevrange(key: string, start: number, stop: number): ZSetMember[] {
+    const members = this.store.get(key) || [];
+    return members.slice(start, stop + 1);
+  }
+}
+
+// ২. গেমিং লিডারবোর্ড ম্যানেজার (Gaming Leaderboard Manager)
+export class LeaderboardManager {
+  private redisZSet: RedisZSetSimulator;
+
+  constructor(redisZSet: RedisZSetSimulator) {
+    this.redisZSet = redisZSet;
+  }
+
+  // স্কোর আপডেট করা (ডেইলি ও গ্লোবাল লিডারবোর্ডে একসাথে)
+  public recordScore(playerId: string, score: number) {
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    
+    // ১. গ্লোবাল লিডারবোর্ড আপডেট
+    this.redisZSet.zadd("leaderboard:global", score, playerId);
+    
+    // ২. ডেইলি লিডারবোর্ড আপডেট
+    this.redisZSet.zadd(`leaderboard:daily:${today}`, score, playerId);
+  }
+
+  // টপ K প্লেয়ারদের তালিকা আনা
+  public getTopPlayers(key: string, limit: number): Array<{ rank: number; playerId: string; score: number }> {
+    const rawList = this.redisZSet.zrevrange(key, 0, limit - 1);
+    return rawList.map((item, idx) => ({
+      rank: idx + 1,
+      playerId: item.playerId,
+      score: item.score
+    }));
+  }
+
+  // কোনো নির্দিষ্ট প্লেয়ারের নিজের রিলেটিভ র্যাঙ্কিং ভিউ (Pivot View)
+  public getPlayerRelativeView(key: string, playerId: string, range: number): Array<{ rank: number; playerId: string; score: number }> | null {
+    const rankIndex = this.redisZSet.zrevrank(key, playerId);
+    if (rankIndex === null) return null;
+
+    const start = Math.max(0, rankIndex - range);
+    const stop = rankIndex + range;
+    const rawList = this.redisZSet.zrevrange(key, start, stop);
+
+    return rawList.map((item, idx) => ({
+      rank: start + idx + 1,
+      playerId: item.playerId,
+      score: item.score
+    }));
+  }
+}
+
+// === ডেমো রান এবং সিমুলেশন পাইলট ===
+async function runLeaderboardDemo() {
+  console.log("=== STARTING DISTRIBUTED REAL-TIME LEADERBOARD ENGINE SIMULATOR ===");
+  const redisZ = new RedisZSetSimulator();
+  const manager = new LeaderboardManager(redisZ);
+
+  // ১. প্লেয়ারদের স্কোর আপডেট সিমুলেশন
+  const players = [
+    { id: "gamer_pro_99", score: 4500 },
+    { id: "pixel_king", score: 7200 },
+    { id: "shadow_ninja", score: 3800 },
+    { id: "alpha_predator", score: 8500 },
+    { id: "cyber_samurai", score: 6100 },
+    { id: "blitz_krieg", score: 7200 }, // Blitz and Pixel have the exact same score!
+  ];
+
+  console.log("
+--- Injecting Real-Time Player Score Updates ---");
+  players.forEach((p) => {
+    manager.recordScore(p.id, p.score);
+    console.log(`[Update] Player '${p.id}' score updated to: ${p.score}`);
+  });
+
+  // ২. গ্লোবাল টপ ৩ র্যাঙ্কিং প্রদর্শন
+  console.log("
+--- Global Leaderboard Top 3 ---");
+  const top3 = manager.getTopPlayers("leaderboard:global", 3);
+  top3.forEach((p) => {
+    console.log(`Rank #${p.rank} | Player: ${p.playerId} | Score: ${p.score}`);
+  });
+
+  // ৩. 'cyber_samurai'-এর রিলেটিভ বা পিভট ভিউ দেখা (আশেপাশের ১ জনের র্যাঙ্কসহ)
+  const targetPlayer = "cyber_samurai";
+  console.log(`
+--- Relative Ranking Spotlight for '${targetPlayer}' ---`);
+  const relativeView = manager.getPlayerRelativeView("leaderboard:global", targetPlayer, 1);
+  if (relativeView) {
+    relativeView.forEach((p) => {
+      const isTarget = p.playerId === targetPlayer ? "⭐️ (YOU)" : "  ";
+      console.log(`Rank #${p.rank} ${isTarget} | Player: ${p.playerId} | Score: ${p.score}`);
+    });
+  }
+
+  // ৪. ডেইলি সেগমেন্টেড লিডারবোর্ড দেখা
+  const today = new Date().toISOString().split("T")[0];
+  console.log(`
+--- Daily Leaderboard Top 5 for ${today} ---`);
+  const dailyTop5 = manager.getTopPlayers(`leaderboard:daily:${today}`, 5);
+  dailyTop5.forEach((p) => {
+    console.log(`Rank #${p.rank} | Player: ${p.playerId} | Score: ${p.score}`);
+  });
+}
+
+runLeaderboardDemo();
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব হাই-স্কেল প্রোডাকশনে ডিস্ট্রিবিউটেড রিয়েল-টাইম লিডারবোর্ড পরিচালনা করার সময় যে ৩টি অত্যন্ত ক্রিটিক্যাল সমস্যা তৈরি হয় এবং স্টাফ-লেভেল সল্যুশন নিচে বিস্তারিত আলোচনা করা হলো:
+
+#### ১. Score Collision & Tie-Breaking (একই স্কোরের র্যাঙ্কিং টাই-ব্রেকিং)
+যদি আপনার গেম লিডারবোর্ডে ১,০০০ প্লেয়ার একই স্কোর (উদা: ৮,৫০০ পয়েন্ট) অর্জন করে, তবে রেডিস জেডসেটের ডিফল্ট লেক্সিকোগ্রাফিকাল (Lexicographical) অর্ডারের কারণে যারা নামের শুরুতে 'A' বা আলফানিউমেরিক দিয়ে শুরু করে, তারা আগে র্যাঙ্ক পেয়ে যায়, যা অন্যান্য প্লেয়ারদের সাথে চরম বৈষম্য তৈরি করে।
+* **স্টাফ-লেভেল সল্যুশন (Secondary Sorting Key - Epoch Timestamp Injection):**
+  - **Timestamp Injection:** জেডসেটে র স্কোর ইনজেকশনের সময় শুধুমাত্র ডেসিমাল স্কোর না বসিয়ে আমরা ডেসিমালের পর প্লেয়ারের স্কোর অর্জন করার টাইমস্ট্যাম্পের একটি ফ্র্যাকশন ম্যাথমেটিক্যালি যোগ করব:
+    `Composite Score = Base Score + (1 - (Achievement Timestamp / 10,000,000,000))`
+  - **Tie-Breaking:** এর ফলে যে প্লেয়ার নির্দিষ্ট স্কোরটি সবার আগে অর্জন করেছে, তার টাইমস্ট্যাম্প ছোট হওয়ায় তার ফ্র্যাকশন ভ্যালু বড় হবে। এটি কোনো প্রকার অতিরিক্ত কুয়েরি ওভারহেড ছাড়াই রেডিস মেমরিতে অত্যন্ত নিখুঁত ও চমৎকার টাই-ব্রেকিং নিশ্চিত করে!
+
+#### ২. Real-Time Hotspot Writes during Global Tournaments (মিলিয়ন QPS রাইট স্পাইক)
+লাইভ বৈশ্বিক টুর্নামেন্টের ফাইনাল ম্যাচ চলার সময় প্রতি সেকেন্ডে লাখ লাখ প্লেয়ারের স্কোর একসাথে স্পাইক করে। রেডিস সিঙ্গেল-থ্রেডেড হওয়ায় এক লাখেরও বেশি জেডসেট স্কোর আপডেট করতে গেলে রেডিসের ইভেন্ট লুপ ব্লক হয়ে যায়, যা গেমিং এপিআইগুলোর ল্যাটেন্সি কয়েক গুণ বাড়িয়ে দেয়।
+* **স্টাফ-লেভেল সল্যুশন (Write Buffering, Aggregation & High-Watermark Updates):**
+  - **Async Write Buffering:** গেম সার্ভার সরাসরি রেডিসে হিট না করে প্লেয়ারের স্কোর কাফকা বা একটি ইন-মেমরি ডিসরাপ্টর রিং বাফারে (Ring Buffer) পুশ করবে।
+  - **Score Deduplication:** স্কোর প্রসেসর ১ সেকেন্ডের একটি ডেটা উইন্ডোতে প্লেয়ারের স্কোর এগ্রিগেশন করবে এবং ওই ইউজারের শুধুমাত্র সর্বোচ্চ স্কোরটি রেডিস জেডসেটে আপডেট করবে। এটি রেডিসের একক কী-তে প্রতি সেকেন্ডে ১০০০ বার রাইটের চাপ কমিয়ে ১ বার রাইটে নিয়ে আসবে, যা রাইট ট্রাফিক ৯৯% কমিয়ে দেয়।
+
+#### ৩. Deep Pagination Memory Blowup (ডিপ রেঞ্জ স্ক্যান ক্র্যাশ)
+যখন লাখ লাখ ইউজারের জেডসেটে কোনো প্লেয়ার ৫০০,০০০ তম র্যাঙ্কের পেজ দেখতে চায় (`ZREVRANGE leaderboard 500000 500010`), তখন রেডিসকে স্কিপ লিস্টের ওপর থেকে শুরু করে প্রথম থেকে ৫ লাখ ইনডেক্স পর্যন্ত লাফিয়ে লাফিয়ে মেমরি ট্রাভার্স (Traverse) করতে হয়। এটি অত্যন্ত ব্যয়বহুল এবং একাধিক ইউজার একসাথে এমন ডিপ পেজিনেশন কুয়েরি করলে রেডিস প্রসেসর ১০০% ব্লক হয়ে পুরো ক্লাস্টার সাট-ডাউন হয়ে যায়।
+* **স্টাফ-লেভেল সল্যুশন (UI Restriction & Tiered Range Querying):**
+  - **UI Hard Limit:** প্রোডাকশন সিস্টেমে রিয়েল-টাইম স্ক্রলিং র্যাঙ্ককে আমরা টপ ৫,০০০ মেম্বারদের মাঝে হার্ড-লিমিট (Hard Limit) করে দেব।
+  - **Self Rank Spotlight:** এর নিচের প্লেয়ারদের জন্য শুধুমাত্র তাদের নিজের র্যাঙ্ক স্পটলাইট দেখানোর জন্য `ZREVRANK` ব্যবহার করব যা ওল্ড স্কিপ লিস্টে অত্যন্ত দ্রুততার সাথে $O(\log N)$-এ প্লেয়ার পজিশন বের করে দেয়। প্লেয়ারকে গভীর লিস্ট স্ক্রল করতে না দিয়ে তার আশেপাশে ৫ জনের পিভট রিলেটিভ লিস্ট রিটার্ন করব যা মেমরি ব্লুআপ চিরতরে বন্ধ করবে।
+
+---
+
+## 📖 Chapter 20: Distributed ID Generator (Snowflake-style)
+
+ডিস্ট্রিবিউটেড মাইক্রোসার্ভিস আর্কিটেকচারে ডেটাবেজ স্কেলিংয়ের জন্য শার্ডিং এবং পার্টিশনিং অত্যন্ত পরিচিত সমাধান। কিন্তু ডিস্ট্রিবিউটেড ডাটাবেজগুলোর সবচেয়ে বড় চ্যালেঞ্জ হলো গ্লোবালি ইউনিক প্রাইমারি কী (Unique Primary Key) বা আইডি জেনারেশন। প্রথাগত Auto-Increment আইডি প্রতিটি ডেটাবেজ ইনস্ট্যান্সে ক্লাসিং বা ডুপ্লিকেশন তৈরি করে। এই সমাপনী চ্যাপ্টারে আমরা টুইটারের বিখ্যাত **Distributed Snowflake ID Generator** ডিজাইন করব যা কোন প্রকার গ্লোবাল কোঅর্ডিনেশন লক ছাড়াই আল্ট্রা-ফাস্ট এবং ইউনিক ৬৪-বিট আইডি তৈরি করতে সক্ষম।
+
+### ১. সিস্টেম রিকোয়ারমেন্টস এবং স্কেল ক্যালকুলেশন (System Requirements & Capacity Estimation)
+
+#### ক. ফাংশনাল রিকোয়ারমেন্টস (Functional Requirements):
+1. **Globally Unique IDs:** উৎপন্ন প্রতিটি আইডি ডিস্ট্রিবিউটেড ক্লাস্টারের মধ্যে অবশ্যই ইউনিক (Unique) হতে হবে।
+2. **Roughly Time Sorted:** আইডিগুলো অবশ্যই সময়ের সাথে ক্রমানুসারে বৃদ্ধি (Roughly Time-Ordered / Monotonically Increasing) পেতে হবে যাতে ডেটাবেস ইনডেক্সিং (B-Tree) অত্যন্ত দক্ষভাবে কাজ করে।
+3. **64-bit Representation:** স্টোরেজ অপ্টিমাইজেশনের জন্য আইডি সাইজ অবশ্যই ৬৪-বিট পূর্ণসংখ্যা (64-bit Integer) হতে হবে।
+
+#### খ. নন-ফাংশনাল রিকোয়ারমেন্টস (Non-Functional Requirements):
+1. **Coordination-less High Availability:** প্রতিটি জেনারেটর নোড অন্য নোডগুলোর সাথে কথা না বলেই (Zero-Network Roundtrip per ID) আইডি জেনারেট করতে পারবে যাতে সিস্টেমে কোনো Single Point of Failure না থাকে।
+2. **Ultra-High Throughput & Low Latency:** প্রতি সেকেন্ডে লাখ লাখ আইডি জেনারেশন রিকোয়েস্ট হ্যান্ডেল করার ক্ষমতা থাকতে হবে। আইডি প্রতি ল্যাটেন্সি ওভারহেড মাইক্রো-সেকেন্ডে হতে হবে।
+
+#### গ. ক্যাপাসিটি ক্যালকুলেশন (Staff Architect Scale Estimations):
+ধরি, আমাদের এন্টারপ্রাইজ মাইক্রোসার্ভিস ক্লাস্টারে:
+* **মোট কন্টেইনার/সার্ভার নোড সংখ্যা (Active Nodes):** $1,024$ nodes.
+* **গড় আইডি জেনারেশন থ্রুপুট (Average ID QPS):** $10,000,000$ IDs/sec.
+* **পিক আইডি জেনারেশন থ্রুপুট (Peak ID QPS):** $50,000,000$ IDs/sec.
+
+**১. থ্রুপুট ও ইনজেশন ব্যান্ডউইথ (Scale & Capacity Estimations):**
+* `Average ID Generation Bandwidth = 10,000,000 * 8 bytes = 80,000,000 bytes/sec ≈` **80 MB/sec** (or **76.29 MiB/sec**)
+* `Peak ID Generation Bandwidth = 50,000,000 * 8 bytes = 400,000,000 bytes/sec ≈` **400 MB/sec** (or **381.47 MiB/sec**)
+
+**২. ৬৪-বিট আইডি লেআউট অ্যালোকেশন (Snowflake 64-bit Bit Allocation):**
+একটি ৬৪-বিট আইডি তৈরি করতে আমরা বিটগুলোকে নিচের ৫টি ভাগে বিভক্ত করব:
+* **Sign Bit (১ বিট):** সর্বদা `0` থাকবে (চিহ্নহীন পজিটিভ সংখ্যার জন্য)।
+* **Timestamp (৪১ বিট):** মিলি-সেকেন্ড রেজোলিউশনে সময় নির্দেশ করে। এটি আমাদের কাস্টম ইপক (Custom Epoch, উদা: ২0২৬-০১-০১) ব্যবহার করে প্রায় **৬৯ বছর** (অর্থাৎ $2^{41}$ মিলি-সেকেন্ড) পর্যন্ত ইউনিক আইডি জেনারেট করতে পারবে।
+* **Datacenter ID (৫ বিট):** ৩২টি পর্যন্ত আলাদা ডেটাসেন্টার চিহ্নিত করতে পারে ($2^5 = 32$).
+* **Worker Node ID (৫ বিট):** প্রতিটি ডেটাসেন্টারের জন্য ৩২টি আলাদা সার্ভার নোড চিহ্নিত করতে পারে ($2^5 = 32$). অর্থাৎ ক্লাস্টারে মোট $32 \times 32 = 1024$ টি ইউনিক কন্টেইনার নোড রেপ্লিকেট করা সম্ভব!
+* **Sequence Number (১২ বিট):** একই মিলি-সেকেন্ডে একই সার্ভার নোডে উৎপন্ন একাধিক আইডিকে আলাদা করতে ব্যবহৃত হয়। এটি প্রতি মিলি-সেকেন্ডে সর্বোচ্চ ৪,০৯৬টি ইউনিক আইডি তৈরি করতে পারে ($2^{12} = 4096$).
+
+**৩. সর্বোচ্চ থ্রুপুট লিমিট যাচাই (Monolithic Global Limit):**
+একটি নোড যদি প্রতি মিলি-সেকেন্ডে ৪,০৯৬টি আইডি তৈরি করতে পারে, তবে ১০২৪টি নোড মিলে প্রতি সেকেন্ডে সর্বোচ্চ কত আইডি তৈরি করবে?
+* `Max Global ID Capacity = 1024 nodes * 4,096 IDs/ms * 1,000 ms/sec =` **4,194,304,000 IDs/second** (4.19 Billion IDs/sec).
+* *সিদ্ধান্ত:* এটি আমাদের পিক রিকোয়ারমেন্টের ($50,000,000$ IDs/sec) চেয়ে প্রায় ৮৩ গুণ বেশি! তাই এই আর্কিটেকচারটি গ্লোবাল স্কেলে ১০০% ফিউচার-প্রুফ।
+
+---
+
+### ২. হাই-ফিডেলিটি সিস্টেম আর্কিটেকচার (High-Fidelity Distributed ID Generator Architecture)
+
+নিচের আর্কিটেকচার ডায়াগ্রামের মাধ্যমে গেম/ওয়েব সার্ভিস নোড থেকে আইডি রিকোয়েস্ট হওয়া, কনসেনসাস সার্ভিসের মাধ্যমে ইউনিক ওয়ার্কার আইডি লিজ নেওয়া এবং বিটওয়াইজ অপারেশনের মাধ্যমে গ্লোবালি ইউনিক ৬৪-বিট স্নোফ্লেক আইডি অ্যাসেম্বলিং ফ্লো দেখানো হলো:
+
+```mermaid
+graph TD
+    %% Clients Layer
+    subgraph Clients [API Clients & Microservices]
+        S1[Payment Service]
+        S2[User Creation Service]
+        S3[Order Engine]
+    end
+
+    %% Snowflake Generators
+    subgraph Generators [Snowflake ID Generators - No Coordination]
+        NodeA["Generator Node A (Datacenter 1, Worker 1)"]
+        NodeB["Generator Node B (Datacenter 1, Worker 2)"]
+        NodeC["Generator Node C (Datacenter 2, Worker 1)"]
+    end
+
+    %% ZooKeeper Coordinator
+    subgraph Coordination [Consensus Registry & Node Registry]
+        ZK[Consensus Engine ZooKeeper / Consul Cluster]
+    end
+
+    %% Output Format
+    subgraph BitLayout [64-bit Unsigned Snowflake ID Structure]
+        Sign["Sign (1 bit: 0)"]
+        Time["Timestamp (41 bits: ms since Custom Epoch)"]
+        DC["Datacenter ID (5 bits)"]
+        Worker["Worker ID (5 bits)"]
+        Seq["Sequence (12 bits)"]
+    end
+
+    %% Registration Flow
+    NodeA -.->|1. Register & Lease Worker ID 1| ZK
+    NodeB -.->|1. Register & Lease Worker ID 2| ZK
+    NodeC -.->|1. Register & Lease Worker ID 3| ZK
+
+    %% Request ID
+    S1 -->|Request Unique ID| NodeA
+    S2 -->|Request Unique ID| NodeB
+    S3 -->|Request Unique ID| NodeC
+
+    %% Bitwise Construction
+    NodeA -->|2. Bitwise Shift Assembly| BitLayout
+    Sign --- Time
+    Time --- DC
+    DC --- Worker
+    Worker --- Seq
+
+    %% Result ID
+    BitLayout -->|3. Return 64-bit String ID: 8345290458122240| S1
+```
+
+---
+
+### ৩. ডিপ-ডাইভ কোর কনসেপ্টস (Bitwise Shift Assembly & Consensus Registry)
+
+#### ক. বিটওয়াইজ শিফটিং মেকানিজম (Bitwise Shift Construction)
+একটি ৬৪-বিট ইন্টিজারের বিভিন্ন অংশে ডেটা বসানোর জন্য বিটওয়াইজ লেফট শিফট (`<<`) এবং বিটওয়াইজ অর (`|`) অপারেটর ব্যবহার করা হয়।
+* মিলি-সেকেন্ড টাইমস্ট্যাম্পকে তার পজিশনে নিতে ২২ বিট বামে সরানো হয়: `Timestamp << 22`
+* ডেটাসেন্টার আইডিকে ১৭ বিট বামে সরানো হয়: `DatacenterID << 17`
+* ওয়ার্কার নোড আইডিকে ১২ বিট বামে সরানো হয়: `WorkerID << 12`
+* শেষে সিকোয়েন্স নাম্বার সরাসরি যোগ করা হয়।
+সবগুলোকে একত্রিত করার ম্যাথমেটিক্যাল ফর্মুলা:
+`SnowflakeID = (Timestamp << 22) | (DatacenterID << 17) | (WorkerID << 12) | Sequence`
+
+#### খ. কোঅর্ডিনেশন লেস স্কেলিং ও ইপক কাস্টমাইজেশন (Epoch Customization)
+* **Epoch Customization:** ওএসের ডিফল্ট Unix Epoch (1970) ব্যবহার না করে আমরা একটি কাস্টম ইপক টাইমস্ট্যাম্প (যেমন: ১ জানুয়ারী ২০২৬) ডিডাক্ট করে নিই। এর ফলে ৪১ বিটের পুরো মেমরিটাই একদম শুরু থেকে রেস্ট অব লাইফ ইউনিক আইডি দিতে ব্যবহার হতে পারে।
+* **Consensus Worker Leasing:** আইডি তৈরির সময় যাতে ডেটাসেন্টার নোডগুলোতে কোনো রেস কন্ডিশন না তৈরি হয়, সেজন্য প্রতিটি নোড বুট-আপ করার সময় **ZooKeeper / Consul** ক্লাস্টার থেকে একটি ইউনিক `Worker ID` লিজ (Lease) নেয়। একবার ওয়ার্কার আইডি পেয়ে গেলে এটি মেমরিতে সম্পূর্ণ ইন্ডিপেনডেন্ট আইডি জেনারেট করে।
+
+---
+
+### ৪. প্র্যাক্টিক্যাল কোড ইমপ্লিমেন্টেশন (TypeScript)
+
+জাভাস্ক্রিপ্ট/টাইপস্ক্রিপ্টে নরমাল সংখ্যাগুলো ডাবল-প্রিসিশন ফ্লোট হওয়ায় $2^{53} - 1$ এর উপরে সঠিক মান ধরে রাখতে পারে না। তাই ৬৪-বিট পূর্ণসংখ্যা নিয়ে নির্ভুলভাবে কাজ করার জন্য আমরা টাইপস্ক্রিপ্টের **`BigInt`** ইঞ্জিন ব্যবহার করে প্রডাকশন-গ্রেড **Snowflake ID Generator** ইমপ্লিমেন্ট করলাম:
+
+```typescript
+export class SnowflakeIdGenerator {
+  // ১. বিট অ্যালোকেশন কনস্ট্যান্টস
+  private readonly datacenterIdBits = 5n;
+  private readonly workerIdBits = 5n;
+  private readonly sequenceBits = 12n;
+
+  // ২. বিটওয়াইজ শিফটিং অফসেট হিসাব
+  private readonly workerIdShift = this.sequenceBits;
+  private readonly datacenterIdShift = this.sequenceBits + this.workerIdBits;
+  private readonly timestampLeftShift = this.sequenceBits + this.workerIdBits + this.datacenterIdBits;
+
+  // ৩. বিট মাস্ক (Bit Masks)
+  private readonly maxDatacenterId = -1n ^ (-1n << this.datacenterIdBits);
+  private readonly maxWorkerId = -1n ^ (-1n << this.workerIdBits);
+  private readonly sequenceMask = -1n ^ (-1n << this.sequenceBits);
+
+  // ৪. কাস্টম ইপক (১ জানুয়ারী ২০২৬ মিলি-সেকেন্ড)
+  private readonly customEpoch = 1767225600000n;
+
+  private datacenterId: bigint;
+  private workerId: bigint;
+  private sequence = 0n;
+  private lastTimestamp = -1n;
+
+  constructor(datacenterId: number, workerId: number) {
+    const dc = BigInt(datacenterId);
+    const worker = BigInt(workerId);
+
+    if (dc > this.maxDatacenterId || dc < 0n) {
+      throw new Error(`Datacenter ID must be between 0 and ${this.maxDatacenterId}`);
+    }
+    if (worker > this.maxWorkerId || worker < 0n) {
+      throw new Error(`Worker ID must be between 0 and ${this.maxWorkerId}`);
+    }
+
+    this.datacenterId = dc;
+    this.workerId = worker;
+  }
+
+  // ৫. অ্যাটমিক বিটওয়াইজ আইডি জেনারেশন
+  public synchronizedNextId(): string {
+    let timestamp = this.getSystemTimestamp();
+
+    // ঘড়ির বিপরীতমুখী মুভমেন্ট (Clock Drift Guard)
+    if (timestamp < this.lastTimestamp) {
+      throw new Error(
+        `Clock moved backwards! Rejecting ID generation for ${this.lastTimestamp - timestamp}ms`
+      );
+    }
+
+    // একই মিলি-সেকেন্ডে মাল্টিপল রিকোয়েস্ট আসলে সিকোয়েন্স বাড়ানো
+    if (this.lastTimestamp === timestamp) {
+      this.sequence = (this.sequence + 1n) & this.sequenceMask;
+      
+      // সিকোয়েন্স ১২-বিট (৪০৯৫) ক্রস করলে পরবর্তী মিলি-সেকেন্ডের জন্য অপেক্ষা করা
+      if (this.sequence === 0n) {
+        timestamp = this.waitUntilNextMillis(this.lastTimestamp);
+      }
+    } else {
+      this.sequence = 0n; // নতুন মিলি-সেকেন্ডে সিকোয়েন্স রিসেট
+    }
+
+    this.lastTimestamp = timestamp;
+
+    // ৬. কাস্টম ইপক ডিডাক্ট করে বিটওয়াইজ শিফটিং করা
+    const timeDelta = timestamp - this.customEpoch;
+    const finalId =
+      (timeDelta << this.timestampLeftShift) |
+      (this.datacenterId << this.datacenterIdShift) |
+      (this.workerId << this.workerIdShift) |
+      this.sequence;
+
+    return finalId.toString(); // BigInt প্রিসিশন লস এড়াতে স্ট্রিং ফরমেটে রিটার্ন
+  }
+
+  private waitUntilNextMillis(lastTimestamp: bigint): bigint {
+    let timestamp = this.getSystemTimestamp();
+    while (timestamp <= lastTimestamp) {
+      timestamp = this.getSystemTimestamp();
+    }
+    return timestamp;
+  }
+
+  private getSystemTimestamp(): bigint {
+    return BigInt(Date.now());
+  }
+}
+
+// === ডেমো রান এবং সিমুলেশন পাইলট ===
+async function runSnowflakeDemo() {
+  console.log("=== STARTING DISTRIBUTED SNOWFLAKE ID GENERATOR SIMULATOR ===");
+  
+  // ডেটাসেন্টার ১, ওয়ার্কার নোড ১৫ হিসেবে ইনিশিয়ালাইজ করা হলো
+  const generator = new SnowflakeIdGenerator(1, 15);
+  const idCount = 5;
+
+  console.log("
+--- Generating Unique Monotonically Increasing 64-bit IDs ---");
+  const idPool: string[] = [];
+  
+  for (let i = 1; i <= idCount; i++) {
+    const id = generator.synchronizedNextId();
+    idPool.push(id);
+    console.log(`Generated ID #${i} -> String value: "${id}" | Raw Type: BigInt String`);
+  }
+
+  // গ্লোবাল ডুপ্লিকেশন চেক
+  const uniqueIds = new Set(idPool);
+  console.log(`
+Verification: Total Generated: ${idPool.length} | Total Unique: ${uniqueIds.size}`);
+  console.log("Collision Test Passed: " + (idPool.length === uniqueIds.size ? "✅ YES" : "❌ NO"));
+
+  // সিকোয়েন্স স্পাইক টেস্ট (মিলি-সেকেন্ড প্রতি সিকোয়েন্স লিমিট যাচাই)
+  console.log("
+--- Micro-burst Sequence Test ---");
+  const burstPool: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    burstPool.push(generator.synchronizedNextId());
+  }
+  
+  console.log("First burst ID: ", burstPool[0]);
+  console.log("Last burst ID:  ", burstPool[burstPool.length - 1]);
+}
+
+runSnowflakeDemo();
+```
+
+---
+
+### 🛑 Staff Architect Edge Cases & Scaling Gaps
+
+বাস্তব হাই-স্কেল প্রোডাকশনে ডিস্ট্রিবিউটেড আইডি জেনারেটর পরিচালনা করার সময় যে ৩টি অত্যন্ত ক্রিটিক্যাল সমস্যা তৈরি হয় এবং স্টাফ-লেভেল সল্যুশন নিচে বিস্তারিত আলোচনা করা হলো:
+
+#### ১. Clock Drift & NTP Backward Leap (ঘড়ির বিপরীতমুখী মুভমেন্ট)
+NTP (Network Time Protocol) যখন সিস্টেমে টাইম সিনক্রোনাইজ করে, তখন হঠাৎ ওএস ঘড়ি কয়েক মিলি-সেকেন্ড পিছিয়ে যেতে পারে (`Clock Drift`)। এই সময়ে যদি স্নোফ্লেক আইডি জেনারেট করে, তবে এটি অতীতে জেনারেট করা আইডি'র সাথে মিলে গিয়ে ডাটাবেজে **Duplicate Primary Key Conflict** তৈরি করে পুরো অ্যাপ্লিকেশন ক্র্যাশ করে দেবে।
+* **স্টাফ-লেভেল সল্যুশন (Clock Drift Spin-Waiting & Safety Margin):**
+  - **Spin-Wait Buffer:** ওএস টাইম লাস্ট টাইমস্ট্যাম্পের চেয়ে ছোট হলে জেনারেটর সাথে সাথে এরর থ্রো না করে ওয়ান-টাইমে ৫ মিলি-সেকেন্ড স্পিন-ওয়েট (Spin-Waiting loop) করবে যাতে ওএস ক্লক রিকভার করতে পারে।
+  - **Virtual Worker Offloading:** যদি ড্রাইভ টাইমস্ট্যাম্প ৫ মিলি-সেকেন্ডের বেশি পিছিয়ে যায়, তবে নোডটি তাৎক্ষণিক একটি সেন্ট্রালাইজড লক এপিআইয়ের মাধ্যমে অল্টারনেটিভ টেম্পোরারি ওয়ার্কার আইডি অ্যাসাইন করে সেকেন্ডারি সিকোয়েন্স ট্র্যাকে চলে যাবে যাতে আইডি প্রোডাকশন কখনোই বিঘ্নিত না হয়।
+
+#### ২. JavaScript JSON Precision Limit (৫৩-বিট জেসন সিরিয়ালাইজেশন ক্র্যাশ)
+টাইপস্ক্রিপ্ট/জাভাস্ক্রিপ্ট এবং ব্রাউজারের সবচেয়ে ফাটাল সিকিউরিটি লিমিটেশন হলো `Number.MAX_SAFE_INTEGER` ($2^{53} - 1$, বা `9007199254740991`)। কিন্তু Snowflake আইডি যেহেতু ৬৪-বিটের পূর্ণসংখ্যা (যা প্রায় `9223372036854775807` পর্যন্ত যেতে পারে), এটি জেসন রেসপন্সের মাধ্যমে কোনো প্রকার স্ট্রিং কনভার্সন ছাড়া ফ্রন্টএন্ড ব্রাউজারে পাঠালে ব্রাউজারের V8 ইঞ্জিন লাস্টের কয়েকটি ডিজিট ট্রাঙ্কেট (Truncate) বা জিরো বানিয়ে দেয়। এর ফলে ফ্রন্টএন্ডে একাধিক প্লেয়ারের আইডি ডুপ্লিকেট হয়ে যায়!
+* **স্টাফ-লেভেল সল্যুশন (JSON String Serialization Force):**
+  - **Force Serialization:** গেটওয়ে নোড এবং মাইক্রোসার্ভিস স্তরে ৬৪-বিট আইডিগুলোকে ডেটাবেজ লেভেলে `BIGINT` হিসেবে স্টোর করলেও এপিআই জেসন পে-লোডে অবজেক্ট সিরিয়ালাইজ করার সময় কঠোরভাবে **String Datatype** হিসেবে এনফোর্স করা হয়:
+    `{ "order_id": "8345290458122240" }` (স্ট্রিং মান)
+  - **Client Safety:** এর ফলে ক্লায়েন্ট বা জাভাস্ক্রিপ্ট ব্রাউজারগুলো ডেটার সঠিকতা শতভাগ অক্ষুণ্ণ রাখতে পারে।
+
+#### ৩. Ephemeral Pod Worker ID Exhaustion (Kubernetes-এ কন্টেইনার দ্রুত রিসাইকেল হওয়া)
+কুবারনেটিসে (Kubernetes) কন্টেইনার স্কেলিং বা ডিপ্লয়মেন্টের সময় নোডগুলো কয়েক সেকেন্ডের মধ্যে তৈরি হয় এবং বন্ধ হয়ে যায়। প্রতিটি নতুন পড যদি কনসেনসাস সার্ভিস (Consul) থেকে ইউনিক ওয়ার্কার আইডি নিতে শুরু করে, তবে মাত্র কয়েক দিনে ১০২৪ টি লিমিটের সবগুলো ওয়ার্কার আইডি লিজ ব্লক হয়ে শেষ হয়ে যাবে। এরপর নতুন কন্টেইনার সার্ভিস স্টার্ট হতে পারবে না!
+* **স্টাফ-লেভেল সল্যুশন (Leased Node IDs with TTL & Recycling Ring):**
+  - **Recyclable Leases:** আমরা Consul-এ আইডি অ্যাসাইন করার সময় প্রতিটি কন্টেইনার আইডির সাথে একটি স্বল্প মেয়াদী **TTL Heartbeat (উদা: ১০ সেকেন্ড)** কনফিগার করব।
+  - **Worker ID Ring:** যখন কোনো পড বন্ধ হয়ে যাবে, Consul ১০ সেকেন্ড পর অটোমেটিক্যালি ওই ওয়ার্কার আইডিটি রিলিজ করে ওপেন পুলে ফিরিয়ে দেবে। নতুন পড স্টার্ট হওয়ার সময় রিং থেকে ফার্স্ট ফ্রি আইডিটি রিয়ুজ করবে, যা মেমরি এক্সহশন সমস্যা চিরতরে মিটিয়ে দেয়।
+
+---
+
+## 🎨 System Design Engineering Handbook: Epic Conclusion
+
+অভিনন্দন! আপনি সফলভাবে **"System Design Engineering Handbook"**-এর ২০টি চ্যাপ্টার সম্পূর্ণ ইন্টারেক্টিভ লার্নিং এবং প্রফেশনাল ডিস্ট্রিবিউটেড আর্কিটেকচারাল ব্লুপ্রিন্টসহ সম্পন্ন করেছেন। 
+
+আমরা এই সম্পূর্ণ বইটিতে কী কী সম্পন্ন করলাম তার একটি একনজর ভিজ্যুয়াল ম্যাপ নিচে দেওয়া হলো:
+
+```mermaid
+mindmap
+  root((System Design Handbook))
+    Observability & Logging
+      Chapter 15: Prometheus Metrics monitoring & Gorilla Compression
+      Chapter 16: Ad Click Aggregator & Sliding Windows
+    Distributed Pipelines
+      Chapter 17: Distributed Message Queue & OS Zero-Copy sendfile
+      Chapter 18: Distributed Rate Limiter & Atomic Lua Scripts
+    Real-Time Engines
+      Chapter 19: Real-Time Gaming Leaderboard & Redis Skip Lists
+      Chapter 20: Distributed ID Generator & Snowflake 64-bit Assembly
+```
+
+এই ২০টি চ্যাপ্টার আপনাকে যেকোনো উচ্চ-স্তরের সিস্টেম ডিজাইন ইন্টারভিউ, ডিস্ট্রিবিউটেড সার্ভিস ডেকোরেশন এবং সিনিয়র/স্টাফ আর্কিটেক্ট লেভেলের প্রোডাকশন চ্যালেঞ্জ মোকাবেলা করতে শতভাগ সাহায্য করবে। 
