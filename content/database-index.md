@@ -9,7 +9,7 @@ category: 'System Design'
 
 স্বাগতম! ডাটাবেস কেবল ডেটা সেভ করার মাধ্যম নয়; এটি কম্পিউটার সায়েন্স ও সিস্টেমস আর্কিটেকচারের সবচেয়ে সূক্ষ্ম ও আকর্ষণীয় সৃষ্টিগুলোর একটি। ডিস্ক রাইট অপারেশন, নেটওয়ার্ক রিড ব্লকিং, কনকারেন্সি লক এবং হার্ডওয়্যার মেমোরির সাথে ডাটাবেস ইঞ্জিন কীভাবে লড়াই করে, তার পূর্ণাঙ্গ এবং গভীর বিবরণ নিয়ে তৈরি এই হ্যান্ডবুক।
 
-এখানে আমাদের **database.md** ফাইলে থাকা **৬১টি চ্যাপ্টারের** একটি সুবিন্যস্ত রোডম্যাপ ও রিডার ইনডেক্স দেওয়া হলো। এটিকে ৬টি মূল আর্কিটেকচারাল মডিউলে ভাগ করা হয়েছে যাতে আপনি ধাপে ধাপে একজন **Staff Database Architect** হিসেবে নিজেকে গড়ে তুলতে পারেন।
+এখানে আমাদের **database.md** ফাইলে থাকা **৬৫টি চ্যাপ্টারের** একটি সুবিন্যস্ত রোডম্যাপ ও রিডার ইনডেক্স দেওয়া হলো। এটিকে ৭টি মূল আর্কিটেকচারাল মডিউলে ভাগ করা হয়েছে যাতে আপনি ধাপে ধাপে একজন **Staff Database Architect** হিসেবে নিজেকে গড়ে তুলতে পারেন।
 
 ---
 
@@ -23,18 +23,20 @@ flowchart TD
         M4["Module 4: Distributed Systems <br> (Sharding, Consensus, 2PC/3PC, Saga)"]
         M5["Module 5: Query Optimization <br> (Execution Plans, Volcano, Vectorized)"]
         M6["Module 6: Production Ops & AI <br> (Case Study, High availability, HNSW)"]
+        M7["Module 7: Emerging Storage & Specialized DBs <br> (Graph, NewSQL, Lakehouse, Hybrid Search)"]
         
         M1 --> M2
         M2 --> M3
         M3 --> M4
         M4 --> M5
         M5 --> M6
+        M6 --> M7
     end
 ```
 
 ---
 
-## 🗺️ ৬১টি চ্যাপ্টারের আর্কিটেকচারাল সূচিপত্র
+## 🗺️ ৬৫টি চ্যাপ্টারের আর্কিটেকচারাল সূচিপত্র
 
 নিচে প্রতিটি মডিউলের অন্তর্গত চ্যাপ্টারগুলোর একটি বিস্তারিত ওভারভিউ এবং নেভিগেশন লিংক দেওয়া হলো:
 
@@ -131,6 +133,16 @@ flowchart TD
 *   [**৫১. Database Network Level: Socket Buffers ও Client Read Blocking:**](/docs/database#৫১-database-network-level-socket-buffers-ও-client-read-blocking) TCP Socket Buffers ও ক্লায়েন্ট I/O ব্লক এভয়ডেন্স।
 *   [**৫৬. Database Connection Pool Scaling ও Little's Law:**](/docs/database#৫৬-database-connection-pool-scaling-ও-queueing-theory-littles-law) Little's Law ($L = \lambda W$) ও CPU থ্রেড অপ্টিমাইজেশন।
 *   [**৬১. Real-World Case Study: High-Throughput E-Commerce System:**](/docs/database#৬১-real-world-case-study-high-throughput-e-commerce-system-১২টি-টেবিলের-রিয়েল-লাইফ-আর্কিটেকচার-ও-operation) **১২টি টেবিলবিশিষ্ট** বাস্তবসম্মত ডাটাবেস ডিজাইন, PG Advisory Locks, Full-Text Search GIN Indexing, এবং locks-ছাড়া Zero-Downtime মাইগ্রেশন কুয়েরির পূর্ণাঙ্গ প্রোডাকশন প্রজেক্ট।
+
+---
+
+### 🔮 Module 7: Advanced Specialized Database Architectures & Emerging Storage (অ্যাডভান্সড স্পেশালাইজড ডাটাবেস আর্কিটেকচার ও এমার্জিং স্টোরেজ)
+*আধুনিক বিগ ডেটা ও এআই যুগের বিশেষায়িত ডাটাবেস সিস্টেমস, ডিস্ট্রিবিউটেড NewSQL এবং ক্লাউড লেকহাউজ মেকানিজম।*
+
+*   [**৬২. Graph Database Internals:**](/docs/database#৬২-graph-database-internals-index-free-adjacency-ও-cypher-traversal) Index-Free Adjacency (IFA) বনাম রিলেショナル জয়েন টেবিলে মেমরি পয়েন্টার চেইসিংয়ের পার্থক্য।
+*   [**৬৩. NewSQL Internals:**](/docs/database#৬৩-newsql-internals-spanner-truetime-ও-cockroachdb-raft-per-range) Google Spanner এবং CockroachDB-এর Raft-per-Range ও TrueTime এপিআই-এর গাণিতিক কনসেনসাস।
+*   [**৬৪. Hybrid Search Systems:**](/docs/database#৬৪-hybrid-search-systems-bm25-lexical--hnsw-vector-search-with-rrf-reciprocal-rank-fusion) BM25 টেক্সট ম্যাচিং এবং HNSW কোসাইন দূরত্বের RRF (Reciprocal Rank Fusion) স্কোরিং ইকুয়েশন।
+*   [**৬৫. Transactional Lakehouse Engines:**](/docs/database#৬৫-transactional-lakehouse-engines-acid-on-object-storage-apache-iceberg--parquet) অবজেক্ট স্টোরেজ (S3) এর ওপর Apache Iceberg এবং Parquet ফিজিক্যাল মেটাডেটা স্ন্যাপশট ও OCC লকিং মেকানিজম।
 
 ---
 
