@@ -929,7 +929,7 @@ export default function ERBuilder() {
         </div>
 
         {/* Active Tables List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin" data-lenis-prevent="true">
           <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 font-mono mb-2">
             Active Schemas ({tables.length})
           </div>
@@ -1046,7 +1046,7 @@ export default function ERBuilder() {
           </div>
 
           {/* SQL Output Box */}
-          <div className="flex-1 p-5 overflow-auto font-mono text-[12px] leading-relaxed text-zinc-300 scrollbar-thin bg-black/40">
+          <div className="flex-1 p-5 overflow-auto font-mono text-[12px] leading-relaxed text-zinc-300 scrollbar-thin bg-black/40" data-lenis-prevent="true">
             <pre className="select-text whitespace-pre-wrap">{compiledSql}</pre>
           </div>
         </section>
