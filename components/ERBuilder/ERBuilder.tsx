@@ -35,9 +35,14 @@ import {
   Maximize2,
   ChevronDown,
   FolderOpen,
+  Network,
+  StickyNote,
+  Activity,
 } from 'lucide-react';
 import { Table, Relation, Column } from './types';
 import TableNode from './TableNode';
+import SystemNode from './SystemNode';
+import StickyNode from './StickyNode';
 import RelationModal from './RelationModal';
 import { getLayoutedElements } from './layout';
 import { generateSQL } from './sqlGenerator';
@@ -317,14 +322,20 @@ interface Project {
   createdAt: string;
   nodes: Node[];
   edges: Edge[];
+  systemNodes?: Node[];
+  systemEdges?: Edge[];
 }
 
 const NODE_TYPES = {
   tableNode: TableNode,
+  systemNode: SystemNode,
+  stickyNode: StickyNode,
 };
 
 function ERBuilderContent() {
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'er' | 'system'>('er');
+  const [isLiveTraffic, setIsLiveTraffic] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { fitView } = useReactFlow();
 
@@ -433,77 +444,138 @@ function ERBuilderContent() {
     };
   }, [setNodes, setEdges]);
 
+  // Helper to re-inject component callbacks into loaded nodes based on their type
+  const injectNodeCallbacks = useCallback((node: any) => {
+    if (node.type === 'systemNode') {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          onDeleteNode: (nodeId: string) => {
+            setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+            setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+          },
+          onUpdateNode: (nodeId: string, updatedFields: any) => {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (n.id !== nodeId) return n;
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    ...updatedFields,
+                  },
+                };
+              })
+            );
+          },
+        },
+      };
+    } else if (node.type === 'stickyNode') {
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          onDeleteNode: (nodeId: string) => {
+            setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+            setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+          },
+          onUpdateNode: (nodeId: string, updatedFields: any) => {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (n.id !== nodeId) return n;
+                return {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    ...updatedFields,
+                  },
+                };
+              })
+            );
+          },
+        },
+      };
+    } else {
+      // Fallback/Default: tableNode (ER Database table card)
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          onDeleteTable: (tableId: string) => {
+            setNodes((nds) => nds.filter((n) => n.id !== tableId));
+            setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
+          },
+          onAddColumn: (tableId: string) => {
+            setActiveTableForCol(tableId);
+            setIsAddingCol(true);
+          },
+          onEditColumn: (tableId: string, colIndex: number) => {
+            setActiveTableForEditCol(tableId);
+            setActiveColIndexForEdit(colIndex);
+            setNodes((nds) => {
+              const n = nds.find((item) => item.id === tableId);
+              if (n) {
+                const col = (n.data.columns as Column[])[colIndex];
+                if (col) {
+                  setEditColName(col.name);
+                  setEditColType(col.type);
+                  setEditColIsPK(!!col.isPK);
+                  setEditColIsFK(!!col.isFK);
+                  setEditColIsNullable(!!col.isNullable);
+                }
+              }
+              return nds;
+            });
+            setIsEditingCol(true);
+          },
+          onDeleteColumn: (tableId: string, colIndex: number) => {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (n.id !== tableId) return n;
+                const newCols = [...(n.data.columns as Column[])];
+                newCols.splice(colIndex, 1);
+                return {
+                  ...n,
+                  data: { ...n.data, columns: newCols },
+                };
+              })
+            );
+          },
+          onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
+            setNodes((nds) =>
+              nds.map((n) => {
+                if (n.id !== tableId) return n;
+                return {
+                  ...n,
+                  data: { ...n.data, color: newColor },
+                };
+              })
+            );
+          },
+        },
+      };
+    }
+  }, [setNodes, setEdges]);
+
   // Multi-Project Management States
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
 
-  const handleSwitchProject = useCallback((projectId: string) => {
+  const handleSwitchProject = useCallback((projectId: string, overrideTab?: 'er' | 'system') => {
     localStorage.setItem('er_arena_active_project_id_v1', projectId);
     setActiveProjectId(projectId);
     
     setProjects((prev) => {
       const proj = prev.find((p) => p.id === projectId);
       if (proj) {
-        // Re-inject callbacks into imported nodes
-        const formattedNodes = proj.nodes.map((node: any) => ({
-          ...node,
-          data: {
-            ...node.data,
-            onDeleteTable: (tableId: string) => {
-              setNodes((nds) => nds.filter((n) => n.id !== tableId));
-              setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
-            },
-            onAddColumn: (tableId: string) => {
-              setActiveTableForCol(tableId);
-              setIsAddingCol(true);
-            },
-            onEditColumn: (tableId: string, colIndex: number) => {
-              setActiveTableForEditCol(tableId);
-              setActiveColIndexForEdit(colIndex);
-              setNodes((nds) => {
-                const n = nds.find((item) => item.id === tableId);
-                if (n) {
-                  const col = (n.data.columns as Column[])[colIndex];
-                  if (col) {
-                    setEditColName(col.name);
-                    setEditColType(col.type);
-                    setEditColIsPK(!!col.isPK);
-                    setEditColIsFK(!!col.isFK);
-                    setEditColIsNullable(!!col.isNullable);
-                  }
-                }
-                return nds;
-              });
-              setIsEditingCol(true);
-            },
-            onDeleteColumn: (tableId: string, colIndex: number) => {
-              setNodes((nds) =>
-                nds.map((n) => {
-                  if (n.id !== tableId) return n;
-                  const newCols = [...(n.data.columns as Column[])];
-                  newCols.splice(colIndex, 1);
-                  return {
-                    ...n,
-                    data: { ...n.data, columns: newCols },
-                  };
-                })
-              );
-            },
-            onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
-              setNodes((nds) =>
-                nds.map((n) => {
-                  if (n.id !== tableId) return n;
-                  return {
-                    ...n,
-                    data: { ...n.data, color: newColor },
-                  };
-                })
-              );
-            },
-          },
-        }));
+        const targetTab = overrideTab || activeTab;
+        const targetNodes = targetTab === 'er' ? proj.nodes : (proj.systemNodes || []);
+        const targetEdges = targetTab === 'er' ? proj.edges : (proj.systemEdges || []);
+
+        const formattedNodes = targetNodes.map(injectNodeCallbacks);
         setNodes(formattedNodes);
-        setEdges(proj.edges);
+        setEdges(targetEdges);
         
         setTimeout(() => {
           fitView({ duration: 600 });
@@ -511,7 +583,129 @@ function ERBuilderContent() {
       }
       return prev;
     });
-  }, [setNodes, setEdges, fitView]);
+  }, [injectNodeCallbacks, setNodes, setEdges, fitView, activeTab]);
+
+  const handleSwitchTab = useCallback((newTab: 'er' | 'system') => {
+    if (newTab === activeTab) return;
+
+    // 1. Force save current active nodes/edges to the outgoing tab slot
+    setProjects((prev) => {
+      const updated = prev.map((p) => {
+        if (p.id === activeProjectId) {
+          if (activeTab === 'er') {
+            return {
+              ...p,
+              nodes: nodes,
+              edges: edges,
+            };
+          } else {
+            return {
+              ...p,
+              systemNodes: nodes,
+              systemEdges: edges,
+            };
+          }
+        }
+        return p;
+      });
+      localStorage.setItem('er_arena_projects_v1', JSON.stringify(updated));
+      return updated;
+    });
+
+    // 2. Switch Tab state & immediately load the target tab's corresponding workspace state
+    setActiveTab(newTab);
+    
+    setProjects((prev) => {
+      const activeProj = prev.find((p) => p.id === activeProjectId);
+      if (activeProj) {
+        const targetNodes = newTab === 'er' ? activeProj.nodes : (activeProj.systemNodes || []);
+        const targetEdges = newTab === 'er' ? activeProj.edges : (activeProj.systemEdges || []);
+
+        const formattedNodes = targetNodes.map(injectNodeCallbacks);
+        setNodes(formattedNodes);
+        setEdges(targetEdges);
+      } else {
+        setNodes([]);
+        setEdges([]);
+      }
+      return prev;
+    });
+
+    setTimeout(() => {
+      fitView({ duration: 600 });
+    }, 100);
+  }, [activeTab, activeProjectId, nodes, edges, injectNodeCallbacks, setNodes, setEdges, fitView]);
+
+  const handleAddSystemComponent = useCallback((icon: 'aws' | 'gcp' | 'kubernetes' | 'postgres' | 'redis' | 'kafka' | 'server' | 'client' | 'nginx' | 'node' | 'lambda' | 'cdn' | 's3' | 'rabbitmq' | 'elasticsearch' | 'docker' | 'gateway') => {
+    const id = `sys_${icon}_${Date.now()}`;
+    const name = icon.toUpperCase() + ' Node';
+    
+    const newNode: Node = {
+      id,
+      type: 'systemNode',
+      position: { x: 300, y: 150 },
+      data: {
+        label: name,
+        icon,
+        status: 'healthy',
+        description: '',
+        onDeleteNode: (nodeId: string) => {
+          setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+          setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+        },
+        onUpdateNode: (nodeId: string, updatedFields: any) => {
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id !== nodeId) return n;
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  ...updatedFields,
+                },
+              };
+            })
+          );
+        },
+      },
+    };
+    
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes]);
+
+  const handleAddStickyNote = useCallback((color: 'yellow' | 'green' | 'blue' | 'rose' = 'yellow') => {
+    const id = `sticky_${Date.now()}`;
+    
+    const newNode: Node = {
+      id,
+      type: 'stickyNode',
+      position: { x: 350, y: 200 },
+      data: {
+        label: 'Double-click to write notes...',
+        color,
+        onDeleteNode: (nodeId: string) => {
+          setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+          setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+        },
+        onUpdateNode: (nodeId: string, updatedFields: any) => {
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id !== nodeId) return n;
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  ...updatedFields,
+                },
+              };
+            })
+          );
+        },
+      },
+    };
+    
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes]);
 
   const handleCreateProject = useCallback((name: string) => {
     const id = name.trim().toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
@@ -581,63 +775,8 @@ function ERBuilderContent() {
           
           const activeProj = parsed.find(p => p.id === lastActiveId) || parsed[0];
           
-          const formattedNodes = activeProj.nodes.map((node: any) => ({
-            ...node,
-            data: {
-              ...node.data,
-              onDeleteTable: (tableId: string) => {
-                setNodes((nds) => nds.filter((n) => n.id !== tableId));
-                setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
-              },
-              onAddColumn: (tableId: string) => {
-                setActiveTableForCol(tableId);
-                setIsAddingCol(true);
-              },
-              onEditColumn: (tableId: string, colIndex: number) => {
-                setActiveTableForEditCol(tableId);
-                setActiveColIndexForEdit(colIndex);
-                setNodes((nds) => {
-                  const n = nds.find((item) => item.id === tableId);
-                  if (n) {
-                    const col = (n.data.columns as Column[])[colIndex];
-                    if (col) {
-                      setEditColName(col.name);
-                      setEditColType(col.type);
-                      setEditColIsPK(!!col.isPK);
-                      setEditColIsFK(!!col.isFK);
-                      setEditColIsNullable(!!col.isNullable);
-                    }
-                  }
-                  return nds;
-                });
-                setIsEditingCol(true);
-              },
-              onDeleteColumn: (tableId: string, colIndex: number) => {
-                setNodes((nds) =>
-                  nds.map((n) => {
-                    if (n.id !== tableId) return n;
-                    const newCols = [...(n.data.columns as Column[])];
-                    newCols.splice(colIndex, 1);
-                    return {
-                      ...n,
-                      data: { ...n.data, columns: newCols },
-                    };
-                  })
-                );
-              },
-              onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
-                setNodes((nds) =>
-                  nds.map((n) => {
-                    if (n.id !== tableId) return n;
-                    return {
-                      ...n,
-                      data: { ...n.data, color: newColor },
-                    };
-                  })
-                );
-              },
-            },
-          }));
+          // Re-inject callbacks using the unified helper
+          const formattedNodes = activeProj.nodes.map(injectNodeCallbacks);
           setNodes(formattedNodes);
           setEdges(activeProj.edges);
           return;
@@ -755,9 +894,11 @@ function ERBuilderContent() {
 
     setProjects(defaultProjList);
     setActiveProjectId('ecommerce_store');
-    setNodes(defaultProjList[0].nodes);
+    
+    // Map defaults using the injector as well just to be safe
+    setNodes(defaultProjList[0].nodes.map(injectNodeCallbacks));
     setEdges(defaultProjList[0].edges);
-  }, [createTableNode, setNodes, setEdges]);
+  }, [createTableNode, injectNodeCallbacks, setNodes, setEdges]);
 
   // Auto-save active schema back to project list & localStorage
   useEffect(() => {
@@ -783,9 +924,32 @@ function ERBuilderContent() {
     });
   }, [nodes, edges, activeProjectId, mounted]);
 
+  // Dynamically update System Design connection animations based on Live Traffic Simulator toggle
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => {
+        if (edge.id.startsWith('sys_rel_')) {
+          const strokeColor = isLiveTraffic ? '#22d3ee' : '#06b6d4';
+          return {
+            ...edge,
+            animated: isLiveTraffic,
+            style: {
+              ...edge.style,
+              stroke: strokeColor,
+              strokeWidth: isLiveTraffic ? 3 : 2,
+              animationDuration: isLiveTraffic ? '1s' : '3s',
+            },
+            label: isLiveTraffic ? 'pulsing load' : 'data flow',
+          };
+        }
+        return edge;
+      })
+    );
+  }, [isLiveTraffic, setEdges]);
+
   // Derive Table metadata dynamically for SQL generation
   const tables = useMemo<Table[]>(() => {
-    return nodes.map((node) => ({
+    return nodes.filter(n => n.type === 'tableNode').map((node) => ({
       id: node.id,
       name: node.data.name as string,
       x: node.position.x,
@@ -796,7 +960,7 @@ function ERBuilderContent() {
 
   // Derive Relation metadata dynamically for SQL generation
   const relations = useMemo<Relation[]>(() => {
-    return edges.map((edge) => {
+    return edges.filter(e => !e.id.startsWith('sys_rel_')).map((edge) => {
       const sourceCol = edge.sourceHandle
         ? edge.sourceHandle.replace(`${edge.source}-`, '').replace('-source', '')
         : '';
@@ -817,8 +981,37 @@ function ERBuilderContent() {
 
   // Handle connection events
   const onConnect = useCallback((connection: Connection) => {
-    setPendingConnection(connection);
-  }, []);
+    const isSystemNode = connection.source?.startsWith('sys') || connection.source?.startsWith('sticky') ||
+                         connection.target?.startsWith('sys') || connection.target?.startsWith('sticky');
+
+    if (isSystemNode) {
+      const strokeColor = '#06b6d4'; // Cyan for cloud architecture connections
+      const newEdge: Edge = {
+        id: `sys_rel_${connection.source}_${connection.sourceHandle}_to_${connection.target}_${connection.targetHandle}`,
+        source: connection.source!,
+        target: connection.target!,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
+        animated: true,
+        type: 'step',
+        label: 'data flow',
+        labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+        labelBgPadding: [4, 4],
+        labelBgBorderRadius: 4,
+        labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
+        style: { stroke: strokeColor, strokeWidth: 2 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: strokeColor,
+          width: 12,
+          height: 12,
+        },
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    } else {
+      setPendingConnection(connection);
+    }
+  }, [setEdges]);
 
   // Double Click Edge to Delete
   const onEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -1308,6 +1501,43 @@ function ERBuilderContent() {
     return generateSQL(tables, relations);
   }, [tables, relations]);
 
+  // Real-time Cloud Infrastructure YAML Topology generator
+  const generateYAMLManifest = useMemo(() => {
+    const sysNodes = nodes.filter(n => n.type === 'systemNode' || n.type === 'stickyNode');
+    if (sysNodes.length === 0) {
+      return `# No system components defined.\n# Click on "Sys Design" tab and add servers, caches, or databases to auto-compile cloud topology.`;
+    }
+
+    let manifest = `---\n# Dynamic Infrastructure manifest compilation\n# Auto-generated by ER Arena Cloud Topology Engine\nversion: config.eraser.io/v1alpha1\nmetadata:\n  name: ${projects.find(p => p.id === activeProjectId)?.name.toLowerCase().replace(/\s+/g, '-') || 'cloud-topology'}\ncomponents:\n`;
+
+    sysNodes.forEach((node) => {
+      const ndata = node.data as any;
+      if (node.type === 'systemNode') {
+        manifest += `  - name: ${(ndata.label || '').toLowerCase().replace(/\s+/g, '_')}\n    type: ${ndata.icon}\n    status: ${ndata.status || 'healthy'}\n`;
+        if (ndata.description) {
+          manifest += `    spec:\n      notes: "${ndata.description.replace(/"/g, '\\"')}"\n`;
+        }
+      } else if (node.type === 'stickyNode') {
+        manifest += `  - name: annotation_${node.id.substring(node.id.length - 6)}\n    type: documentation\n    spec:\n      color: ${ndata.color || 'yellow'}\n      content: "${(ndata.label || '').replace(/\n/g, ' ').replace(/"/g, '\\"')}"\n`;
+      }
+    });
+
+    const activeEdges = edges.filter(e => e.source.startsWith('sys') || e.source.startsWith('sticky'));
+    if (activeEdges.length > 0) {
+      manifest += `connections:\n`;
+      activeEdges.forEach((edge) => {
+        const cleanSrc = edge.source.replace(/sys_|_/g, '-');
+        const cleanTgt = edge.target.replace(/sys_|_/g, '-');
+        manifest += `  - source: ${cleanSrc}\n    target: ${cleanTgt}\n`;
+        if (edge.label) {
+          manifest += `    protocol: "${edge.label}"\n`;
+        }
+      });
+    }
+
+    return manifest;
+  }, [nodes, edges, activeProjectId, projects]);
+
   const copyToClipboard = () => {
     navigator.clipboard.writeText(compiledSql);
     setCopied(true);
@@ -1415,186 +1645,298 @@ function ERBuilderContent() {
             )}
           </div>
         </div>
-
-        {/* Presets and Global Actions */}
-        <div className="p-4 border-b border-white/[0.06] space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4.5 w-4.5 text-emerald-400" />
-              <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                Presets & Engine
-              </h2>
-            </div>
-            
-            {/* Backup Action Icons */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={handleExportJSON}
-                className="h-6 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all text-[9px] font-bold uppercase font-mono cursor-pointer"
-                title="Export Diagram Backups (JSON)"
-              >
-                <Download className="h-3 w-3" />
-                Backup
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="h-6 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all text-[9px] font-bold uppercase font-mono cursor-pointer"
-                title="Import Diagram Backups (JSON)"
-              >
-                <Upload className="h-3 w-3" />
-                Load
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleLoadPreset('ecommerce')}
-              className="py-1.5 px-2 border border-white/[0.05] bg-white/[0.02] hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-400 rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer"
-            >
-              Shop
-            </button>
-            <button
-              onClick={() => handleLoadPreset('billing')}
-              className="py-1.5 px-2 border border-white/[0.05] bg-white/[0.02] hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-cyan-400 rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer"
-            >
-              SaaS
-            </button>
-            <button
-              onClick={() => handleLoadPreset('cms')}
-              className="py-1.5 px-2 border border-white/[0.05] bg-white/[0.02] hover:border-purple-500/30 hover:bg-purple-500/5 hover:text-purple-400 rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer"
-            >
-              CMS
-            </button>
-          </div>
-
-          {/* Reverse Engineer pasted SQL Button */}
+            {/* 🎛️ Dual-Mode Workspace Tab Switcher */}
+        <div className="px-4 py-2 border-b border-white/[0.06] flex items-center gap-2 bg-[#0c0c10]/40">
           <button
-            onClick={() => setIsReversingSQL(true)}
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-300 text-[10px] font-black uppercase tracking-wider font-mono rounded-lg transition-all cursor-pointer shadow-sm"
+            onClick={() => handleSwitchTab('er')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === 'er'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold'
+                : 'text-zinc-500 border border-transparent hover:text-zinc-300'
+            }`}
           >
-            <Import className="h-3.5 w-3.5" />
-            Reverse Engineer SQL
+            <Database className="h-3.5 w-3.5" />
+            ER Model
+          </button>
+          <button
+            onClick={() => handleSwitchTab('system')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === 'system'
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold'
+                : 'text-zinc-500 border border-transparent hover:text-zinc-300'
+            }`}
+          >
+            <Network className="h-3.5 w-3.5" />
+            Sys Design
           </button>
         </div>
 
-        {/* Add Table Field */}
-        <div className="p-4 border-b border-white/[0.06]">
-          <form onSubmit={handleAddTable} className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-400">
-                Create New Table
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newTableName}
-                onChange={(e) => setNewTableName(e.target.value)}
-                placeholder="e.g. transactions"
-                className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-xs font-mono text-white placeholder-zinc-500 focus:border-emerald-500/30 focus:outline-none transition-colors"
-              />
-              <button
-                type="submit"
-                className="h-8 w-8 flex items-center justify-center rounded-lg bg-emerald-500 text-[#09090b] hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/10 cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Quick Node Search */}
-        <div className="p-4 border-b border-white/[0.06]">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search table node..."
-              className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] pl-9 pr-3 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:border-emerald-500/30 focus:outline-none transition-colors"
-            />
-          </div>
-        </div>
-
-        {/* Active Tables List with click to focus fly-to node transitions */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin" data-lenis-prevent="true">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 font-mono mb-2 flex items-center justify-between">
-            <span>Active Schemas ({tables.length})</span>
-            <span className="text-[8px] text-zinc-600 font-normal">Click to Focus</span>
-          </div>
-          {filteredSidebarTables.map((t) => {
-            // Find domain color styling for listing dot indicator
-            const activeNode = nodes.find((n) => n.id === t.id);
-            const domainColor = (activeNode?.data?.color as 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') || 'slate';
-            
-            const dotColorMap: Record<string, string> = {
-              slate: 'bg-zinc-500',
-              emerald: 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]',
-              cyan: 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.4)]',
-              purple: 'bg-purple-400 shadow-[0_0_8px_rgba(139,92,246,0.4)]',
-              amber: 'bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]',
-              rose: 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.4)]',
-            };
-
-            return (
-              <div
-                key={t.id}
-                onClick={() => handleFocusTableNode(t.id)}
-                className="flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2 hover:bg-white/[0.03] transition-all group cursor-pointer border-l-2 border-l-transparent hover:border-l-emerald-500"
-              >
-                <div className="flex items-center gap-2 font-mono text-xs text-zinc-300">
-                  <div className={`h-1.5 w-1.5 rounded-full transition-all ${dotColorMap[domainColor]}`} />
-                  <span className="truncate max-w-[150px] uppercase font-bold text-zinc-200 group-hover:text-white">{t.name}</span>
-                  <span className="text-[9px] text-zinc-500 font-normal font-sans">({t.columns.length})</span>
+        {activeTab === 'er' && (
+          <>
+            {/* Presets and Global Actions */}
+            <div className="p-4 border-b border-white/[0.06] space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4.5 w-4.5 text-emerald-400" />
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                    Presets & Engine
+                  </h2>
                 </div>
                 
+                {/* Backup Action Icons */}
                 <div className="flex items-center gap-1.5">
-                  <span title="Focus Canvas">
-                    <Maximize2 className="h-2.5 w-2.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
-                  </span>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setNodes((nds) => nds.filter((tab) => tab.id !== t.id));
-                      setEdges((eds) => eds.filter((e) => e.source !== t.id && e.target !== t.id));
-                    }}
-                    className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                    onClick={handleExportJSON}
+                    className="h-6 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all text-[9px] font-bold uppercase font-mono cursor-pointer"
+                    title="Export Diagram Backups (JSON)"
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Download className="h-3 w-3" />
+                    Backup
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-6 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all text-[9px] font-bold uppercase font-mono cursor-pointer"
+                    title="Import Diagram Backups (JSON)"
+                  >
+                    <Upload className="h-3 w-3" />
+                    Load
                   </button>
                 </div>
               </div>
-            );
-          })}
-          {filteredSidebarTables.length === 0 && (
-            <div className="text-center py-8 text-xs text-zinc-500 font-mono">
-              No matching tables found
+              
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => handleLoadPreset('ecommerce')}
+                  className="py-1.5 px-2 border border-white/[0.05] bg-white/[0.02] hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-400 rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Shop
+                </button>
+                <button
+                  onClick={() => handleLoadPreset('billing')}
+                  className="py-1.5 px-2 border border-white/[0.05] bg-white/[0.02] hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-cyan-400 rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  SaaS
+                </button>
+                <button
+                  onClick={() => handleLoadPreset('cms')}
+                  className="py-1.5 px-2 border border-white/[0.05] bg-white/[0.02] hover:border-purple-500/30 hover:bg-purple-500/5 hover:text-purple-400 rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  CMS
+                </button>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Action Panel Footer */}
-        <div className="p-4 border-t border-white/[0.06] flex gap-2">
-          <button
-            onClick={triggerAutoLayout}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 text-[10px] font-black uppercase tracking-wider font-mono rounded-lg transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-emerald-500/10"
-            title="Auto Layout Tree"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Auto Layout
-          </button>
-          <button
-            onClick={handleResetDiagram}
-            className="h-9 w-9 flex items-center justify-center border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500 hover:text-white text-rose-400 rounded-lg transition-all active:scale-95 cursor-pointer"
-            title="Delete Schema"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      </aside>
+            {/* ➕ Quick Spawn Database Table Form */}
+            <form onSubmit={handleAddTable} className="p-4 border-b border-white/[0.06] bg-white/[0.01] space-y-3.5">
+              <div className="flex items-center gap-2">
+                <Plus className="h-4.5 w-4.5 text-emerald-400" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                  Quick Spawn Table
+                </h2>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="table_name (e.g. orders)"
+                  value={newTableName}
+                  onChange={(e) => setNewTableName(e.target.value)}
+                  className="flex-1 rounded-lg border border-white/[0.08] bg-[#0c0c10] px-3 py-1.5 text-xs font-mono text-white placeholder-zinc-600 focus:border-emerald-500/40 focus:outline-none transition-colors"
+                />
+                <button
+                  type="submit"
+                  className="py-1.5 px-3 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 rounded-lg text-xs font-black uppercase tracking-wider font-mono transition-all active:scale-95 cursor-pointer shadow-sm"
+                >
+                  Spawn
+                </button>
+              </div>
+            </form>
+
+            {/* 🔍 Search and Tables List Directory */}
+            <div className="p-4 border-b border-white/[0.06] bg-white/[0.01] space-y-3">
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-emerald-400" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                  Tables Directory
+                </h2>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Filter tables..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-lg border border-white/[0.08] bg-[#0c0c10] pl-9 pr-4 py-2 text-xs font-mono text-white placeholder-zinc-600 focus:border-emerald-500/40 focus:outline-none transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Sidebar list of active tables */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin max-h-[350px]">
+              {filteredSidebarTables.map((t) => {
+                const rfNode = nodes.find((n) => n.id === t.id);
+                const colorTheme = rfNode?.data.color || 'slate';
+                
+                // Theme border mapping
+                const getBorderClass = () => {
+                  switch(colorTheme) {
+                    case 'emerald': return 'border-emerald-500/20 hover:border-emerald-500/40 bg-emerald-950/5';
+                    case 'cyan': return 'border-cyan-500/20 hover:border-cyan-500/40 bg-cyan-950/5';
+                    case 'purple': return 'border-purple-500/20 hover:border-purple-500/40 bg-purple-950/5';
+                    case 'amber': return 'border-amber-500/20 hover:border-amber-500/40 bg-amber-950/5';
+                    case 'rose': return 'border-rose-500/20 hover:border-rose-500/40 bg-rose-950/5';
+                    default: return 'border-white/[0.05] hover:border-white/[0.15] bg-white/[0.01]';
+                  }
+                };
+
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => {
+                      const node = nodes.find((n) => n.id === t.id);
+                      if (node) {
+                        const { x, y } = node.position;
+                        fitView({
+                          nodes: [node],
+                          duration: 800,
+                        });
+                      }
+                    }}
+                    className={`group w-full text-left px-3 py-2 border rounded-xl flex items-center justify-between text-xs font-mono transition-all cursor-pointer ${getBorderClass()}`}
+                  >
+                    <div className="flex items-center gap-2 truncate pr-2">
+                      <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                        colorTheme === 'emerald' ? 'bg-emerald-400'
+                          : colorTheme === 'cyan' ? 'bg-cyan-400'
+                          : colorTheme === 'purple' ? 'bg-purple-400'
+                          : colorTheme === 'amber' ? 'bg-amber-400'
+                          : colorTheme === 'rose' ? 'bg-rose-400'
+                          : 'bg-zinc-500'
+                      }`} />
+                      <span className="truncate max-w-[150px] uppercase font-bold text-zinc-200 group-hover:text-white">{t.name}</span>
+                      <span className="text-[9px] text-zinc-500 font-normal font-sans">({t.columns.length})</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5">
+                      <span title="Focus Canvas">
+                        <Maximize2 className="h-2.5 w-2.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNodes((nds) => nds.filter((tab) => tab.id !== t.id));
+                          setEdges((eds) => eds.filter((e) => e.source !== t.id && e.target !== t.id));
+                        }}
+                        className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredSidebarTables.length === 0 && (
+                <div className="text-center py-8 text-xs text-zinc-500 font-mono">
+                  No matching tables found
+                </div>
+              )}
+            </div>
+
+            {/* Action Panel Footer */}
+            <div className="p-4 border-t border-white/[0.06] flex gap-2 mt-auto">
+              <button
+                onClick={triggerAutoLayout}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 text-[10px] font-black uppercase tracking-wider font-mono rounded-lg transition-all active:scale-95 cursor-pointer shadow-sm hover:shadow-emerald-500/10"
+                title="Auto Layout Tree"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Auto Layout
+              </button>
+              <button
+                onClick={handleResetDiagram}
+                className="h-9 w-9 flex items-center justify-center border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500 hover:text-white text-rose-400 rounded-lg transition-all active:scale-95 cursor-pointer"
+                title="Delete Schema"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'system' && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-thin">
+            {/* Component Assets Grid */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-cyan-400" />
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 font-mono">
+                  System Infrastructure
+                </h3>
+              </div>
+              <p className="text-[9px] font-mono text-zinc-500 leading-normal">
+                Click any infrastructure block to instantly spawn it on your active canvas.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {[
+                  { icon: 'postgres', label: 'PostgreSQL', theme: 'hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-cyan-400' },
+                  { icon: 'redis', label: 'Redis Cache', theme: 'hover:border-rose-500/30 hover:bg-rose-500/5 hover:text-rose-400' },
+                  { icon: 'kafka', label: 'Kafka Broker', theme: 'hover:border-purple-500/30 hover:bg-purple-500/5 hover:text-purple-400' },
+                  { icon: 'kubernetes', label: 'K8s Cluster', theme: 'hover:border-blue-500/30 hover:bg-blue-500/5 hover:text-blue-400' },
+                  { icon: 'aws', label: 'AWS Provider', theme: 'hover:border-amber-500/30 hover:bg-amber-500/5 hover:text-amber-400' },
+                  { icon: 'client', label: 'Client Runtime', theme: 'hover:border-emerald-500/30 hover:bg-emerald-500/5 hover:text-emerald-400' },
+                  { icon: 'nginx', label: 'Nginx Proxy', theme: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 hover:text-emerald-500' },
+                  { icon: 'server', label: 'App Server', theme: 'hover:border-sky-500/30 hover:bg-sky-500/5 hover:text-sky-400' },
+                  { icon: 'lambda', label: 'AWS Lambda', theme: 'hover:border-amber-400/30 hover:bg-amber-400/5 hover:text-amber-300' },
+                  { icon: 'cdn', label: 'Global CDN', theme: 'hover:border-teal-400/30 hover:bg-teal-400/5 hover:text-teal-300' },
+                  { icon: 's3', label: 'S3 Bucket', theme: 'hover:border-yellow-500/30 hover:bg-yellow-500/5 hover:text-yellow-400' },
+                  { icon: 'rabbitmq', label: 'RabbitMQ', theme: 'hover:border-orange-500/30 hover:bg-orange-500/5 hover:text-orange-400' },
+                  { icon: 'elasticsearch', label: 'Elasticsearch', theme: 'hover:border-emerald-350/30 hover:bg-emerald-350/5 hover:text-emerald-300' },
+                  { icon: 'docker', label: 'Docker Container', theme: 'hover:border-blue-450/30 hover:bg-blue-450/5 hover:text-blue-400' },
+                  { icon: 'gateway', label: 'API Gateway', theme: 'hover:border-indigo-400/30 hover:bg-indigo-400/5 hover:text-indigo-300' },
+                ].map((item) => (
+                  <button
+                    key={item.icon}
+                    onClick={() => handleAddSystemComponent(item.icon as any)}
+                    className={`py-2 px-2.5 border border-white/[0.05] bg-white/[0.01] rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${item.theme}`}
+                  >
+                    <span className="truncate capitalize">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Draggable Sticky Notes */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2">
+                <StickyNote className="h-4 w-4 text-amber-400" />
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-zinc-400 font-mono">
+                  Annotations & Notes
+                </h3>
+              </div>
+              <p className="text-[9px] font-mono text-zinc-500 leading-normal">
+                Spawn post-it sticky sheets in different color categories for specs and runbooks.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {[
+                  { color: 'yellow', label: 'Amber note', theme: 'border-amber-500/25 text-amber-400 bg-amber-500/5 hover:bg-amber-500/10' },
+                  { color: 'green', label: 'Green note', theme: 'border-emerald-500/25 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10' },
+                  { color: 'blue', label: 'Cyan note', theme: 'border-cyan-500/25 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/10' },
+                  { color: 'rose', label: 'Rose note', theme: 'border-rose-500/25 text-rose-400 bg-rose-500/5 hover:bg-rose-500/10' },
+                ].map((item) => (
+                  <button
+                    key={item.color}
+                    onClick={() => handleAddStickyNote(item.color as any)}
+                    className={`py-2 px-2.5 border rounded-lg text-[9px] font-bold font-mono uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${item.theme}`}
+                  >
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}      </aside>
 
       {/* 🚀 Main Layout Split Arena */}
       <main className="flex-1 h-full flex flex-col min-w-0 z-10 relative">
@@ -1618,7 +1960,22 @@ function ERBuilderContent() {
           </ReactFlow>
 
           {/* Collapsible Quick Guide floating popover trigger */}
-          <div className="absolute top-4 right-4 z-20">
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            {activeTab === 'system' && (
+              <button
+                type="button"
+                onClick={() => setIsLiveTraffic(!isLiveTraffic)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border backdrop-blur-md text-[10px] font-mono font-bold uppercase transition-all shadow-lg cursor-pointer ${
+                  isLiveTraffic
+                    ? 'border-cyan-500/40 bg-cyan-950/80 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.35)] animate-pulse'
+                    : 'border-white/[0.08] bg-[#0c0c10]/85 text-zinc-400 hover:text-white hover:border-white/[0.15]'
+                }`}
+              >
+                <Activity className={`h-3.5 w-3.5 ${isLiveTraffic ? 'text-cyan-400' : 'text-zinc-500'}`} />
+                <span>{isLiveTraffic ? 'Live Traffic ON' : 'Simulate Traffic'}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setShowInstructions(!showInstructions)}
@@ -1655,38 +2012,43 @@ function ERBuilderContent() {
           </div>
         </div>
 
-        {/* 📟 Collapsible Retro SQL Console Terminal */}
-        <section className="h-64 border-t border-white/[0.06] bg-[#07070a] flex flex-col">
+        {/* 📟 Collapsible Retro Console Terminal */}
+        <section className="h-64 border-t border-white/[0.06] bg-[#07070a] flex flex-col z-20">
           {/* Console Header Bar */}
           <div className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.01] px-6 py-2.5">
             <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <div className={`h-2 w-2 rounded-full animate-pulse ${activeTab === 'er' ? 'bg-emerald-500' : 'bg-cyan-500'}`} />
               <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 font-mono">
-                Real-Time SQL DDL Script
+                {activeTab === 'er' ? 'Real-Time SQL DDL Script' : 'Real-Time Cloud YAML Manifest'}
               </span>
             </div>
             
             <button
-              onClick={copyToClipboard}
+              onClick={() => {
+                const textToCopy = activeTab === 'er' ? compiledSql : generateYAMLManifest;
+                navigator.clipboard.writeText(textToCopy);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
               className="flex items-center gap-1.5 rounded border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 hover:bg-white/[0.06] hover:text-white transition-colors cursor-pointer active:scale-95"
             >
               {copied ? (
                 <>
-                  <Check className="h-3 w-3 text-emerald-400" />
+                  <Check className={`h-3 w-3 ${activeTab === 'er' ? 'text-emerald-400' : 'text-cyan-400'}`} />
                   Copied!
                 </>
               ) : (
                 <>
                   <Copy className="h-3 w-3" />
-                  Copy Script
+                  Copy Console
                 </>
               )}
             </button>
           </div>
 
-          {/* SQL Output Box */}
+          {/* Console Output Box */}
           <div className="flex-1 p-5 overflow-auto font-mono text-[12px] leading-relaxed text-zinc-300 scrollbar-thin bg-black/40" data-lenis-prevent="true">
-            <pre className="select-text whitespace-pre-wrap">{compiledSql}</pre>
+            <pre className="select-text whitespace-pre-wrap">{activeTab === 'er' ? compiledSql : generateYAMLManifest}</pre>
           </div>
         </section>
       </main>
