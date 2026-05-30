@@ -34,6 +34,7 @@ import {
   Import,
   Maximize2,
   ChevronDown,
+  FolderOpen,
 } from 'lucide-react';
 import { Table, Relation, Column } from './types';
 import TableNode from './TableNode';
@@ -310,6 +311,14 @@ const parseSQL = (sqlText: string): { tables: Table[]; relations: Relation[] } =
   return { tables, relations };
 };
 
+interface Project {
+  id: string;
+  name: string;
+  createdAt: string;
+  nodes: Node[];
+  edges: Edge[];
+}
+
 const NODE_TYPES = {
   tableNode: TableNode,
 };
@@ -351,10 +360,6 @@ function ERBuilderContent() {
   // React Flow states (single source of truth)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-
-  // Custom Combobox select states
-  const [isOpenAddColType, setIsOpenAddColType] = useState(false);
-  const [isOpenEditColType, setIsOpenEditColType] = useState(false);
 
   // Create Table Node utility (fully self-contained, binds state modifiers perfectly)
   const createTableNode = useCallback((
@@ -428,17 +433,153 @@ function ERBuilderContent() {
     };
   }, [setNodes, setEdges]);
 
+  // Multi-Project Management States
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string>('');
+
+  const handleSwitchProject = useCallback((projectId: string) => {
+    localStorage.setItem('er_arena_active_project_id_v1', projectId);
+    setActiveProjectId(projectId);
+    
+    setProjects((prev) => {
+      const proj = prev.find((p) => p.id === projectId);
+      if (proj) {
+        // Re-inject callbacks into imported nodes
+        const formattedNodes = proj.nodes.map((node: any) => ({
+          ...node,
+          data: {
+            ...node.data,
+            onDeleteTable: (tableId: string) => {
+              setNodes((nds) => nds.filter((n) => n.id !== tableId));
+              setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
+            },
+            onAddColumn: (tableId: string) => {
+              setActiveTableForCol(tableId);
+              setIsAddingCol(true);
+            },
+            onEditColumn: (tableId: string, colIndex: number) => {
+              setActiveTableForEditCol(tableId);
+              setActiveColIndexForEdit(colIndex);
+              setNodes((nds) => {
+                const n = nds.find((item) => item.id === tableId);
+                if (n) {
+                  const col = (n.data.columns as Column[])[colIndex];
+                  if (col) {
+                    setEditColName(col.name);
+                    setEditColType(col.type);
+                    setEditColIsPK(!!col.isPK);
+                    setEditColIsFK(!!col.isFK);
+                    setEditColIsNullable(!!col.isNullable);
+                  }
+                }
+                return nds;
+              });
+              setIsEditingCol(true);
+            },
+            onDeleteColumn: (tableId: string, colIndex: number) => {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.id !== tableId) return n;
+                  const newCols = [...(n.data.columns as Column[])];
+                  newCols.splice(colIndex, 1);
+                  return {
+                    ...n,
+                    data: { ...n.data, columns: newCols },
+                  };
+                })
+              );
+            },
+            onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
+              setNodes((nds) =>
+                nds.map((n) => {
+                  if (n.id !== tableId) return n;
+                  return {
+                    ...n,
+                    data: { ...n.data, color: newColor },
+                  };
+                })
+              );
+            },
+          },
+        }));
+        setNodes(formattedNodes);
+        setEdges(proj.edges);
+        
+        setTimeout(() => {
+          fitView({ duration: 600 });
+        }, 100);
+      }
+      return prev;
+    });
+  }, [setNodes, setEdges, fitView]);
+
+  const handleCreateProject = useCallback((name: string) => {
+    const id = name.trim().toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+    const newProj: Project = {
+      id,
+      name,
+      createdAt: new Date().toISOString(),
+      nodes: [
+        createTableNode('users', 'users', 100, 100, [
+          { name: 'id', type: 'INT', isPK: true },
+          { name: 'username', type: 'VARCHAR(100)' },
+        ], 'slate')
+      ],
+      edges: [],
+    };
+    
+    setProjects((prev) => {
+      const updated = [...prev, newProj];
+      localStorage.setItem('er_arena_projects_v1', JSON.stringify(updated));
+      return updated;
+    });
+    
+    setTimeout(() => {
+      handleSwitchProject(id);
+    }, 50);
+  }, [createTableNode, handleSwitchProject]);
+
+  const handleDeleteProject = useCallback((projectId: string) => {
+    setProjects((prev) => {
+      if (prev.length <= 1) return prev;
+      if (confirm('Are you sure you want to delete this entire project folder? All ER diagram tables inside it will be lost.')) {
+        const remaining = prev.filter(p => p.id !== projectId);
+        localStorage.setItem('er_arena_projects_v1', JSON.stringify(remaining));
+        
+        const nextActiveId = remaining[0].id;
+        localStorage.setItem('er_arena_active_project_id_v1', nextActiveId);
+        
+        // Trigger switch
+        setTimeout(() => {
+          handleSwitchProject(nextActiveId);
+        }, 50);
+        
+        return remaining;
+      }
+      return prev;
+    });
+  }, [handleSwitchProject]);
+
+  // Custom Combobox select states
+  const [isOpenAddColType, setIsOpenAddColType] = useState(false);
+  const [isOpenEditColType, setIsOpenEditColType] = useState(false);
+
   // Load from local storage or presets on mount
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem('core_kernel_diagram_v5');
+    const saved = localStorage.getItem('er_arena_projects_v1');
     
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed.nodes && parsed.edges) {
-          // Re-inject callbacks into imported nodes
-          const formattedNodes = parsed.nodes.map((node: any) => ({
+        const parsed = JSON.parse(saved) as Project[];
+        if (parsed.length > 0) {
+          setProjects(parsed);
+          const lastActiveId = localStorage.getItem('er_arena_active_project_id_v1') || parsed[0].id;
+          setActiveProjectId(lastActiveId);
+          
+          const activeProj = parsed.find(p => p.id === lastActiveId) || parsed[0];
+          
+          const formattedNodes = activeProj.nodes.map((node: any) => ({
             ...node,
             data: {
               ...node.data,
@@ -496,7 +637,7 @@ function ERBuilderContent() {
             },
           }));
           setNodes(formattedNodes);
-          setEdges(parsed.edges);
+          setEdges(activeProj.edges);
           return;
         }
       } catch (e) {
@@ -504,48 +645,141 @@ function ERBuilderContent() {
       }
     }
 
-    // Load defaults if empty
-    const defaultNodes = ECOMMERCE_PRESETS.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns, 'slate'));
-    const defaultEdges = ECOMMERCE_RELATIONS.map((rel) => {
-      let strokeColor = '#10b981';
-      if (rel.type === '1:1') strokeColor = '#06b6d4';
-      if (rel.type === 'N:M') strokeColor = '#8b5cf6';
+    // Default Initialization
+    const defaultProjList: Project[] = [
+      {
+        id: 'ecommerce_store',
+        name: 'E-Commerce Store',
+        createdAt: new Date().toISOString(),
+        nodes: ECOMMERCE_PRESETS.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns, 'slate')),
+        edges: ECOMMERCE_RELATIONS.map((rel) => {
+          let strokeColor = '#10b981';
+          if (rel.type === '1:1') strokeColor = '#06b6d4';
+          if (rel.type === 'N:M') strokeColor = '#8b5cf6';
 
-      return {
-        id: rel.id,
-        source: rel.sourceTable,
-        target: rel.targetTable,
-        sourceHandle: `${rel.sourceTable}-${rel.sourceColumn}-source`,
-        targetHandle: `${rel.targetTable}-${rel.targetColumn}-target`,
-        animated: true,
-        type: 'step',
-        label: rel.type,
-        labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
-        labelBgPadding: [4, 4] as [number, number],
-        labelBgBorderRadius: 4,
-        labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
-        style: { stroke: strokeColor, strokeWidth: 2 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: strokeColor,
-          width: 12,
-          height: 12,
-        },
-      };
-    });
+          return {
+            id: rel.id,
+            source: rel.sourceTable,
+            target: rel.targetTable,
+            sourceHandle: `${rel.sourceTable}-${rel.sourceColumn}-source`,
+            targetHandle: `${rel.targetTable}-${rel.targetColumn}-target`,
+            animated: true,
+            type: 'step',
+            label: rel.type,
+            labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+            labelBgPadding: [4, 4] as [number, number],
+            labelBgBorderRadius: 4,
+            labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
+            style: { stroke: strokeColor, strokeWidth: 2 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: strokeColor,
+              width: 12,
+              height: 12,
+            },
+          };
+        }),
+      },
+      {
+        id: 'saas_billing',
+        name: 'SaaS Billing System',
+        createdAt: new Date().toISOString(),
+        nodes: [
+          createTableNode('accounts', 'accounts', 100, 100, [
+            { name: 'id', type: 'INT', isPK: true },
+            { name: 'company_name', type: 'VARCHAR(255)' },
+            { name: 'billing_email', type: 'VARCHAR(255)' },
+          ], 'cyan'),
+          createTableNode('subscriptions', 'subscriptions', 450, 100, [
+            { name: 'id', type: 'INT', isPK: true },
+            { name: 'account_id', type: 'INT', isFK: true },
+            { name: 'plan_id', type: 'INT', isFK: true },
+            { name: 'status', type: 'VARCHAR(50)' },
+            { name: 'renews_at', type: 'TIMESTAMP' },
+          ], 'cyan'),
+          createTableNode('plans', 'plans', 800, 100, [
+            { name: 'id', type: 'INT', isPK: true },
+            { name: 'name', type: 'VARCHAR(100)' },
+            { name: 'amount_cents', type: 'INT' },
+            { name: 'interval', type: 'VARCHAR(20)' },
+          ], 'cyan'),
+        ],
+        edges: [
+          {
+            id: 'rel_accounts_subs',
+            source: 'subscriptions',
+            target: 'accounts',
+            sourceHandle: 'subscriptions-account_id-source',
+            targetHandle: 'accounts-id-target',
+            animated: true,
+            type: 'step',
+            label: '1:N',
+            labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+            labelBgPadding: [4, 4],
+            labelBgBorderRadius: 4,
+            labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: '#10b981', strokeWidth: 1 },
+            style: { stroke: '#10b981', strokeWidth: 2 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#10b981',
+              width: 12,
+              height: 12,
+            },
+          },
+          {
+            id: 'rel_plans_subs',
+            source: 'subscriptions',
+            target: 'plans',
+            sourceHandle: 'subscriptions-plan_id-source',
+            targetHandle: 'plans-id-target',
+            animated: true,
+            type: 'step',
+            label: '1:N',
+            labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+            labelBgPadding: [4, 4],
+            labelBgBorderRadius: 4,
+            labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: '#10b981', strokeWidth: 1 },
+            style: { stroke: '#10b981', strokeWidth: 2 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#10b981',
+              width: 12,
+              height: 12,
+            },
+          },
+        ],
+      }
+    ];
 
-    setNodes(defaultNodes);
-    setEdges(defaultEdges);
+    setProjects(defaultProjList);
+    setActiveProjectId('ecommerce_store');
+    setNodes(defaultProjList[0].nodes);
+    setEdges(defaultProjList[0].edges);
   }, [createTableNode, setNodes, setEdges]);
 
-  // Auto-save active schemas to local storage
+  // Auto-save active schema back to project list & localStorage
   useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem(
-      'core_kernel_diagram_v5',
-      JSON.stringify({ nodes, edges })
-    );
-  }, [nodes, edges, mounted]);
+    if (!mounted || !activeProjectId) return;
+    
+    setProjects((prev) => {
+      const currentProj = prev.find(p => p.id === activeProjectId);
+      if (currentProj && (currentProj.nodes !== nodes || currentProj.edges !== edges)) {
+        const updated = prev.map((p) => {
+          if (p.id === activeProjectId) {
+            return {
+              ...p,
+              nodes,
+              edges,
+            };
+          }
+          return p;
+        });
+        localStorage.setItem('er_arena_projects_v1', JSON.stringify(updated));
+        return updated;
+      }
+      return prev;
+    });
+  }, [nodes, edges, activeProjectId, mounted]);
 
   // Derive Table metadata dynamically for SQL generation
   const tables = useMemo<Table[]>(() => {
@@ -1105,6 +1339,57 @@ function ERBuilderContent() {
 
       {/* 📋 Sidebar Controls Panel */}
       <aside className="w-80 h-full border-r border-white/[0.06] bg-[#0c0c10]/40 backdrop-blur-xl flex flex-col shrink-0 z-10 relative">
+        {/* 📁 Active Directory Project Folders Section */}
+        <div className="p-4 border-b border-white/[0.06] bg-white/[0.01] space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <FolderOpen className="h-4 w-4 text-cyan-400 animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 font-mono">
+                Project Directory
+              </span>
+            </div>
+            
+            <button
+              onClick={() => {
+                const name = prompt('Enter new project folder name (e.g. HRIS, E-commerce):');
+                if (name && name.trim()) {
+                  handleCreateProject(name.trim());
+                }
+              }}
+              className="h-5 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all text-[8px] font-bold uppercase font-mono cursor-pointer"
+            >
+              <Plus className="h-2.5 w-2.5" />
+              New
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <select
+                value={activeProjectId}
+                onChange={(e) => handleSwitchProject(e.target.value)}
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs font-mono text-zinc-200 bg-[#09090c] focus:border-cyan-500/30 focus:outline-none transition-colors [&_option]:bg-[#09090c] cursor-pointer"
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    📁 {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {projects.length > 1 && (
+              <button
+                onClick={() => handleDeleteProject(activeProjectId)}
+                className="h-8 w-8 flex items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
+                title="Delete active folder project"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Presets and Global Actions */}
         <div className="p-4 border-b border-white/[0.06] space-y-4">
           <div className="flex items-center justify-between">
