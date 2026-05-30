@@ -33,6 +33,7 @@ import {
   HelpCircle,
   Import,
   Maximize2,
+  ChevronDown,
 } from 'lucide-react';
 import { Table, Relation, Column } from './types';
 import TableNode from './TableNode';
@@ -350,6 +351,10 @@ function ERBuilderContent() {
   // React Flow states (single source of truth)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Custom Combobox select states
+  const [isOpenAddColType, setIsOpenAddColType] = useState(false);
+  const [isOpenEditColType, setIsOpenEditColType] = useState(false);
 
   // Create Table Node utility (fully self-contained, binds state modifiers perfectly)
   const createTableNode = useCallback((
@@ -685,6 +690,7 @@ function ERBuilderContent() {
     setNewColIsPK(false);
     setNewColIsFK(false);
     setNewColIsNullable(false);
+    setIsOpenAddColType(false);
   };
 
   // Edit Column Form Submit Action
@@ -716,6 +722,7 @@ function ERBuilderContent() {
     setIsEditingCol(false);
     setActiveTableForEditCol(null);
     setActiveColIndexForEdit(null);
+    setIsOpenEditColType(false);
   };
 
   // Focus and Zoom onto a specific table node from Sidebar List
@@ -1366,7 +1373,10 @@ function ERBuilderContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsAddingCol(false)}
+                onClick={() => {
+                  setIsAddingCol(false);
+                  setIsOpenAddColType(false);
+                }}
                 className="text-zinc-500 hover:text-white text-xs font-mono font-bold border border-white/[0.04] bg-white/[0.01] px-2 py-0.5 rounded cursor-pointer"
               >
                 ESC
@@ -1390,26 +1400,57 @@ function ERBuilderContent() {
             </div>
 
             {/* Column Datatype Select */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
                 Data Type
               </label>
-              <select
-                value={newColType}
-                onChange={(e) => setNewColType(e.target.value)}
-                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white bg-[#09090c] focus:border-emerald-500/30 focus:outline-none transition-colors [&_option]:bg-[#09090c]"
+              <button
+                type="button"
+                onClick={() => setIsOpenAddColType(!isOpenAddColType)}
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white text-left flex items-center justify-between hover:border-white/[0.15] transition-colors focus:outline-none cursor-pointer"
               >
-                {/* Grouped Datatypes */}
-                {['Numeric', 'String', 'Temporal', 'Advanced'].map((gpName) => (
-                  <optgroup key={gpName} label={gpName.toUpperCase()} className="text-zinc-500 font-bold uppercase tracking-wide text-[9px] my-1">
-                    {DATA_TYPES.filter((d) => d.group === gpName).map((dt) => (
-                      <option key={dt.value} value={dt.value} className="text-white font-mono text-xs normal-case">
-                        {dt.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                <span>{DATA_TYPES.find(d => d.value === newColType)?.label || newColType}</span>
+                <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${isOpenAddColType ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Custom options grouped popover dropdown */}
+              {isOpenAddColType && (
+                <div 
+                  className="absolute left-0 right-0 mt-1 z-[120] rounded-xl border border-white/[0.08] bg-[#0c0c10] max-h-52 overflow-y-auto p-2 space-y-2.5 shadow-2xl scrollbar-thin"
+                  data-lenis-prevent="true"
+                >
+                  {['Numeric', 'String', 'Temporal', 'Advanced'].map((gpName) => {
+                    const types = DATA_TYPES.filter((d) => d.group === gpName);
+                    return (
+                      <div key={gpName} className="space-y-1">
+                        <div className="text-[8px] font-black uppercase tracking-widest text-zinc-650 font-mono px-2">
+                          {gpName}
+                        </div>
+                        <div className="space-y-0.5">
+                          {types.map((dt) => (
+                            <button
+                              key={dt.value}
+                              type="button"
+                              onClick={() => {
+                                setNewColType(dt.value);
+                                setIsOpenAddColType(false);
+                              }}
+                              className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center justify-between hover:bg-white/[0.05] cursor-pointer ${
+                                newColType === dt.value
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold'
+                                  : 'text-zinc-400 hover:text-white border border-transparent'
+                              }`}
+                            >
+                              <span>{dt.label}</span>
+                              {newColType === dt.value && <Check className="h-3 w-3 text-emerald-400" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Key / Nullable toggles */}
@@ -1487,6 +1528,7 @@ function ERBuilderContent() {
                   setIsEditingCol(false);
                   setActiveTableForEditCol(null);
                   setActiveColIndexForEdit(null);
+                  setIsOpenEditColType(false);
                 }}
                 className="text-zinc-500 hover:text-white text-xs font-mono font-bold border border-white/[0.04] bg-white/[0.01] px-2 py-0.5 rounded cursor-pointer"
               >
@@ -1511,26 +1553,57 @@ function ERBuilderContent() {
             </div>
 
             {/* Column Datatype Select */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
                 Data Type
               </label>
-              <select
-                value={editColType}
-                onChange={(e) => setEditColType(e.target.value)}
-                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white bg-[#09090c] focus:border-emerald-500/30 focus:outline-none transition-colors [&_option]:bg-[#09090c]"
+              <button
+                type="button"
+                onClick={() => setIsOpenEditColType(!isOpenEditColType)}
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white text-left flex items-center justify-between hover:border-white/[0.15] transition-colors focus:outline-none cursor-pointer"
               >
-                {/* Grouped Datatypes */}
-                {['Numeric', 'String', 'Temporal', 'Advanced'].map((gpName) => (
-                  <optgroup key={gpName} label={gpName.toUpperCase()} className="text-zinc-500 font-bold uppercase tracking-wide text-[9px] my-1">
-                    {DATA_TYPES.filter((d) => d.group === gpName).map((dt) => (
-                      <option key={dt.value} value={dt.value} className="text-white font-mono text-xs normal-case">
-                        {dt.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                <span>{DATA_TYPES.find(d => d.value === editColType)?.label || editColType}</span>
+                <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-200 ${isOpenEditColType ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Custom options grouped popover dropdown */}
+              {isOpenEditColType && (
+                <div 
+                  className="absolute left-0 right-0 mt-1 z-[120] rounded-xl border border-white/[0.08] bg-[#0c0c10] max-h-52 overflow-y-auto p-2 space-y-2.5 shadow-2xl scrollbar-thin"
+                  data-lenis-prevent="true"
+                >
+                  {['Numeric', 'String', 'Temporal', 'Advanced'].map((gpName) => {
+                    const types = DATA_TYPES.filter((d) => d.group === gpName);
+                    return (
+                      <div key={gpName} className="space-y-1">
+                        <div className="text-[8px] font-black uppercase tracking-widest text-zinc-650 font-mono px-2">
+                          {gpName}
+                        </div>
+                        <div className="space-y-0.5">
+                          {types.map((dt) => (
+                            <button
+                              key={dt.value}
+                              type="button"
+                              onClick={() => {
+                                setEditColType(dt.value);
+                                setIsOpenEditColType(false);
+                              }}
+                              className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center justify-between hover:bg-white/[0.05] cursor-pointer ${
+                                editColType === dt.value
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold'
+                                  : 'text-zinc-400 hover:text-white border border-transparent'
+                              }`}
+                            >
+                              <span>{dt.label}</span>
+                              {editColType === dt.value && <Check className="h-3 w-3 text-emerald-400" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Key / Nullable toggles */}
