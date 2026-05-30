@@ -31,7 +31,7 @@ function getMermaidChart(children: ReactNode): string | null {
 const RUNNABLE_LANGUAGES = ['javascript', 'js', 'typescript', 'ts', 'python', 'py', 'go', 'golang', 'cpp', 'c', 'sql', 'sqlite', 'bash', 'sh'];
 
 export default function PlaygroundCodeBlock(props: PlaygroundCodeBlockProps) {
-  const { setCode, setLanguage, setIsOpen } = usePlayground();
+  const { setCode, setLanguage, setIsOpen, clearTerminal, runCode } = usePlayground();
   const [isHovered, setIsHovered] = useState(false);
 
   // Check if it's a Mermaid chart
@@ -75,14 +75,19 @@ export default function PlaygroundCodeBlock(props: PlaygroundCodeBlockProps) {
     if (cleanLang === 'sqlite') cleanLang = 'sql';
     if (cleanLang === 'sh') cleanLang = 'bash';
 
+    // Clear output and pre-fill state
+    clearTerminal();
     setLanguage(cleanLang);
     setCode(rawCode.trim());
     setIsOpen(true);
 
-    // Dynamic floating spark effect
+    // Auto-execute the block on compile server instantly
+    runCode(rawCode.trim(), cleanLang);
+
+    // Dynamic tactile animation
     gsap.timeline()
-      .to(`.try-btn-${lang}`, { scale: 0.9, duration: 0.08 })
-      .to(`.try-btn-${lang}`, { scale: 1, duration: 0.12, ease: 'power2.out' });
+      .to(`.run-arena-btn-${lang}`, { scale: 0.95, duration: 0.08 })
+      .to(`.run-arena-btn-${lang}`, { scale: 1, duration: 0.12, ease: 'power2.out' });
   };
 
   return (
@@ -110,10 +115,10 @@ export default function PlaygroundCodeBlock(props: PlaygroundCodeBlockProps) {
           {isRunnable && (
             <button
               onClick={handleTryInPlayground}
-              className={`try-btn-${lang} flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-400 shadow-sm transition-all hover:bg-emerald-500 hover:text-[#09090b] hover:shadow-emerald-500/20 active:scale-95 cursor-pointer select-none`}
+              className={`run-arena-btn-${lang} flex items-center gap-1 rounded-md border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 px-2.5 py-0.5 text-[9px] font-black uppercase text-emerald-400 shadow-sm transition-all hover:from-emerald-500 hover:to-teal-500 hover:text-[#09090b] hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 cursor-pointer select-none`}
             >
               <Play className="h-2 w-2 fill-current" />
-              Try in Playground
+              Run in Arena
             </button>
           )}
         </div>
