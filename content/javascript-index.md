@@ -150,10 +150,24 @@ flowchart TD
     *   `--allow-natives-syntax` মেমরি ফ্ল্যাগ অন করে V8 Engines-এর অভ্যন্তরীণ সি-লেভেল মেথডগুলো অ্যাক্সেস।
     *   `%OptimizeFunctionOnNextCall()`, `%GetOptimizationStatus()` এবং `%HasFastProperties()` দিয়ে JIT অপ্টিমাইজেশন ও হিডেন ক্লাসের গতির প্রত্যক্ষ পরীক্ষা।
 
+
+
+
+### 📂 Module 7: JS Engine Security, Vulnerabilities & Hardening (জাভাস্ক্রিপ্ট ইঞ্জিন সিকিউরিটি ও হার্ডেনিং)
+*   **Chapter 19: JIT Compiler Exploits & Type Confusion**
+    *   V8 ইঞ্জিনের JIT কম্পাইলার অপ্টিমাইজেশন ব্রেক করার কৌশল এবং **Type Confusion (CVE-2020-6418)**-এর অভ্যন্তরীণ মেকানিজম।
+    *   Arbitrary Read/Write প্রিমিয়ার এক্সপ্লয়েটেশন এবং প্রসেস মেমরি ড্যামেজ।
+*   **Chapter 20: V8 Pointer Compression & Sandbox Security Boundaries**
+    *   ৩২-বিট রিলেটিভ অফসেট ব্যবহার করে মেমরি সাশ্রয়ের সিক্রেট: **Pointer Compression** এবং Heap Base ম্যাপিং।
+    *   **V8 Sandbox (V8 Heap Sandbox):** টাইপ বিভ্রান্তি শোষণ থেকে বাইরের ওএস মেমরি সম্পূর্ণ বিচ্ছিন্ন রাখার নিরাপত্তা প্রাচীর।
+*   **Chapter 21: Production-Grade Hardening & Safe Execution Environments**
+    *   প্রোডাকশনে ভি৮ মেমরিকে সুরক্ষিত করতে `--disallow-code-generation-from-strings` এবং `--write-protect-code-memory` মেমরি সেফটি ফ্ল্যাগের ব্যবহার।
+    *   ওএস-লেভেল সিকিউরিটি টিউনিং: Rootless execution, User Namespaces এবং Seccomp কার্নেল সিস্টেম কল ফিল্টারিং।
+
 ---
 
 > [!NOTE]
 > **Learning Journey Note:**
-> এই ১৮টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
+> এই ২১টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
 
 ---
