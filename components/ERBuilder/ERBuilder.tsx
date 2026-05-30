@@ -564,6 +564,7 @@ function ERBuilderContent() {
   const [isOpenAddColType, setIsOpenAddColType] = useState(false);
   const [isOpenEditColType, setIsOpenEditColType] = useState(false);
   const [isOpenProjectSelector, setIsOpenProjectSelector] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   // Load from local storage or presets on mount
   useEffect(() => {
@@ -1616,18 +1617,41 @@ function ERBuilderContent() {
             <Controls className="!bg-[#0a0a0f] !border-white/[0.08] !rounded-xl !shadow-2xl overflow-hidden [&_button]:!bg-[#0a0a0f] [&_button]:!border-white/[0.05] [&_button]:!text-zinc-400 [&_button:hover]:!text-white [&_svg]:!fill-current" />
           </ReactFlow>
 
-          {/* Quick instructions floating badge */}
-          <div className="absolute top-4 right-4 flex flex-col gap-2 rounded-xl border border-white/[0.06] bg-[#0c0c10]/85 px-4 py-3.5 backdrop-blur-md text-[10px] font-mono text-zinc-400 shadow-xl pointer-events-none select-none max-w-sm">
-            <div className="flex items-center gap-2 font-bold text-zinc-200">
-              <Info className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span>ER Arena System Instructions</span>
-            </div>
-            <ul className="list-disc pl-4 space-y-1.5 mt-0.5 text-zinc-400 text-[9px] leading-relaxed">
-              <li>Drag teal circles (Source) to emerald circles (Target) to draw relations.</li>
-              <li>Hover table header to category brand it with a domain color tag.</li>
-              <li>Hover column rows inside table cards to Edit/Settings or Delete columns.</li>
-              <li>Double-click any relation line to delete that connection.</li>
-            </ul>
+          {/* Collapsible Quick Guide floating popover trigger */}
+          <div className="absolute top-4 right-4 z-20">
+            <button
+              type="button"
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.08] bg-[#0c0c10]/85 text-zinc-400 hover:text-white hover:border-white/[0.15] backdrop-blur-md text-[10px] font-mono font-bold uppercase transition-all shadow-lg cursor-pointer"
+            >
+              <Info className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Guide</span>
+            </button>
+
+            {/* Quick instructions floating popover card */}
+            {showInstructions && (
+              <div className="absolute right-0 mt-2 w-80 rounded-xl border border-white/[0.08] bg-[#0c0c10]/95 p-4 backdrop-blur-md text-[10px] font-mono text-zinc-400 shadow-2xl space-y-2.5">
+                <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 font-bold text-zinc-200">
+                  <div className="flex items-center gap-1.5">
+                    <Info className="h-4 w-4 text-emerald-400" />
+                    <span>Arena Instructions</span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setShowInstructions(false)}
+                    className="text-zinc-500 hover:text-white text-[9px] font-bold border border-white/[0.04] bg-white/[0.01] px-1.5 py-0.5 rounded cursor-pointer"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+                <ul className="list-disc pl-4 space-y-2 text-zinc-400 text-[9px] leading-relaxed">
+                  <li>Drag teal circles (Source) to emerald circles (Target) to draw relations.</li>
+                  <li>Hover table header to category brand it with a domain color tag.</li>
+                  <li>Hover column rows inside table cards to Edit/Settings or Delete columns.</li>
+                  <li>Double-click any relation line to delete that connection.</li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
