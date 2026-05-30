@@ -563,6 +563,7 @@ function ERBuilderContent() {
   // Custom Combobox select states
   const [isOpenAddColType, setIsOpenAddColType] = useState(false);
   const [isOpenEditColType, setIsOpenEditColType] = useState(false);
+  const [isOpenProjectSelector, setIsOpenProjectSelector] = useState(false);
 
   // Load from local storage or presets on mount
   useEffect(() => {
@@ -1365,17 +1366,41 @@ function ERBuilderContent() {
 
           <div className="flex items-center gap-2">
             <div className="flex-1 relative">
-              <select
-                value={activeProjectId}
-                onChange={(e) => handleSwitchProject(e.target.value)}
-                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-xs font-mono text-zinc-200 bg-[#09090c] focus:border-cyan-500/30 focus:outline-none transition-colors [&_option]:bg-[#09090c] cursor-pointer"
+              <button
+                type="button"
+                onClick={() => setIsOpenProjectSelector(!isOpenProjectSelector)}
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-xs font-mono text-white text-left flex items-center justify-between hover:border-white/[0.15] transition-colors focus:outline-none cursor-pointer"
               >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    📁 {p.name}
-                  </option>
-                ))}
-              </select>
+                <span className="truncate">📁 {projects.find(p => p.id === activeProjectId)?.name || 'E-Commerce Store'}</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform duration-200 shrink-0 ml-1 ${isOpenProjectSelector ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Custom options grouped popover dropdown */}
+              {isOpenProjectSelector && (
+                <div 
+                  className="absolute left-0 right-0 mt-1 z-[130] rounded-xl border border-white/[0.08] bg-[#0c0c10] max-h-52 overflow-y-auto p-1.5 space-y-0.5 shadow-2xl scrollbar-thin"
+                  data-lenis-prevent="true"
+                >
+                  {projects.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        handleSwitchProject(p.id);
+                        setIsOpenProjectSelector(false);
+                      }}
+                      className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center justify-between hover:bg-white/[0.05] cursor-pointer ${
+                        activeProjectId === p.id
+                          ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold'
+                          : 'text-zinc-400 hover:text-white border border-transparent'
+                      }`}
+                    >
+                      <span className="truncate">📁 {p.name}</span>
+                      {activeProjectId === p.id && <Check className="h-3 w-3 text-cyan-400 shrink-0 ml-1" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             
             {projects.length > 1 && (
