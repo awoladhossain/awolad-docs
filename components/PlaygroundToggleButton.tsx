@@ -7,10 +7,17 @@ import { gsap } from 'gsap';
 
 export default function PlaygroundToggleButton() {
   const { isOpen, setIsOpen } = usePlayground();
+  const [mounted, setMounted] = React.useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Set mounted on client mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Staggered magnetic hover effect using GSAP
   useEffect(() => {
+    if (!mounted) return;
     const button = buttonRef.current;
     if (!button) return;
 
@@ -58,7 +65,9 @@ export default function PlaygroundToggleButton() {
       button.removeEventListener('mouseenter', onMouseEnter);
       button.removeEventListener('mouseleave', onMouseLeave);
     };
-  }, []);
+  }, [mounted]);
+
+  if (!mounted) return null;
 
   return (
     <button

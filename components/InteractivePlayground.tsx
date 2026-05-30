@@ -44,8 +44,14 @@ export default function InteractivePlayground() {
     clearTerminal,
   } = usePlayground();
 
+  const [mounted, setMounted] = React.useState(false);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Set mounted on client mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Auto-scroll terminal to bottom when output changes
   useEffect(() => {
@@ -54,6 +60,7 @@ export default function InteractivePlayground() {
 
   // GSAP animation for sliding in/out
   useEffect(() => {
+    if (!mounted) return;
     if (isOpen) {
       gsap.to(containerRef.current, {
         x: 0,
@@ -75,7 +82,7 @@ export default function InteractivePlayground() {
         ease: 'power3.in',
       });
     }
-  }, [isOpen]);
+  }, [isOpen, mounted]);
 
   const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
@@ -91,6 +98,8 @@ export default function InteractivePlayground() {
 
     runCode();
   };
+
+  if (!mounted) return null;
 
   return (
     <div
