@@ -106,27 +106,40 @@ export default function InteractivePlayground() {
       ref={containerRef}
       style={{ transform: 'translateX(100%)', opacity: 0 }}
       data-lenis-prevent="true"
-      className={`fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-white/[0.06] bg-[#09090b]/95 backdrop-blur-xl shadow-2xl transition-shadow duration-300 lg:w-[48%] xl:w-[45%] ${
-        isOpen ? 'shadow-emerald-950/20' : 'pointer-events-none'
+      className={`fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-white/[0.08] bg-[#050508]/80 backdrop-blur-2xl shadow-2xl transition-all duration-300 lg:w-[48%] xl:w-[45%] ${
+        isOpen ? 'shadow-emerald-950/30 border-emerald-500/10' : 'pointer-events-none'
       }`}
     >
+      {/* Dynamic Radial glow indicators based on engine state */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-l-3xl z-0">
+        <div className={`absolute -right-20 -top-20 h-80 w-80 rounded-full transition-all duration-1000 ${
+          isRunning ? 'bg-amber-500/5 blur-[120px]' : 'bg-emerald-500/4 blur-[120px]'
+        }`} />
+        <div className="absolute -left-20 -bottom-20 h-80 w-80 rounded-full bg-indigo-500/5 blur-[120px]" />
+      </div>
+
       {/* Editor Header controls */}
-      <div className="flex h-12 items-center justify-between border-b border-white/[0.05] bg-white/[0.01] px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-300">Playground</span>
+      <div className="relative z-10 flex h-14 items-center justify-between border-b border-white/[0.06] bg-black/40 px-5 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20">
+            <Terminal className="h-3 w-3 text-emerald-400 animate-pulse" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-200">System Sandbox</span>
+            <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">Isolated Environment</span>
+          </div>
         </div>
 
         {/* Controls Panel */}
         <div className="flex items-center gap-3">
-          {/* Language Selector Dropdown */}
+          {/* Language Selector Dropdown with high end hover animations */}
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="rounded-lg border border-white/[0.08] bg-[#0c0c10] px-2.5 py-1 text-xs font-semibold text-zinc-300 outline-none transition-colors hover:border-emerald-500/30 hover:text-white"
+            className="rounded-lg border border-white/[0.08] bg-[#09090d] px-3 py-1.5 text-xs font-semibold text-zinc-300 outline-none hover:border-emerald-500/30 hover:text-emerald-300 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/10 transition-all select-none cursor-pointer"
           >
             {LANGUAGES.map((lang) => (
-              <option key={lang.value} value={lang.value} className="bg-[#09090b]">
+              <option key={lang.value} value={lang.value} className="bg-[#09090d] text-zinc-300 font-semibold py-1">
                 {lang.label}
               </option>
             ))}
@@ -135,33 +148,57 @@ export default function InteractivePlayground() {
           {/* Close Panel Button */}
           <button
             onClick={() => setIsOpen(false)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.05] bg-white/[0.02] text-zinc-400 hover:bg-white/[0.06] hover:text-white transition-all"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.02] text-zinc-400 hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 transition-all active:scale-95 cursor-pointer"
             title="Close Playground"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       {/* Code Editor Frame */}
-      <div className="relative flex-1 overflow-hidden">
-        {/* Glow lights behind editor */}
-        <div className="absolute -right-20 -top-20 h-60 w-60 rounded-full bg-emerald-500/3 blur-[90px] pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 h-60 w-60 rounded-full bg-teal-500/3 blur-[90px] pointer-events-none" />
-
+      <div className="relative z-10 flex-1 overflow-hidden bg-black/10">
         <div className="h-full w-full">
           <MonacoEditor
             height="100%"
             language={language === 'sql' ? 'sql' : language === 'golang' || language === 'go' ? 'go' : language}
-            theme="vs-dark"
+            theme="premium-space-dark"
             value={code}
             onChange={handleEditorChange}
+            onMount={(editor, monaco) => {
+              // Custom luxurious Dracula/Neon inspired space theme
+              monaco.editor.defineTheme('premium-space-dark', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                  { token: 'comment', foreground: '6272a4', fontStyle: 'italic' },
+                  { token: 'keyword', foreground: 'ff79c6', fontStyle: 'bold' },
+                  { token: 'string', foreground: 'f1fa8c' },
+                  { token: 'number', foreground: 'bd93f9' },
+                  { token: 'operator', foreground: '50fa7b' },
+                  { token: 'type', foreground: '8be9fd', fontStyle: 'italic' },
+                  { token: 'function', foreground: '50fa7b', fontStyle: 'bold' },
+                  { token: 'identifier', foreground: 'f8f8f2' },
+                ],
+                colors: {
+                  'editor.background': '#07070a',
+                  'editor.lineHighlightBackground': '#111118',
+                  'editor.selectionBackground': '#44475a40',
+                  'editorCursor.foreground': '#10b981',
+                  'editorLineNumber.foreground': '#374151',
+                  'editorLineNumber.activeForeground': '#10b981',
+                  'editorWidget.background': '#09090d',
+                  'editorWidget.border': '#ffffff0c',
+                }
+              });
+              monaco.editor.setTheme('premium-space-dark');
+            }}
             options={{
               minimap: { enabled: false },
               fontSize: 13,
               fontFamily: 'var(--font-geist-mono)',
-              lineHeight: 20,
-              padding: { top: 12, bottom: 12 },
+              lineHeight: 22,
+              padding: { top: 16, bottom: 16 },
               tabSize: 2,
               scrollBeyondLastLine: false,
               automaticLayout: true,
@@ -169,8 +206,8 @@ export default function InteractivePlayground() {
               cursorBlinking: 'smooth',
               cursorSmoothCaretAnimation: 'on',
               scrollbar: {
-                verticalScrollbarSize: 8,
-                horizontalScrollbarSize: 8,
+                verticalScrollbarSize: 6,
+                horizontalScrollbarSize: 6,
                 vertical: 'visible',
                 horizontal: 'visible',
               },
@@ -180,36 +217,43 @@ export default function InteractivePlayground() {
       </div>
 
       {/* Console Action Bar */}
-      <div className="flex h-11 items-center justify-between border-t border-b border-white/[0.05] bg-[#0c0c10]/80 px-4">
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
-          <Cpu className="h-3.5 w-3.5 text-zinc-600" />
-          Terminal Console
+      <div className="relative z-10 flex h-12 items-center justify-between border-t border-b border-white/[0.06] bg-[#08080c]/90 px-5">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className={`h-2.5 w-2.5 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.4)] transition-all duration-300 ${
+              isRunning ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'
+            }`} />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+              {isRunning ? 'sandbox executing...' : 'telemetry engine online'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className="flex items-center gap-3">
           {/* Clear console logs */}
           <button
             onClick={clearTerminal}
-            className="flex items-center gap-1 rounded-md border border-white/[0.05] bg-white/[0.01] px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-400 hover:bg-white/[0.05] hover:text-white transition-all cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.01] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400 hover:bg-white/[0.05] hover:text-white transition-all cursor-pointer select-none active:scale-95"
           >
-            <RotateCcw className="h-3 w-3" />
-            Clear
+            <RotateCcw className="h-3.5 w-3.5" />
+            Clear Output
           </button>
           
           {/* Execute Code Button */}
           <button
             onClick={handleRunClick}
             disabled={isRunning}
-            className="run-btn-pulse flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-1.5 text-xs font-bold uppercase text-[#09090b] shadow-md shadow-emerald-500/10 hover:bg-emerald-400 hover:shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="run-btn-pulse flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-1.5 text-xs font-bold uppercase tracking-wide text-[#050508] hover:from-emerald-400 hover:to-teal-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] shadow-lg shadow-emerald-950/20 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer select-none"
           >
             {isRunning ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Running...
+                Executing...
               </>
             ) : (
               <>
-                <Play className="h-3 w-3 fill-[#09090b]" />
-                Run Code
+                <Play className="h-3.5 w-3.5 fill-[#050508]" />
+                Run Execution
               </>
             )}
           </button>
@@ -217,32 +261,31 @@ export default function InteractivePlayground() {
       </div>
 
       {/* Terminal logs panel */}
-      <div className="h-[32%] min-h-[140px] overflow-y-auto bg-[#070709] p-4 font-mono text-xs leading-normal border-t border-white/[0.04] scrollbar-thin select-text">
-        <div className="space-y-1.5">
+      <div className="relative z-10 h-[32%] min-h-[140px] overflow-y-auto bg-[#040407] p-5 font-mono text-[11px] leading-relaxed border-t border-white/[0.05] scrollbar-thin select-text">
+        <div className="space-y-2">
           {terminalOutput.map((line, idx) => {
-            let typeColor = 'text-zinc-350';
+            let typeStyle = 'text-zinc-300 pl-2.5 border-l border-zinc-700/30';
             let prefix = '';
 
             if (line.type === 'stderr') {
-              typeColor = 'text-red-400 font-medium bg-red-950/20 px-1 rounded-sm border border-red-500/10 block w-full';
+              typeStyle = 'text-rose-400 font-medium bg-rose-950/20 border border-rose-500/10 px-3 py-2 rounded-lg shadow-sm shadow-rose-950/20 block w-full leading-normal';
               prefix = '✖ ';
             } else if (line.type === 'system') {
-              typeColor = 'text-emerald-400/80 font-bold';
+              typeStyle = 'text-emerald-400 font-bold bg-emerald-950/20 border border-emerald-500/10 px-3 py-2 rounded-lg shadow-sm shadow-emerald-950/20 block w-full leading-normal';
               prefix = '[System] ';
             } else {
-              typeColor = 'text-zinc-200';
-              prefix = '> ';
+              prefix = '• ';
             }
 
             return (
-              <div key={idx} className={`${typeColor} whitespace-pre-wrap`}>
-                <span className="opacity-40 select-none">{prefix}</span>
+              <div key={idx} className={`${typeStyle} whitespace-pre-wrap transition-all duration-300 hover:bg-white/[0.01]`}>
+                <span className="opacity-45 select-none">{prefix}</span>
                 {line.text}
               </div>
             );
           })}
           {terminalOutput.length === 0 && (
-            <div className="text-zinc-600 italic select-none">Console is clean. Run code to see output.</div>
+            <div className="text-zinc-600 italic select-none py-1.5 pl-1.5">Console logs is clean. Code execution outputs will stream here...</div>
           )}
           <div ref={terminalEndRef} />
         </div>
