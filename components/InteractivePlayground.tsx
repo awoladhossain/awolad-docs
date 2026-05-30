@@ -105,6 +105,7 @@ export default function InteractivePlayground() {
     <div
       ref={containerRef}
       style={{ transform: 'translateX(100%)', opacity: 0 }}
+      data-lenis-prevent="true"
       className={`fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-white/[0.06] bg-[#09090b]/95 backdrop-blur-xl shadow-2xl transition-shadow duration-300 lg:w-[48%] xl:w-[45%] ${
         isOpen ? 'shadow-emerald-950/20' : 'pointer-events-none'
       }`}
