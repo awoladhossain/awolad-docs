@@ -12,6 +12,8 @@ import {
   Edge,
   Node,
   MarkerType,
+  ReactFlowProvider,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -29,6 +31,8 @@ import {
   Upload,
   Settings,
   HelpCircle,
+  Import,
+  Maximize2,
 } from 'lucide-react';
 import { Table, Relation, Column } from './types';
 import TableNode from './TableNode';
@@ -166,13 +170,153 @@ const ECOMMERCE_RELATIONS: Relation[] = [
   },
 ];
 
+// Robust SQL DDL Schema Parser for Reverse Engineering
+const parseSQL = (sqlText: string): { tables: Table[]; relations: Relation[] } => {
+  const tables: Table[] = [];
+  const relations: Relation[] = [];
+
+  // Remove comments (lines starting with -- or within /* */)
+  let cleanSql = sqlText.replace(/--.*$/gm, '');
+  cleanSql = cleanSql.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Split by statements (semicolon)
+  const statements = cleanSql.split(';');
+
+  statements.forEach((stmt) => {
+    const trimmed = stmt.trim();
+    if (!trimmed) return;
+
+    // 1. CREATE TABLE parser
+    const createTableMatch = trimmed.match(/create\s+table\s+(\w+)\s*\(([\s\S]+)\)/i);
+    if (createTableMatch) {
+      const tableName = createTableMatch[1].trim().toLowerCase();
+      const body = createTableMatch[2];
+
+      const columns: Column[] = [];
+      // Split body by commas, keeping nested parenthesis intact (e.g. DECIMAL(10,2))
+      const colMatches: string[] = [];
+      let depth = 0;
+      let current = '';
+
+      for (let i = 0; i < body.length; i++) {
+        const char = body[i];
+        if (char === '(') depth++;
+        if (char === ')') depth--;
+
+        if (char === ',' && depth === 0) {
+          colMatches.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      if (current.trim()) {
+        colMatches.push(current.trim());
+      }
+
+      colMatches.forEach((line) => {
+        const cleanLine = line.trim().replace(/\s+/g, ' ');
+        if (!cleanLine) return;
+
+        // Skip constraint lines (e.g. CONSTRAINT pk_name PRIMARY KEY (...))
+        if (
+          cleanLine.toUpperCase().startsWith('CONSTRAINT') ||
+          cleanLine.toUpperCase().startsWith('PRIMARY KEY') ||
+          cleanLine.toUpperCase().startsWith('FOREIGN KEY')
+        ) {
+          // If inline table PRIMARY KEY constraint is defined
+          if (cleanLine.toUpperCase().startsWith('PRIMARY KEY') || (cleanLine.toUpperCase().startsWith('CONSTRAINT') && cleanLine.toUpperCase().includes('PRIMARY KEY'))) {
+            // Try to extract primary key columns
+            const pkMatch = cleanLine.match(/primary\s+key\s*\(([^)]+)\)/i);
+            if (pkMatch) {
+              const pkColsList = pkMatch[1].split(',').map((c) => c.trim().toLowerCase());
+              pkColsList.forEach((colName) => {
+                const existingCol = columns.find((c) => c.name === colName);
+                if (existingCol) existingCol.isPK = true;
+              });
+            }
+          }
+          return;
+        }
+
+        const parts = cleanLine.split(' ');
+        if (parts.length < 2) return;
+
+        const colName = parts[0].toLowerCase();
+        let colType = parts[1].toUpperCase();
+
+        // Handle types with parameters like VARCHAR(255), DECIMAL(10,2)
+        const typeParamsMatch = cleanLine.match(new RegExp(`${parts[0]}\\s+([\\w\\(\\),\\s]+)`, 'i'));
+        if (typeParamsMatch) {
+          const rawType = typeParamsMatch[1].trim();
+          // Extract just the datatype e.g. VARCHAR(255)
+          const mainTypeMatch = rawType.match(/^(\w+(?:\([^)]+\))?)/);
+          if (mainTypeMatch) {
+            colType = mainTypeMatch[1].toUpperCase();
+          }
+        }
+
+        const upperLine = cleanLine.toUpperCase();
+        const isPK = upperLine.includes('PRIMARY KEY');
+        const isNullable = !upperLine.includes('NOT NULL');
+
+        columns.push({
+          name: colName,
+          type: colType,
+          isPK,
+          isNullable,
+          isFK: false,
+        });
+      });
+
+      tables.push({
+        id: tableName,
+        name: tableName,
+        x: 100 + Math.random() * 300,
+        y: 100 + Math.random() * 300,
+        columns,
+      });
+    }
+
+    // 2. ALTER TABLE ADD FOREIGN KEY parser
+    const alterMatch = trimmed.match(/alter\s+table\s+(\w+)\s+add\s+(?:constraint\s+\w+\s+)?foreign\s+key\s*\((\w+)\)\s*references\s*(\w+)\s*\((\w+)\)/i);
+    if (alterMatch) {
+      const sourceTable = alterMatch[1].trim().toLowerCase();
+      const sourceCol = alterMatch[2].trim().toLowerCase();
+      const targetTable = alterMatch[3].trim().toLowerCase();
+      const targetCol = alterMatch[4].trim().toLowerCase();
+
+      relations.push({
+        id: `rel_${sourceTable}_${sourceCol}_to_${targetTable}_${targetCol}`,
+        sourceTable,
+        sourceColumn: sourceCol,
+        targetTable,
+        targetColumn: targetCol,
+        type: '1:N',
+      });
+    }
+  });
+
+  // Automatically mark source columns as FK
+  relations.forEach((rel) => {
+    const table = tables.find((t) => t.id === rel.sourceTable);
+    if (table) {
+      const col = table.columns.find((c) => c.name === rel.sourceColumn);
+      if (col) col.isFK = true;
+    }
+  });
+
+  return { tables, relations };
+};
+
 const NODE_TYPES = {
   tableNode: TableNode,
 };
 
-export default function ERBuilder() {
+function ERBuilderContent() {
   const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { fitView } = useReactFlow();
 
   // UI inputs state
   const [searchQuery, setSearchQuery] = useState('');
@@ -199,12 +343,23 @@ export default function ERBuilder() {
   const [editColIsFK, setEditColIsFK] = useState(false);
   const [editColIsNullable, setEditColIsNullable] = useState(false);
 
+  // Reverse Engineering SQL Modal state
+  const [isReversingSQL, setIsReversingSQL] = useState(false);
+  const [pastedSQL, setPastedSQL] = useState('');
+
   // React Flow states (single source of truth)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Create Table Node utility (fully self-contained, binds state modifiers perfectly)
-  const createTableNode = useCallback((id: string, name: string, x: number, y: number, columns: Column[]): Node => {
+  const createTableNode = useCallback((
+    id: string, 
+    name: string, 
+    x: number, 
+    y: number, 
+    columns: Column[],
+    color: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose' = 'slate'
+  ): Node => {
     return {
       id,
       type: 'tableNode',
@@ -212,6 +367,7 @@ export default function ERBuilder() {
       data: {
         name,
         columns,
+        color,
         onDeleteTable: (tableId: string) => {
           setNodes((nds) => nds.filter((n) => n.id !== tableId));
           setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
@@ -252,6 +408,17 @@ export default function ERBuilder() {
             })
           );
         },
+        onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id !== tableId) return n;
+              return {
+                ...n,
+                data: { ...n.data, color: newColor },
+              };
+            })
+          );
+        },
       },
     };
   }, [setNodes, setEdges]);
@@ -259,7 +426,7 @@ export default function ERBuilder() {
   // Load from local storage or presets on mount
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem('core_kernel_diagram_v4');
+    const saved = localStorage.getItem('core_kernel_diagram_v5');
     
     if (saved) {
       try {
@@ -310,6 +477,17 @@ export default function ERBuilder() {
                   })
                 );
               },
+              onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
+                setNodes((nds) =>
+                  nds.map((n) => {
+                    if (n.id !== tableId) return n;
+                    return {
+                      ...n,
+                      data: { ...n.data, color: newColor },
+                    };
+                  })
+                );
+              },
             },
           }));
           setNodes(formattedNodes);
@@ -322,7 +500,7 @@ export default function ERBuilder() {
     }
 
     // Load defaults if empty
-    const defaultNodes = ECOMMERCE_PRESETS.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns));
+    const defaultNodes = ECOMMERCE_PRESETS.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns, 'slate'));
     const defaultEdges = ECOMMERCE_RELATIONS.map((rel) => {
       let strokeColor = '#10b981';
       if (rel.type === '1:1') strokeColor = '#06b6d4';
@@ -359,7 +537,7 @@ export default function ERBuilder() {
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem(
-      'core_kernel_diagram_v4',
+      'core_kernel_diagram_v5',
       JSON.stringify({ nodes, edges })
     );
   }, [nodes, edges, mounted]);
@@ -540,12 +718,87 @@ export default function ERBuilder() {
     setActiveColIndexForEdit(null);
   };
 
+  // Focus and Zoom onto a specific table node from Sidebar List
+  const handleFocusTableNode = (tableId: string) => {
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        selected: n.id === tableId,
+      }))
+    );
+    setTimeout(() => {
+      fitView({ nodes: [{ id: tableId }], duration: 800, maxZoom: 1.1 });
+    }, 50);
+  };
+
+  // Reverse Engineering past DDL SQL Form Handler
+  const handleReverseSQLSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pastedSQL.trim()) return;
+
+    try {
+      const { tables: parsedTables, relations: parsedRelations } = parseSQL(pastedSQL);
+      if (parsedTables.length === 0) {
+        alert('Failed to parse schema. No CREATE TABLE statements found.');
+        return;
+      }
+
+      const parsedNodes = parsedTables.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns, 'slate'));
+      const parsedEdges = parsedRelations.map((rel) => {
+        let strokeColor = '#10b981';
+        if (rel.type === '1:1') strokeColor = '#06b6d4';
+        if (rel.type === 'N:M') strokeColor = '#8b5cf6';
+
+        return {
+          id: rel.id,
+          source: rel.sourceTable,
+          target: rel.targetTable,
+          sourceHandle: `${rel.sourceTable}-${rel.sourceColumn}-source`,
+          targetHandle: `${rel.targetTable}-${rel.targetColumn}-target`,
+          animated: true,
+          type: 'step',
+          label: rel.type,
+          labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+          labelBgPadding: [4, 4] as [number, number],
+          labelBgBorderRadius: 4,
+          labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
+          style: { stroke: strokeColor, strokeWidth: 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: strokeColor,
+            width: 12,
+            height: 12,
+          },
+        };
+      });
+
+      setNodes(parsedNodes);
+      setEdges(parsedEdges);
+      setIsReversingSQL(false);
+      setPastedSQL('');
+
+      // Auto layout and center view
+      setTimeout(() => {
+        const { nodes: lNodes } = getLayoutedElements(parsedNodes, parsedEdges, 'LR');
+        setNodes(lNodes);
+        
+        setTimeout(() => {
+          fitView({ duration: 900 });
+        }, 150);
+      }, 100);
+
+      alert(`Successfully reverse engineered ${parsedTables.length} tables and ${parsedRelations.length} relationships!`);
+    } catch (err) {
+      alert('Reverse engineering failed. Please check your SQL syntax.');
+    }
+  };
+
   // Clear/Reset entire Schema
   const handleResetDiagram = () => {
     if (confirm('Are you sure you want to delete the entire schema? This action is irreversible.')) {
       setNodes([]);
       setEdges([]);
-      localStorage.removeItem('core_kernel_diagram_v4');
+      localStorage.removeItem('core_kernel_diagram_v5');
     }
   };
 
@@ -612,6 +865,17 @@ export default function ERBuilder() {
                     return {
                       ...n,
                       data: { ...n.data, columns: newCols },
+                    };
+                  })
+                );
+              },
+              onChangeColor: (tableId: string, newColor: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => {
+                setNodes((nds) =>
+                  nds.map((n) => {
+                    if (n.id !== tableId) return n;
+                    return {
+                      ...n,
+                      data: { ...n.data, color: newColor },
                     };
                   })
                 );
@@ -755,7 +1019,7 @@ export default function ERBuilder() {
         ];
       }
 
-      const pNodes = presetTables.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns));
+      const pNodes = presetTables.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns, 'slate'));
       const pEdges = presetRelations.map((rel) => {
         let strokeColor = '#10b981';
         if (rel.type === '1:1') strokeColor = '#06b6d4';
@@ -816,7 +1080,7 @@ export default function ERBuilder() {
   if (!mounted) return null;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-[#09090b] text-white select-none relative z-10 antialiased">
+    <div className="flex h-[calc(100vh-3.5rem)] w-full overflow-hidden bg-[#09090b] text-white select-none relative z-10 antialiased font-sans">
       {/* Background Lighting meshes */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/5 blur-[120px]" />
@@ -885,6 +1149,15 @@ export default function ERBuilder() {
               CMS
             </button>
           </div>
+
+          {/* Reverse Engineer pasted SQL Button */}
+          <button
+            onClick={() => setIsReversingSQL(true)}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-300 text-[10px] font-black uppercase tracking-wider font-mono rounded-lg transition-all cursor-pointer shadow-sm"
+          >
+            <Import className="h-3.5 w-3.5" />
+            Reverse Engineer SQL
+          </button>
         </div>
 
         {/* Add Table Field */}
@@ -928,32 +1201,56 @@ export default function ERBuilder() {
           </div>
         </div>
 
-        {/* Active Tables List */}
+        {/* Active Tables List with click to focus fly-to node transitions */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin" data-lenis-prevent="true">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 font-mono mb-2">
-            Active Schemas ({tables.length})
+          <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 font-mono mb-2 flex items-center justify-between">
+            <span>Active Schemas ({tables.length})</span>
+            <span className="text-[8px] text-zinc-600 font-normal">Click to Focus</span>
           </div>
-          {filteredSidebarTables.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2 hover:bg-white/[0.03] transition-all group"
-            >
-              <div className="flex items-center gap-2 font-mono text-xs text-zinc-300">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                <span className="truncate max-w-[170px] uppercase font-bold">{t.name}</span>
-                <span className="text-[9px] text-zinc-500 font-normal font-sans">({t.columns.length} cols)</span>
-              </div>
-              <button
-                onClick={() => {
-                  setNodes((nds) => nds.filter((tab) => tab.id !== t.id));
-                  setEdges((eds) => eds.filter((e) => e.source !== t.id && e.target !== t.id));
-                }}
-                className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+          {filteredSidebarTables.map((t) => {
+            // Find domain color styling for listing dot indicator
+            const activeNode = nodes.find((n) => n.id === t.id);
+            const domainColor = (activeNode?.data?.color as 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') || 'slate';
+            
+            const dotColorMap: Record<string, string> = {
+              slate: 'bg-zinc-500',
+              emerald: 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]',
+              cyan: 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.4)]',
+              purple: 'bg-purple-400 shadow-[0_0_8px_rgba(139,92,246,0.4)]',
+              amber: 'bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]',
+              rose: 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.4)]',
+            };
+
+            return (
+              <div
+                key={t.id}
+                onClick={() => handleFocusTableNode(t.id)}
+                className="flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2 hover:bg-white/[0.03] transition-all group cursor-pointer border-l-2 border-l-transparent hover:border-l-emerald-500"
               >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-2 font-mono text-xs text-zinc-300">
+                  <div className={`h-1.5 w-1.5 rounded-full transition-all ${dotColorMap[domainColor]}`} />
+                  <span className="truncate max-w-[150px] uppercase font-bold text-zinc-200 group-hover:text-white">{t.name}</span>
+                  <span className="text-[9px] text-zinc-500 font-normal font-sans">({t.columns.length})</span>
+                </div>
+                
+                <div className="flex items-center gap-1.5">
+                  <span title="Focus Canvas">
+                    <Maximize2 className="h-2.5 w-2.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNodes((nds) => nds.filter((tab) => tab.id !== t.id));
+                      setEdges((eds) => eds.filter((e) => e.source !== t.id && e.target !== t.id));
+                    }}
+                    className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
           {filteredSidebarTables.length === 0 && (
             <div className="text-center py-8 text-xs text-zinc-500 font-mono">
               No matching tables found
@@ -1003,14 +1300,15 @@ export default function ERBuilder() {
           </ReactFlow>
 
           {/* Quick instructions floating badge */}
-          <div className="absolute top-4 right-4 flex flex-col gap-1.5 rounded-xl border border-white/[0.06] bg-[#0c0c10]/85 px-4 py-3.5 backdrop-blur-md text-[10px] font-mono text-zinc-400 shadow-xl pointer-events-none select-none max-w-sm">
+          <div className="absolute top-4 right-4 flex flex-col gap-2 rounded-xl border border-white/[0.06] bg-[#0c0c10]/85 px-4 py-3.5 backdrop-blur-md text-[10px] font-mono text-zinc-400 shadow-xl pointer-events-none select-none max-w-sm">
             <div className="flex items-center gap-2 font-bold text-zinc-200">
               <Info className="h-4 w-4 text-emerald-400 shrink-0" />
               <span>ER Arena System Instructions</span>
             </div>
-            <ul className="list-disc pl-4 space-y-1 mt-1 text-zinc-400 text-[9px] leading-relaxed">
+            <ul className="list-disc pl-4 space-y-1.5 mt-0.5 text-zinc-400 text-[9px] leading-relaxed">
               <li>Drag teal circles (Source) to emerald circles (Target) to draw relations.</li>
-              <li>Hover column rows inside table cards to Edit or Delete columns.</li>
+              <li>Hover table header to category brand it with a domain color tag.</li>
+              <li>Hover column rows inside table cards to Edit/Settings or Delete columns.</li>
               <li>Double-click any relation line to delete that connection.</li>
             </ul>
           </div>
@@ -1287,6 +1585,59 @@ export default function ERBuilder() {
         </div>
       )}
 
+      {/* 📥 SQL DDL Reverse Engineering pasted modal */}
+      {isReversingSQL && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <form
+            onSubmit={handleReverseSQLSubmit}
+            className="w-[600px] rounded-2xl border border-white/[0.08] bg-[#09090c]/95 p-6 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200 space-y-4"
+          >
+            <div className="border-b border-white/[0.06] pb-3 mb-2 flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-xs font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
+                  <Import className="h-4 w-4 text-emerald-400 shrink-0" />
+                  Reverse Engineer SQL Schema (DDL)
+                </span>
+                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">
+                  Paste DDL CREATE TABLE & ALTER TABLE scripts below
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReversingSQL(false);
+                  setPastedSQL('');
+                }}
+                className="text-zinc-500 hover:text-white text-xs font-mono font-bold border border-white/[0.04] bg-white/[0.01] px-2 py-0.5 rounded cursor-pointer"
+              >
+                ESC
+              </button>
+            </div>
+
+            {/* Textarea */}
+            <div className="space-y-1.5">
+              <textarea
+                value={pastedSQL}
+                onChange={(e) => setPastedSQL(e.target.value)}
+                required
+                rows={10}
+                placeholder="CREATE TABLE customers (&#13;&#10;  id SERIAL PRIMARY KEY,&#13;&#10;  name VARCHAR(100) NOT NULL,&#13;&#10;  email VARCHAR(255) UNIQUE&#13;&#10;);&#13;&#10;&#13;&#10;CREATE TABLE orders (&#13;&#10;  id INT PRIMARY KEY,&#13;&#10;  customer_id INT&#13;&#10;);&#13;&#10;&#13;&#10;ALTER TABLE orders ADD FOREIGN KEY (customer_id) REFERENCES customers(id);"
+                className="w-full rounded-lg border border-white/[0.08] bg-black/40 px-3 py-2 text-[11px] font-mono text-zinc-300 placeholder-zinc-600 focus:border-emerald-500/30 focus:outline-none transition-colors scrollbar-thin leading-relaxed"
+                data-lenis-prevent="true"
+              />
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              className="w-full py-2.5 px-3 border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 text-xs font-black uppercase tracking-wider font-mono rounded-lg transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/15"
+            >
+              Parse and Render Schema
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* Edge relations type dialog modal popup */}
       <RelationModal
         isOpen={pendingConnection !== null}
@@ -1304,5 +1655,14 @@ export default function ERBuilder() {
         }
       />
     </div>
+  );
+}
+
+// Master Wrap to support the useReactFlow hook
+export default function ERBuilder() {
+  return (
+    <ReactFlowProvider>
+      <ERBuilderContent />
+    </ReactFlowProvider>
   );
 }
