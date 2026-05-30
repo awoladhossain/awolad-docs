@@ -883,3 +883,249 @@ try {
 ```
 
 ---
+
+
+## ১৩. Node.js C++ Addons & V8 API Wrappers
+
+জাভাস্ক্রিপ্ট একটি হাই-লেভেল স্ক্রিপ্টিং ভাষা হলেও Node.js-এর আসল ক্ষমতা লুকিয়ে আছে এর সরাসরি C++ লেভেলে কার্নেল এপিআই ব্যবহারের ক্ষমতায়। Node.js আমাদের জাভাস্ক্রিপ্ট কোডকে সরাসরি C++ কোড বা বাইনারির সাথে কানেক্ট করতে **Node-API (N-API)** এবং **V8 C++ Wrappers** প্রদান করে।
+
+### N-API (Node-API) এবং V8 ABI Stability
+
+অতীতে Node.js-এ C++ অ্যাডন লেখার জন্য সরাসরি V8 ইঞ্জিনের C++ লাইব্রেরি ব্যবহার করা হতো। কিন্তু এতে বড় সমস্যা ছিল: V8 ইঞ্জিন আপডেট হলেই এর C++ API-তে ব্রেকিং চেঞ্জ আসত, যার ফলে পুরানো C++ অ্যাডনগুলো ক্র্যাশ করত এবং প্রতিবার নোড ভার্সন আপডেটের সাথে রি-কম্পাইল করতে হতো।
+
+এই সমস্যা দূর করতে Node.js প্রবর্তন করেছে **Node-API (N-API)**:
+- এটি একটি বিশুদ্ধ C-স্টাইল এপিআই যা V8 ইঞ্জিনের চারপাশে একটি সুরক্ষিত বাউন্ডারি তৈরি করে।
+- N-API আমাদের **ABI Stability (Application Binary Interface Stability)** অফার করে। এর অর্থ হলো, একবার নোড-এপিআই দিয়ে কম্পাইল করা C++ বাইনারি অ্যাডন ফিউচারে নোডের যেকোনো আপগ্রেডেড ভার্সনে কোনো প্রকার রি-কম্পাইলেশন ছাড়াই সফলভাবে রান করবে।
+
+---
+
+### JavaScript Object থেকে C++ Primitive-এ ডাটা কনভার্ট ট্রিক
+
+জাভাস্ক্রিপ্ট অবজেক্ট মেমরির হিপে V8-এর হ্যান্ডেল অবজেক্ট (`v8::Local<v8::Value>`) হিসেবে জমা থাকে। C++ কোড সরাসরি এই V8 মেমরি পড়তে পারে না।
+
+নিচে একটি C++ নোড-এপিআই কোডের আর্কিটেকচারাল স্ট্রাকচার দেখানো হলো যা জাভাস্ক্রিপ্ট ভ্যালুকে C++ ইন্টিজারে রূপান্তর করে ও রিটার্ন করে:
+
+```cpp
+#include <node_api.h>
+
+// জাভাস্ক্রিপ্ট থেকে কল করা ফাংশন যা C++ লেভেলে এক্সিকিউট হবে
+napi_value AddSystemResource(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2];
+    
+    // ১. JS থেকে পাঠানো আর্গুমেন্ট রিসিভ করা (V8 Handles)
+    napi_get_cb_info(env, info, &argc, args, NULL, NULL);
+
+    int32_t val1, val2;
+    // ২. V8 Heap Value থেকে C++ primitive int32-এ মেমরি কনভার্সন
+    napi_get_value_int32(env, args[0], &val1);
+    napi_get_value_int32(env, args[1], &val2);
+
+    // ৩. C++ CPU-তে নেটিভ স্পিডে ক্যালকুলেশন
+    int32_t sum = val1 + val2;
+
+    // ৪. C++ primitive থেকে পুনরায় V8 heap napi_value-তে কনভার্সন ও রিটার্ন
+    napi_value result;
+    napi_create_int32(env, sum, &result);
+    return result;
+}
+```
+
+---
+
+## ১৪. Deno vs. Bun Systems Architecture
+
+Node.js-এর উদ্ভাবক রায়ান ডাল (Ryan Dahl) পরবর্তীতে Node.js-এর কিছু সিকিউরিটি ও আর্কিটেকচারাল ডিজাইনের সীমাবদ্ধতা কাটিয়ে উঠতে **Deno** তৈরি করেন। অন্যদিকে জারড সামনার (Jarred Sumner) জাভাস্ক্রিপ্ট এক্সিকিউশন ও বান্ডলিং গতিতে বৈপ্লবিক গতি আনতে তৈরি করেন **Bun**। এদের ফিজিক্যাল সিস্টেম আর্কিটেকচার সম্পূর্ণ ভিন্ন।
+
+```text
++---------------------------------------------------------------------------------+
+| Runtime Systems Comparison                                                      |
+|                                                                                 |
+|  [ Node.js ]                   [ Deno ]                     [ Bun ]             |
+|  - Engine: Google V8           - Engine: Google V8          - Engine: JSCore    |
+|  - Loop: libuv (C)             - Loop: Tokio (Rust)         - Loop: Zig Event   |
+|  - Bridge: C++ Bindings        - Bridge: Rust Ops           - Bridge: Zig Direct|
++---------------------------------------------------------------------------------+
+```
+
+### Deno Architecture (Rust & Tokio)
+- **Rust Core:** ডেনো সম্পূর্ণভাবে **Rust** ল্যাঙ্গুয়েজ দিয়ে ডেভেলপ করা হয়েছে। এটি গুগলের V8 ইঞ্জিন ব্যবহার করে কিন্তু V8-এর চারপাশের ওএস বাইন্ডিংগুলোর জন্য C++ এর বদলে মরিচাহীন ও মেমরি-সুরক্ষিত Rust ব্যবহার করে।
+- **Tokio Event Loop:** ডেনো নোডের C-ভিত্তিক libuv ইভেন্ট লুপের পরিবর্তে Rust-এর বিশ্বখ্যাত মাল্টি-থ্রেডেড অ্যাসিনক্রোনাস রানটাইম **Tokio** ব্যবহার করে। Tokio চরম গতিতে ওএস থ্রেডগুলো অর্কেস্ট্রেট করে।
+- **Rust Ops (deno_core):** জাভাস্ক্রিপ্ট থেকে Rust-এ ডাটা পাস করার জন্য ডেনো তার নিজস্ব অত্যন্ত দক্ষ মেসেজ পাসিং সিস্টেম **Ops** বা অপারেশন ব্যবহার করে।
+- **Security Sandboxing:** ডেনো ডিফল্টভাবে সুরক্ষিত স্যান্ডবক্সে চলে। রানটাইমে অনুমতি (`--allow-net`, `--allow-read`) না দিলে V8 ইঞ্জিন কোনোভাবেই Rust ব্রিজের মাধ্যমে ওএস ফাইলসিস্টেম বা নেটওয়ার্ক সকেট স্পর্শ করতে পারে না।
+
+---
+
+### Bun Architecture (Zig & JavaScriptCore)
+- **JavaScriptCore (JSC):** বানের সবচেয়ে বড় বৈপ্লবিক সিদ্ধান্ত হলো তারা গুগলের V8 ইঞ্জিন ব্যবহার না করে অ্যাপলের সাফারির জন্য তৈরি **JavaScriptCore (JSC)** ইঞ্জিন ব্যবহার করে। JSC অত্যন্ত লাইটওয়েট এবং V8-এর তুলনায় এর স্টার্টআপ টাইম (Startup Time) ও মেমরি ওভারহেড অনেক কম।
+- **Zig Language:** বান সম্পূর্ণভাবে সিস্টেম প্রোগ্রামিং ল্যাঙ্গুয়েজ **Zig** দিয়ে তৈরি। Zig-এ কোনো হাই-লেভেল মেমরি ওভারহেড বা হিডেন কন্ট্রোল ফ্লো থাকে না। এটি সরাসরি C কোডের সমকক্ষ এবং চরম কম্পাইলার-লেভেল অপ্টিমাইজেশন প্রদান করে।
+- **Custom Event Loop (Direct syscalls):** বান কোনো থার্ড-পার্টি লাইব্রেরি (যেমন libuv বা Tokio) ব্যবহার না করে সরাসরি ওএসের কার্নেলের ওপর কাস্টম ইভেন্ট লুপ তৈরি করেছে। এটি সরাসরি লিনাক্সের `epoll` এবং ম্যাকের `kqueue` মেমরি অ্যাড্রেস বাইন্ড করে ওএস কার্নেল লেভেলে সরাসরি সিস্টেম কল (Direct Syscalls) ফায়ার করে। ফলে বানের অ্যাসিনক্রোনাস স্পিড ডেনো বা নোডের তুলনায় কয়েক গুণ বেশি।
+
+---
+
+## ১৫. Systems Synthesis Project: Scratch-built Non-blocking Net Socket Server + File Watcher
+
+এই চ্যাপ্টারে আমরা পূর্ববর্তী সমস্ত থিওরিটিক্যাল জ্ঞান (Call Stack, Memory Heap, Event Loop Poll Phase, Libuv Thread Pool, Multi-threading) প্র্যাক্টিক্যাল কোডের মাধ্যমে প্রুফ করব।
+
+আমরা সম্পূর্ণ নোডজেএসের নেটিভ মডিউল ব্যবহার করে একটি **Multi-threaded, Non-blocking TCP Net Socket Server + Real-time File Watcher** অ্যাপ্লিকেশন তৈরি করব।
+
+### প্রজেক্টের ওএস-লেভেল কাজের ফ্লো:
+১. **TCP Socket Server:** পোর্ট `৯০০০`-এ রান করবে। এটি যেকোনো ইনকামিং অ্যাসিনক্রোনাস কানেকশনকে সিঙ্গেল-থ্রেডেড ইভেন্ট লুপের (Poll Phase) মাধ্যমে নন-ব্লকিং মোডে হ্যান্ডেল করবে।
+২. **File Watcher:** সার্ভারটি ওএস লেভেলে একটি `audit.log` ফাইল মনিটর করবে। ফাইলে নতুন কোনো মেমরি ডাটা বা টেক্সট রাইট হওয়ামাত্র সার্ভারটি সাথে সাথে সমস্ত কানেক্টেড ক্লায়েন্টদের স্ক্রিনে রিয়েল-টাইমে তা ব্রডকাস্ট করবে।
+৩. **Thread-safe Worker Threads:** লগের ডাটা যখনই পরিবর্তিত হবে, প্রসেসরের মেইন থ্রেডকে ধীরগতির না করে আমরা নোডের **`worker_threads`** লাইব্রেরি ব্যবহার করে একটি ব্যাকগ্রাউন্ড থ্রেডে সেই লগের SHA-256 ক্রিপ্টোগ্রাফিক হ্যাশ ক্যালকুলেশন করব। এরপর মেইন থ্রেডের ইভেন্ট লুপে মেসেজ পাঠিয়ে ক্লায়েন্টদের আপডেট ফরোয়ার্ড করব।
+
+---
+
+### সম্পূর্ণ রানিং সিস্টেম কোড (`system-server.js`):
+
+```javascript
+/**
+ * Systems Synthesis Project
+ * A Non-blocking, Multi-threaded TCP Socket Server & Live File Watcher built from scratch.
+ * Resolves systems interaction, V8 Event Loop & OS Kernel Bridges.
+ */
+
+const net = require("net");
+const fs = require("fs");
+const path = require("path");
+const { Worker, isMainThread, parentPort, workerData } = require("worker_threads");
+
+// ==========================================
+// ১. BACKGROUND WORKER THREAD CODE (CPU INTENSIVE)
+// ==========================================
+if (!isMainThread) {
+    // এই অংশটি ব্যাকগ্রাউন্ড ওএস থ্রেডে প্যারালালি রান করবে!
+    // মেইন জাভাস্ক্রিপ্ট থ্রেডের কল স্ট্যাক বা ইভেন্ট লুপ জ্যাম হবে না।
+    const crypto = require("crypto");
+    
+    const logData = workerData.text;
+    console.log(`[WORKER THREAD] Processing CPU-intensive SHA-256 hash for log data...`);
+    
+    // ক্রিপ্টো হ্যাশ জেনারেশন (ভারী সিপিইউ ইনটেনসিভ কাজ)
+    const hash = crypto.createHash("sha256").update(logData).digest("hex");
+    
+    // রেজাল্ট মেইন থ্রেডের ইভেন্ট লুপে ফেরত পাঠানো হচ্ছে
+    parentPort.postMessage({ hash });
+    process.exit(0);
+}
+
+// ==========================================
+// ২. MAIN THREAD CODE (EVENT LOOP & I/O MULTIPLEXING)
+// ==========================================
+const LOG_FILE_PATH = path.join(__dirname, "audit.log");
+const PORT = 9000;
+
+// কানেক্টেড টিসিপি সকেট ক্লায়েন্টদের মেমরি ট্র্যাক করার তালিকা
+const activeSockets = new Set();
+
+// ফিজিক্যাল লগ ফাইলটি আগে থেকে মেমরিতে তৈরি করে রাখা
+if (!fs.existsSync(LOG_FILE_PATH)) {
+    fs.writeFileSync(LOG_FILE_PATH, "[SYSTEM INIT] Audit log initialized\n", "utf-8");
+}
+
+// ৩. TCP SOCKET SERVER তৈরি (Poll Phase-এ নন-ব্লকিং I/O)
+const server = net.createServer((socket) => {
+    // নতুন কোনো ওএস সকেট রিকোয়েস্ট সফলভাবে রিসিভ হয়েছে 
+    const clientAddress = `${socket.remoteAddress}:${socket.remotePort}`;
+    console.log(`[MAIN THREAD] TCP Connection established from: ${clientAddress}`);
+    
+    // সকেট ট্র্যাক করতে মেমরি সেটে অ্যাড করা
+    activeSockets.add(socket);
+    
+    socket.write(`Welcome to the AntiGravity Systems Audit socket!\n`);
+    socket.write(`Listening for real-time changes in '${path.basename(LOG_FILE_PATH)}'...\n\n`);
+    
+    // ক্লায়েন্ট সংযোগ বিচ্ছিন্ন করলে মেমরি থেকে মুছে দেওয়া (Memory Leak Prevention)
+    socket.on("close", () => {
+        console.log(`[MAIN THREAD] Client connection closed: ${clientAddress}`);
+        activeSockets.delete(socket);
+    });
+    
+    socket.on("error", (err) => {
+        console.error(`[MAIN THREAD] Socket Error from ${clientAddress}:`, err.message);
+        activeSockets.delete(socket);
+    });
+});
+
+// ৪. REAL-TIME FILE WATCHER (OS Filesystem Event Bridge)
+// fs.watch সরাসরি ওএস লিনাক্স কার্নেলের inotify এপিআই-এর সাথে কানেক্ট করে
+fs.watch(LOG_FILE_PATH, (eventType, filename) => {
+    if (eventType === "change") {
+        console.log(`[MAIN THREAD] Filesystem change detected on ${filename}. Accessing libuv thread pool...`);
+        
+        // libuv ফাইল রিড অপারেশন থ্রেড পুলে পাঠিয়ে দেয়
+        fs.readFile(LOG_FILE_PATH, "utf-8", (err, data) => {
+            if (err) {
+                console.error("Failed to read log file:", err.message);
+                return;
+            }
+            
+            // সর্বশেষ নতুন লাইন এক্সট্র্যাক্ট করা
+            const lines = data.trim().split("\n");
+            const lastLine = lines[lines.length - 1];
+            
+            console.log(`[MAIN THREAD] New log entry: "${lastLine}"`);
+            
+            // ৫. MULTI-THREADING: ক্রিপ্টো হ্যাশ প্রসেসিংকে ওয়ার্কার থ্রেডে পাঠানো
+            const worker = new Worker(__filename, {
+                workerData: { text: lastLine }
+            });
+            
+            // ওয়ার্কার থ্রেড থেকে মেসেজ রিসিভ করা (ইভেন্ট লুপ মাইক্রো/ম্যাক্রো ফেজ ট্রিগার)
+            worker.on("message", ({ hash }) => {
+                console.log(`[MAIN THREAD] Worker successfully finished! Computed SHA-256: ${hash.slice(0, 16)}...`);
+                
+                const broadcastMessage = `[BROADCAST CHANGE] Log: "${lastLine}" | Hash: ${hash}\n`;
+                
+                // সমস্ত সকেট ক্লায়েন্টদের কাছে রিয়েল-টাইমে আপডেট পাঠানো 
+                let clientCount = 0;
+                activeSockets.forEach((clientSocket) => {
+                    if (clientSocket.writable) {
+                        clientSocket.write(broadcastMessage);
+                        clientCount++;
+                    }
+                });
+                console.log(`[MAIN THREAD] Broadcasted log change successfully to ${clientCount} active TCP client(s).\n`);
+            });
+            
+            worker.on("error", (workerErr) => {
+                console.error("[MAIN THREAD] Worker Thread Error:", workerErr);
+            });
+        });
+    }
+});
+
+// সার্ভার চালু করা
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`[MAIN THREAD] Non-blocking TCP Server running successfully on 0.0.0.0:${PORT}`);
+    console.log(`[MAIN THREAD] System Log File located at: ${LOG_FILE_PATH}`);
+    console.log(`👉 To connect, open another terminal and run: nc localhost ${PORT}\n`);
+    console.log(`[SIMULATION] Appending test logs to trigger filesystem events...`);
+    
+    // টেস্ট লগ এমুলেশন টাইমার (প্রতি ৫ সেকেন্ডে ফাইল রাইট করবে)
+    let count = 1;
+    const intervalId = setInterval(() => {
+        if (count > 5) {
+            clearInterval(intervalId);
+            console.log("[SIMULATION] Simulation finished. Server remains active.");
+            return;
+        }
+        const logEntry = `[AUDIT INFO] Node cluster transaction #${count} - Memory Allocation secure.`;
+        fs.appendFile(LOG_FILE_PATH, logEntry + "\n", (err) => {
+            if (err) console.error("Emulation write failed:", err.message);
+        });
+        count++;
+    }, 6000);
+});
+```
+
+---
+
+### ওএস এবং রানটাইম কনসেপ্টস কীভাবে এই প্রজেক্টে সিন্থেসাইজ হচ্ছে:
+১. **Call Stack:** `net.createServer()` এবং `fs.watch()` কল হয়ে স্ট্যাক থেকে পপ হয়ে গেছে। সার্ভার মেমরি লক না করেই সচল আছে।
+২. **Memory Heap:** `activeSockets` এর ভেতরের সকেট অবজেক্টগুলো হিপ মেমরিতে এলোকেটেড আছে। যখন ক্লায়েন্ট চলে যায় (`on('close')`), আমরা `.delete()` কল করে হিপ থেকে রেফারেন্স রিসেট করি, যা মেমরি লিক থেকে সুরক্ষা দেয়।
+৩. **Event Loop - Poll Phase:** ফাইল চেঞ্জ বা নেটওয়ার্ক সকেট প্যাকেট রিসিভ করার জন্য ইভেন্ট লুপটি Poll Phase-এ ওএস কার্নেল এপিআই লিসেন করছে। কোনো রিকোয়েস্ট আসবামাত্র Poll Phase ওএস বাফার খালি করে কলব্যাকে কন্ট্রোল ফেরত পাঠায়।
+৪. **libuv Thread Pool:** `fs.readFile()` ফায়ার হওয়ামাত্র libuv তার ইন্টারনাল ওয়ার্কার থ্রেডকে ডিস্ক রিড করার জন্য মেমরিতে অ্যাসাইন করে দেয়, ফলে মেইন থ্রেডের রানিং স্পিড একদম ড্রপ করে না।
+৫. **Multi-threaded Worker Threads:** যখনই লগের ডাটা বা হ্যাশ ডাইজেস্ট করার মতো অতিরিক্ত প্রসেসর ইনটেনসিভ কাজ সামনে আসে, নোড একটি সম্পূর্ণ পৃথক ওএস থ্রেড স্পন করে ওয়ার্কারের সাহায্যে ওই কাজটি সম্পন্ন করে মেইন থ্রেডে পুশ করে। এটি সিঙ্গেল থ্রেডের সরলতা এবং মাল্টি-থ্রেডিংয়ের গতি ও দক্ষতার এক অপূর্ব সিস্টেমের মেলবন্ধন!
+
+---
