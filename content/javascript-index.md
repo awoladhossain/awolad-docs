@@ -21,11 +21,11 @@ category: 'Software Engineering'
 
 ```mermaid
 flowchart TD
-    subgraph V8Engine [V8 Engine Sandbox (JS Execution)]
-        Parser["1. Parser & AST <br> (Lexical/Syntax Analysis)"]
-        Ignition["2. Ignition Interpreter <br> (Bytecode Generation)"]
-        Feedback["3. Profiling Feedback <br> (Type Feedback Vector)"]
-        TurboFan["4. TurboFan JIT Compiler <br> (Native Machine Assembly)"]
+    subgraph V8Engine ["V8 Engine Sandbox (JS Execution)"]
+        Parser["1. Parser and AST (Lexical/Syntax Analysis)"]
+        Ignition["2. Ignition Interpreter (Bytecode Generation)"]
+        Feedback["3. Profiling Feedback (Type Feedback Vector)"]
+        TurboFan["4. TurboFan JIT Compiler (Native Machine Assembly)"]
         
         Parser --> Ignition
         Ignition --> Feedback
@@ -33,16 +33,16 @@ flowchart TD
         TurboFan -->|De-optimization| Ignition
     end
 
-    subgraph RuntimeBoundary [Runtime Environment: Node.js / Browser]
-        CallStack["Call Stack <br> (Activation Records)"]
-        Heap["V8 Heap Memory <br> (New Space / Old Space GC)"]
-        EventLoop["libuv Event Loop <br> (6 Phase Async Execution Loop)"]
-        ThreadPool["libuv Thread Pool <br> (Blocking OS Tasks)"]
+    subgraph RuntimeBoundary ["Runtime Environment: Node.js / Browser"]
+        CallStack["Call Stack (Activation Records)"]
+        Heap["V8 Heap Memory (New Space / Old Space GC)"]
+        EventLoop["libuv Event Loop (6 Phase Async Execution Loop)"]
+        ThreadPool["libuv Thread Pool (Blocking OS Tasks)"]
     end
 
-    subgraph OSBridge [Operating System Layer]
-        Epoll["Kernel Polling Engine <br> (epoll / kqueue / IOCP)"]
-        SystemFS["Physical Filesystem & Sockets"]
+    subgraph OSBridge ["Operating System Layer"]
+        Epoll["Kernel Polling Engine (epoll / kqueue / IOCP)"]
+        SystemFS["Physical Filesystem and Sockets"]
     end
 
     Ignition -->|Execution| CallStack
