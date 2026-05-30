@@ -179,6 +179,12 @@ flowchart TD
 *   **Chapter 24: Array Internals & Hashed Data Structures (Array vs Map vs Set)**
     *   ভি৮ অ্যারির ফিজিক্যাল অ্যালোকেশন: **Fast Elements** (contiguous flat C++) বনাম **Dictionary Elements** (sparse hashes) এবং ওএস মেমরি কলাপ্স।
     *   `Map` এবং `Set` এর ভেতরের deterministic hashing buckets ম্যাপিং এবং মেমরি বাকেট ওভারহেড বিশ্লেষণ।
+*   **Chapter 24B: Callbacks, Callback Hell & Promises C++ Internals**
+    *   **Inversion of Control (IoC):** কলব্যাকের মাধ্যমে আউটার স্কোপ ক্লোজার হোল্ডিং এবং স্ট্যাক ওভারহেড।
+    *   V8 C++ **`JSPromise`** ইন্টারনালস: `[[PromiseState]]`, `[[PromiseResult]]` এবং `[[PromiseFulfillReactions]]` লিঙ্কড-লিস্ট এর ভৌত রূপ।
+*   **Chapter 24C: V8 Scopes & Prototype Chain Delegation**
+    *   ভি৮ কম্পাইলারে Scope Tree জেনারেশন: Global, Function এবং Lexical Block scopes।
+    *   **Prototype Delegation:** `__proto__` লিঙ্কড-লিস্টের ওএস মেমরি ট্রাভার্সাল এবং **Inline Caching (IC)** এর প্রোটোটাইপ অপ্টিমাইজেশন ট্রিক।
 
 
 
@@ -198,6 +204,6 @@ flowchart TD
 
 > [!NOTE]
 > **Learning Journey Note:**
-> এই ২৭টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
+> এই ২৯টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
 
 ---
