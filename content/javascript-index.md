@@ -164,10 +164,26 @@ flowchart TD
     *   প্রোডাকশনে ভি৮ মেমরিকে সুরক্ষিত করতে `--disallow-code-generation-from-strings` এবং `--write-protect-code-memory` মেমরি সেফটি ফ্ল্যাগের ব্যবহার।
     *   ওএস-লেভেল সিকিউরিটি টিউনিং: Rootless execution, User Namespaces এবং Seccomp কার্নেল সিস্টেম কল ফিল্টারিং।
 
+
+
+
+### 📂 Module 8: Syntax Internals, Optimization & Runtime Mechanics (সিনট্যাক্স ইন্টারনালস ও অপ্টিমাইজেশন)
+*   **Chapter 22: Scope Variables & Stack Pointers (var vs let vs const)**
+    *   V8 ইঞ্জিনের Variable Environment বনাম Lexical Environment মেমরি ম্যানেজমেন্ট।
+    *   **Temporal Dead Zone (TDZ):** আন-ইনিশিয়ালাইজড ভেরিয়েবলের মেমরি ব্লকিং এরর ট্র্যাকিং।
+    *   `const` এর স্ট্যাক পয়েন্টার লক বনাম ডায়নামিক হিপ মেমরি প্রোপার্টি পরিবর্তনের সূক্ষ্ম পার্থক্য।
+*   **Chapter 23: Loop Executions & JIT Optimizations (for vs forEach vs map/reduce)**
+    *   **Loop Unrolling:** JIT কম্পাইলার কীভাবে লুপের কন্ডিশনাল কলাপ্স এড়াতে প্রসেসর লেভেলে লুপ উন্মুক্ত করে।
+    *   `forEach` এর মাধ্যমে কল স্ট্যাকের ডায়নামিক **Activation Record (Stack Frame)** স্পন ওভারহেড।
+    *   `map`, `filter` ও `reduce` মেথডগুলোর চেইনিংয়ে হিপ মেমরিতে অতিরিক্ত অবজেক্ট অ্যালোকেশন ও Scavenge GC ট্রিগার হওয়া।
+*   **Chapter 24: Array Internals & Hashed Data Structures (Array vs Map vs Set)**
+    *   ভি৮ অ্যারির ফিজিক্যাল অ্যালোকেশন: **Fast Elements** (contiguous flat C++) বনাম **Dictionary Elements** (sparse hashes) এবং ওএস মেমরি কলাপ্স।
+    *   `Map` এবং `Set` এর ভেতরের deterministic hashing buckets ম্যাপিং এবং মেমরি বাকেট ওভারহেড বিশ্লেষণ।
+
 ---
 
 > [!NOTE]
 > **Learning Journey Note:**
-> এই ২১টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
+> এই ২৪টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
 
 ---
