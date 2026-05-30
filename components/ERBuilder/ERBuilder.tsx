@@ -18,12 +18,8 @@ import '@xyflow/react/dist/style.css';
 import {
   Database,
   Plus,
-  Play,
   Trash2,
-  Download,
-  Upload,
   Search,
-  Maximize2,
   RefreshCw,
   Copy,
   Check,
@@ -31,7 +27,7 @@ import {
   Info,
 } from 'lucide-react';
 import { Table, Relation, Column } from './types';
-import TableNode, { CustomNode } from './TableNode';
+import TableNode from './TableNode';
 import RelationModal from './RelationModal';
 import { getLayoutedElements } from './layout';
 import { generateSQL } from './sqlGenerator';
@@ -144,8 +140,6 @@ const NODE_TYPES = {
 
 export default function ERBuilder() {
   const [mounted, setMounted] = useState(false);
-  const [tables, setTables] = useState<Table[]>([]);
-  const [relations, setRelations] = useState<Relation[]>([]);
 
   // UI inputs state
   const [searchQuery, setSearchQuery] = useState('');
@@ -161,83 +155,96 @@ export default function ERBuilder() {
   const [newColIsPK, setNewColIsPK] = useState(false);
   const [newColIsFK, setNewColIsFK] = useState(false);
 
-  // React Flow states
+  // React Flow states (single source of truth)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // Check hydration mount
-  useEffect(() => {
-    setMounted(true);
-    // Load local storage diagram if exists, otherwise load preset
-    const saved = localStorage.getItem('core_kernel_diagram');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setTables(parsed.tables || []);
-        setRelations(parsed.relations || []);
-      } catch (e) {
-        // Fallback
-        setTables(ECOMMERCE_PRESETS);
-        setRelations(ECOMMERCE_RELATIONS);
-      }
-    } else {
-      setTables(ECOMMERCE_PRESETS);
-      setRelations(ECOMMERCE_RELATIONS);
-    }
-  }, []);
-
-  // Save to local storage on schema changes
-  useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem(
-      'core_kernel_diagram',
-      JSON.stringify({ tables, relations })
-    );
-  }, [tables, relations, mounted]);
-
-  // Synchronize React Flow nodes with tables state
-  useEffect(() => {
-    const tableNodes: Node[] = tables.map((table) => ({
-      id: table.id,
+  // Create Table Node utility
+  const createTableNode = useCallback((id: string, name: string, x: number, y: number, columns: Column[]): Node => {
+    return {
+      id,
       type: 'tableNode',
-      position: { x: table.x, y: table.y },
-      selected: false,
+      position: { x, y },
       data: {
-        name: table.name,
-        columns: table.columns,
+        name,
+        columns,
         onDeleteTable: (tableId: string) => {
-          setTables((prev) => prev.filter((t) => t.id !== tableId));
-          setRelations((prev) =>
-            prev.filter((r) => r.sourceTable !== tableId && r.targetTable !== tableId)
-          );
+          setNodes((nds) => nds.filter((n) => n.id !== tableId));
+          setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
         },
         onAddColumn: (tableId: string) => {
           setActiveTableForCol(tableId);
           setIsAddingCol(true);
         },
         onDeleteColumn: (tableId: string, colIndex: number) => {
-          setTables((prev) =>
-            prev.map((t) => {
-              if (t.id !== tableId) return t;
-              const newCols = [...t.columns];
+          setNodes((nds) =>
+            nds.map((n) => {
+              if (n.id !== tableId) return n;
+              const newCols = [...(n.data.columns as Column[])];
               newCols.splice(colIndex, 1);
-              return { ...t, columns: newCols };
+              return {
+                ...n,
+                data: { ...n.data, columns: newCols },
+              };
             })
           );
         },
       },
-    }));
+    };
+  }, [setNodes, setEdges]);
 
-    setNodes(tableNodes);
-  }, [tables, setNodes]);
-
-  // Synchronize React Flow edges with relations state
+  // Check hydration mount and load initial schemas
   useEffect(() => {
-    const flowEdges: Edge[] = relations.map((rel) => {
-      // Find edge colors based on types
-      let strokeColor = '#10b981'; // emerald for 1:N
-      if (rel.type === '1:1') strokeColor = '#06b6d4'; // cyan
-      if (rel.type === 'N:M') strokeColor = '#8b5cf6'; // purple
+    setMounted(true);
+    const saved = localStorage.getItem('core_kernel_diagram_v3');
+    
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.nodes && parsed.edges) {
+          // Re-inject callbacks into parsed nodes
+          const formattedNodes = parsed.nodes.map((node: any) => ({
+            ...node,
+            data: {
+              ...node.data,
+              onDeleteTable: (tableId: string) => {
+                setNodes((nds) => nds.filter((n) => n.id !== tableId));
+                setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
+              },
+              onAddColumn: (tableId: string) => {
+                setActiveTableForCol(tableId);
+                setIsAddingCol(true);
+              },
+              onDeleteColumn: (tableId: string, colIndex: number) => {
+                setNodes((nds) =>
+                  nds.map((n) => {
+                    if (n.id !== tableId) return n;
+                    const newCols = [...(n.data.columns as Column[])];
+                    newCols.splice(colIndex, 1);
+                    return {
+                      ...n,
+                      data: { ...n.data, columns: newCols },
+                    };
+                  })
+                );
+              },
+            },
+          }));
+          setNodes(formattedNodes);
+          setEdges(parsed.edges);
+          return;
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+
+    // Load defaults if no saved state
+    const defaultNodes = ECOMMERCE_PRESETS.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns));
+    const defaultEdges = ECOMMERCE_RELATIONS.map((rel) => {
+      let strokeColor = '#10b981';
+      if (rel.type === '1:1') strokeColor = '#06b6d4';
+      if (rel.type === 'N:M') strokeColor = '#8b5cf6';
 
       return {
         id: rel.id,
@@ -248,8 +255,8 @@ export default function ERBuilder() {
         animated: true,
         type: 'step',
         label: rel.type,
-        labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontClassName: 'font-mono' },
-        labelBgPadding: [4, 4],
+        labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+        labelBgPadding: [4, 4] as [number, number],
         labelBgBorderRadius: 4,
         labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
         style: { stroke: strokeColor, strokeWidth: 2 },
@@ -262,29 +269,52 @@ export default function ERBuilder() {
       };
     });
 
-    setEdges(flowEdges);
-  }, [relations, setEdges]);
+    setNodes(defaultNodes);
+    setEdges(defaultEdges);
+  }, [createTableNode, setNodes, setEdges]);
 
-  // Handle manual position changes during dragging
-  const handleNodesChange = useCallback(
-    (changes: any) => {
-      onNodesChange(changes);
-      changes.forEach((change: any) => {
-        if (change.type === 'position' && change.position) {
-          setTables((prev) =>
-            prev.map((t) =>
-              t.id === change.id
-                ? { ...t, x: change.position.x, y: change.position.y }
-                : t
-            )
-          );
-        }
-      });
-    },
-    [onNodesChange]
-  );
+  // Auto-save nodes and edges on changes
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem(
+      'core_kernel_diagram_v3',
+      JSON.stringify({ nodes, edges })
+    );
+  }, [nodes, edges, mounted]);
 
-  // Trigger relation modal on handle connections
+  // Derive Table metadata state dynamically for SQL generation
+  const tables = useMemo<Table[]>(() => {
+    return nodes.map((node) => ({
+      id: node.id,
+      name: node.data.name as string,
+      x: node.position.x,
+      y: node.position.y,
+      columns: (node.data.columns as Column[]) || [],
+    }));
+  }, [nodes]);
+
+  // Derive Relation metadata state dynamically for SQL generation
+  const relations = useMemo<Relation[]>(() => {
+    return edges.map((edge) => {
+      const sourceCol = edge.sourceHandle
+        ? edge.sourceHandle.replace(`${edge.source}-`, '').replace('-source', '')
+        : '';
+      const targetCol = edge.targetHandle
+        ? edge.targetHandle.replace(`${edge.target}-`, '').replace('-target', '')
+        : '';
+
+      return {
+        id: edge.id,
+        sourceTable: edge.source,
+        sourceColumn: sourceCol,
+        targetTable: edge.target,
+        targetColumn: targetCol,
+        type: (edge.label as '1:1' | '1:N' | 'N:M') || '1:N',
+      };
+    });
+  }, [edges]);
+
+  // Handle connection events
   const onConnect = useCallback((connection: Connection) => {
     setPendingConnection(connection);
   }, []);
@@ -294,23 +324,33 @@ export default function ERBuilder() {
     const { source, target, sourceHandle, targetHandle } = pendingConnection;
     if (!source || !target || !sourceHandle || !targetHandle) return;
 
-    // Parse column names out of handle IDs (e.g. users-email-source -> email)
-    const sourceCol = sourceHandle.replace(`${source}-`, '').replace('-source', '');
-    const targetCol = targetHandle.replace(`${target}-`, '').replace('-target', '');
+    let strokeColor = '#10b981';
+    if (type === '1:1') strokeColor = '#06b6d4';
+    if (type === 'N:M') strokeColor = '#8b5cf6';
 
-    const newRelation: Relation = {
-      id: `rel_${source}_${sourceCol}_to_${target}_${targetCol}`,
-      sourceTable: source,
-      sourceColumn: sourceCol,
-      targetTable: target,
-      targetColumn: targetCol,
-      type,
+    const newEdge: Edge = {
+      id: `rel_${source}_${sourceHandle}_to_${target}_${targetHandle}`,
+      source,
+      target,
+      sourceHandle,
+      targetHandle,
+      animated: true,
+      type: 'step',
+      label: type,
+      labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+      labelBgPadding: [4, 4],
+      labelBgBorderRadius: 4,
+      labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
+      style: { stroke: strokeColor, strokeWidth: 2 },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: strokeColor,
+        width: 12,
+        height: 12,
+      },
     };
 
-    // Prevent duplicate relations
-    if (!relations.some((r) => r.id === newRelation.id)) {
-      setRelations((prev) => [...prev, newRelation]);
-    }
+    setEdges((eds) => addEdge(newEdge, eds));
     setPendingConnection(null);
   };
 
@@ -320,24 +360,23 @@ export default function ERBuilder() {
     if (!newTableName.trim()) return;
     const cleanName = newTableName.trim().toLowerCase().replace(/\s+/g, '_');
 
-    // Prevent duplicate tables
-    if (tables.some((t) => t.name === cleanName)) {
+    if (nodes.some((n) => n.id === cleanName)) {
       alert('Table already exists!');
       return;
     }
 
-    const newTable: Table = {
-      id: cleanName,
-      name: cleanName,
-      x: 150 + Math.random() * 200,
-      y: 150 + Math.random() * 200,
-      columns: [
+    const newNode = createTableNode(
+      cleanName,
+      cleanName,
+      150 + Math.random() * 200,
+      150 + Math.random() * 200,
+      [
         { name: 'id', type: 'INT', isPK: true },
         { name: 'created_at', type: 'TIMESTAMP' },
-      ],
-    };
+      ]
+    );
 
-    setTables((prev) => [...prev, newTable]);
+    setNodes((nds) => [...nds, newNode]);
     setNewTableName('');
   };
 
@@ -354,19 +393,24 @@ export default function ERBuilder() {
       isFK: newColIsFK,
     };
 
-    setTables((prev) =>
-      prev.map((t) => {
-        if (t.id !== activeTableForCol) return t;
-        // Avoid duplicate columns
-        if (t.columns.some((c) => c.name === cleanName)) {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id !== activeTableForCol) return node;
+        const cols = (node.data.columns as Column[]) || [];
+        if (cols.some((c) => c.name === cleanName)) {
           alert('Column already exists!');
-          return t;
+          return node;
         }
-        return { ...t, columns: [...t.columns, newCol] };
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            columns: [...cols, newCol],
+          },
+        };
       })
     );
 
-    // Reset column state
     setIsAddingCol(false);
     setNewColName('');
     setNewColType('INT');
@@ -377,20 +421,23 @@ export default function ERBuilder() {
   // Clear/Reset Schema
   const handleResetDiagram = () => {
     if (confirm('Are you sure you want to delete the entire schema? This action is irreversible.')) {
-      setTables([]);
-      setRelations([]);
-      localStorage.removeItem('core_kernel_diagram');
+      setNodes([]);
+      setEdges([]);
+      localStorage.removeItem('core_kernel_diagram_v3');
     }
   };
 
   // Preset Loaders
   const handleLoadPreset = (type: 'ecommerce' | 'billing' | 'cms') => {
     if (confirm('Loading a preset will replace your current working schema. Proceed?')) {
+      let presetTables: Table[] = [];
+      let presetRelations: Relation[] = [];
+
       if (type === 'ecommerce') {
-        setTables(ECOMMERCE_PRESETS);
-        setRelations(ECOMMERCE_RELATIONS);
+        presetTables = ECOMMERCE_PRESETS;
+        presetRelations = ECOMMERCE_RELATIONS;
       } else if (type === 'billing') {
-        setTables([
+        presetTables = [
           {
             id: 'accounts',
             name: 'accounts',
@@ -427,8 +474,8 @@ export default function ERBuilder() {
               { name: 'interval', type: 'VARCHAR(20)' },
             ],
           },
-        ]);
-        setRelations([
+        ];
+        presetRelations = [
           {
             id: 'rel_accounts_subs',
             sourceTable: 'subscriptions',
@@ -445,10 +492,9 @@ export default function ERBuilder() {
             targetColumn: 'id',
             type: '1:N',
           },
-        ]);
+        ];
       } else {
-        // CMS preset
-        setTables([
+        presetTables = [
           {
             id: 'authors',
             name: 'authors',
@@ -482,8 +528,8 @@ export default function ERBuilder() {
               { name: 'content', type: 'TEXT' },
             ],
           },
-        ]);
-        setRelations([
+        ];
+        presetRelations = [
           {
             id: 'rel_authors_posts',
             sourceTable: 'posts',
@@ -500,8 +546,40 @@ export default function ERBuilder() {
             targetColumn: 'id',
             type: '1:N',
           },
-        ]);
+        ];
       }
+
+      const pNodes = presetTables.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns));
+      const pEdges = presetRelations.map((rel) => {
+        let strokeColor = '#10b981';
+        if (rel.type === '1:1') strokeColor = '#06b6d4';
+        if (rel.type === 'N:M') strokeColor = '#8b5cf6';
+
+        return {
+          id: rel.id,
+          source: rel.sourceTable,
+          target: rel.targetTable,
+          sourceHandle: `${rel.sourceTable}-${rel.sourceColumn}-source`,
+          targetHandle: `${rel.targetTable}-${rel.targetColumn}-target`,
+          animated: true,
+          type: 'step',
+          label: rel.type,
+          labelStyle: { fill: '#ffffff', fontWeight: 700, fontSize: 8, fontFamily: 'monospace' },
+          labelBgPadding: [4, 4] as [number, number],
+          labelBgBorderRadius: 4,
+          labelBgStyle: { fill: '#0a0a0f', fillOpacity: 0.9, stroke: strokeColor, strokeWidth: 1 },
+          style: { stroke: strokeColor, strokeWidth: 2 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: strokeColor,
+            width: 12,
+            height: 12,
+          },
+        };
+      });
+
+      setNodes(pNodes);
+      setEdges(pEdges);
       setTimeout(() => triggerAutoLayout(), 100);
     }
   };
@@ -509,15 +587,7 @@ export default function ERBuilder() {
   // Trigger Dagre automatic layout
   const triggerAutoLayout = () => {
     const { nodes: lNodes, edges: lEdges } = getLayoutedElements(nodes, edges, 'LR');
-    setTables((prev) =>
-      prev.map((t) => {
-        const found = lNodes.find((n) => n.id === t.id);
-        if (found) {
-          return { ...t, x: found.position.x, y: found.position.y };
-        }
-        return t;
-      })
-    );
+    setNodes(lNodes);
   };
 
   // Compile schema details to raw SQL text
@@ -637,10 +707,8 @@ export default function ERBuilder() {
               </div>
               <button
                 onClick={() => {
-                  setTables((prev) => prev.filter((tab) => tab.id !== t.id));
-                  setRelations((prev) =>
-                    prev.filter((r) => r.sourceTable !== t.id && r.targetTable !== t.id)
-                  );
+                  setNodes((nds) => nds.filter((tab) => tab.id !== t.id));
+                  setEdges((eds) => eds.filter((e) => e.source !== t.id && e.target !== t.id));
                 }}
                 className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
               >
@@ -682,7 +750,7 @@ export default function ERBuilder() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={handleNodesChange}
+            onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             nodeTypes={NODE_TYPES}
