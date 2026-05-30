@@ -156,12 +156,12 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph V8Pipeline [V8 Execution Pipeline]
+    subgraph V8Pipeline ["V8 Execution Pipeline"]
         JSCode["JavaScript Text Code"]
-        Parser["AST Parser <br> (Generates Abstract Syntax Tree)"]
-        Ignition["Ignition Interpreter <br> (Generates V8 Bytecode)"]
-        Feedback["Type Feedback Vector <br> (Profiles variable types dynamically)"]
-        TurboFan["TurboFan JIT Compiler <br> (Generates Native Machine Code)"]
+        Parser["AST Parser (Generates Abstract Syntax Tree)"]
+        Ignition["Ignition Interpreter (Generates V8 Bytecode)"]
+        Feedback["Type Feedback Vector (Profiles variable types dynamically)"]
+        TurboFan["TurboFan JIT Compiler (Generates Native Machine Code)"]
         CPU["Physical Host CPU Execution"]
 
         JSCode --> Parser
@@ -262,16 +262,16 @@ add("hello", "world");
 
 ```mermaid
 flowchart LR
-    subgraph CallStackRegion [Call Stack - Fixed Frames]
+    subgraph CallStackRegion ["Call Stack - Fixed Frames"]
         direction TB
-        StackFrame1["Function: printProfile() <br> [agePtr: 0x7ffd98d001] <br> [namePtr: 0x7ffd98d008]"]
-        StackFrame2["Global Execution Context <br> [globalVar: undefined]"]
+        StackFrame1["Function: printProfile() (agePtr: 0x7ffd98d001) (namePtr: 0x7ffd98d008)"]
+        StackFrame2["Global Execution Context (globalVar: undefined)"]
     end
 
-    subgraph MemoryHeapRegion [Memory Heap - Dynamic Blocks]
+    subgraph MemoryHeapRegion ["Memory Heap - Dynamic Blocks"]
         direction TB
-        Obj1["Address: 0x7ffd98d001 <br> { age: 28, type: 'Integer' }"]
-        Obj2["Address: 0x7ffd98d008 <br> { name: 'Awolad', encoding: 'UTF-8' }"]
+        Obj1["Address: 0x7ffd98d001 { age: 28, type: 'Integer' }"]
+        Obj2["Address: 0x7ffd98d008 { name: 'Awolad', encoding: 'UTF-8' }"]
     end
 
     StackFrame1 -->|agePtr Reference| Obj1
@@ -331,10 +331,10 @@ V8-এর জিসি মূলত **Generational Hypothesis** নামক এ
 
 ```mermaid
 flowchart TD
-    subgraph MajorGCProcess [Mark-Sweep-Compact 3-Phase Execution]
-        PhaseM["1. Marking Phase <br> (Tri-color DFS graph traversal)"]
-        PhaseS["2. Sweeping Phase <br> (Adds white object blocks to Free List)"]
-        PhaseC["3. Compacting Phase <br> (Defragments memory by moving live blocks)"]
+    subgraph MajorGCProcess ["Mark-Sweep-Compact 3-Phase Execution"]
+        PhaseM["1. Marking Phase (Tri-color DFS graph traversal)"]
+        PhaseS["2. Sweeping Phase (Adds white object blocks to Free List)"]
+        PhaseC["3. Compacting Phase (Defragments memory by moving live blocks)"]
 
         PhaseM --> PhaseS
         PhaseS --> PhaseC
@@ -479,13 +479,13 @@ createUserSession();
 
 ```mermaid
 flowchart TD
-    subgraph EventLoopMechanics [Task Execution & Event Loop Priority]
+    subgraph EventLoopMechanics ["Task Execution & Event Loop Priority"]
         Start[Call Stack Cleared]
-        CheckMicro{"Are there Micro-tasks <br> in Micro-task Queue?"}
-        ExecMicro["Execute Micro-task <br> (Promise callbacks)"]
-        Render["Render UI / Browser Repaint <br> (Browser Only)"]
-        CheckMacro{"Are there Macro-tasks <br> in Callback Queue?"}
-        ExecMacro["Execute ONE Macro-task <br> (setTimeout / I/O)"]
+        CheckMicro{"Are there Micro-tasks in Micro-task Queue?"}
+        ExecMicro["Execute Micro-task (Promise callbacks)"]
+        Render["Render UI / Browser Repaint (Browser Only)"]
+        CheckMacro{"Are there Macro-tasks in Callback Queue?"}
+        ExecMacro["Execute ONE Macro-task (setTimeout / I/O)"]
 
         Start --> CheckMicro
         CheckMicro -->|Yes| ExecMicro
@@ -587,7 +587,7 @@ Node.js রানটাইমে **`process.nextTick()`** কোনো সাধ
 
 ```mermaid
 flowchart TD
-    subgraph LibuvArchitecture [libuv Core Kernel Interface]
+    subgraph LibuvArchitecture ["libuv Core Kernel Interface"]
         direction TB
         JS_Call["JS Async Call (eg. fs.readFile / dns.lookup)"]
         LibuvCore["libuv C-Core API Boundary"]
