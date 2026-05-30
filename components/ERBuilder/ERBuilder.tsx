@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Controls,
@@ -25,6 +25,10 @@ import {
   Check,
   Sparkles,
   Info,
+  Download,
+  Upload,
+  Settings,
+  HelpCircle,
 } from 'lucide-react';
 import { Table, Relation, Column } from './types';
 import TableNode from './TableNode';
@@ -32,7 +36,35 @@ import RelationModal from './RelationModal';
 import { getLayoutedElements } from './layout';
 import { generateSQL } from './sqlGenerator';
 
-// Presets data definitions
+// A comprehensive standard database datatypes catalog
+const DATA_TYPES = [
+  // Numeric
+  { group: 'Numeric', value: 'INT', label: 'INT (Integer)' },
+  { group: 'Numeric', value: 'BIGINT', label: 'BIGINT (Large Integer)' },
+  { group: 'Numeric', value: 'SERIAL', label: 'SERIAL (Auto-Incrementing)' },
+  { group: 'Numeric', value: 'DECIMAL(10,2)', label: 'DECIMAL (Fixed decimal)' },
+  { group: 'Numeric', value: 'NUMERIC', label: 'NUMERIC (Arbitrary precision)' },
+  { group: 'Numeric', value: 'REAL', label: 'REAL (Single precision float)' },
+  { group: 'Numeric', value: 'DOUBLE PRECISION', label: 'DOUBLE PRECISION' },
+  // String / Characters
+  { group: 'String', value: 'VARCHAR(255)', label: 'VARCHAR(255)' },
+  { group: 'String', value: 'VARCHAR(100)', label: 'VARCHAR(100)' },
+  { group: 'String', value: 'VARCHAR(50)', label: 'VARCHAR(50)' },
+  { group: 'String', value: 'TEXT', label: 'TEXT (Unbounded text)' },
+  { group: 'String', value: 'CHAR(36)', label: 'CHAR(36) (Fixed char)' },
+  { group: 'String', value: 'UUID', label: 'UUID (Universally Unique ID)' },
+  // Temporal
+  { group: 'Temporal', value: 'TIMESTAMP', label: 'TIMESTAMP (Date + Time)' },
+  { group: 'Temporal', value: 'DATE', label: 'DATE' },
+  { group: 'Temporal', value: 'TIME', label: 'TIME' },
+  { group: 'Temporal', value: 'INTERVAL', label: 'INTERVAL' },
+  // Advanced / Binary
+  { group: 'Advanced', value: 'BOOLEAN', label: 'BOOLEAN' },
+  { group: 'Advanced', value: 'JSON', label: 'JSON' },
+  { group: 'Advanced', value: 'JSONB', label: 'JSONB (Binary JSON)' },
+  { group: 'Advanced', value: 'BYTEA', label: 'BYTEA (Binary byte data)' },
+];
+
 const ECOMMERCE_PRESETS: Table[] = [
   {
     id: 'users',
@@ -140,6 +172,7 @@ const NODE_TYPES = {
 
 export default function ERBuilder() {
   const [mounted, setMounted] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // UI inputs state
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,19 +180,30 @@ export default function ERBuilder() {
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Column creation modal
+  // Column creation modal state
   const [isAddingCol, setIsAddingCol] = useState(false);
   const [activeTableForCol, setActiveTableForCol] = useState<string | null>(null);
   const [newColName, setNewColName] = useState('');
   const [newColType, setNewColType] = useState('INT');
   const [newColIsPK, setNewColIsPK] = useState(false);
   const [newColIsFK, setNewColIsFK] = useState(false);
+  const [newColIsNullable, setNewColIsNullable] = useState(false);
+
+  // Column editing modal state
+  const [isEditingCol, setIsEditingCol] = useState(false);
+  const [activeTableForEditCol, setActiveTableForEditCol] = useState<string | null>(null);
+  const [activeColIndexForEdit, setActiveColIndexForEdit] = useState<number | null>(null);
+  const [editColName, setEditColName] = useState('');
+  const [editColType, setEditColType] = useState('INT');
+  const [editColIsPK, setEditColIsPK] = useState(false);
+  const [editColIsFK, setEditColIsFK] = useState(false);
+  const [editColIsNullable, setEditColIsNullable] = useState(false);
 
   // React Flow states (single source of truth)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // Create Table Node utility
+  // Create Table Node utility (fully self-contained, binds state modifiers perfectly)
   const createTableNode = useCallback((id: string, name: string, x: number, y: number, columns: Column[]): Node => {
     return {
       id,
@@ -175,6 +219,25 @@ export default function ERBuilder() {
         onAddColumn: (tableId: string) => {
           setActiveTableForCol(tableId);
           setIsAddingCol(true);
+        },
+        onEditColumn: (tableId: string, colIndex: number) => {
+          setActiveTableForEditCol(tableId);
+          setActiveColIndexForEdit(colIndex);
+          setNodes((nds) => {
+            const node = nds.find((n) => n.id === tableId);
+            if (node) {
+              const col = (node.data.columns as Column[])[colIndex];
+              if (col) {
+                setEditColName(col.name);
+                setEditColType(col.type);
+                setEditColIsPK(!!col.isPK);
+                setEditColIsFK(!!col.isFK);
+                setEditColIsNullable(!!col.isNullable);
+              }
+            }
+            return nds;
+          });
+          setIsEditingCol(true);
         },
         onDeleteColumn: (tableId: string, colIndex: number) => {
           setNodes((nds) =>
@@ -193,16 +256,16 @@ export default function ERBuilder() {
     };
   }, [setNodes, setEdges]);
 
-  // Check hydration mount and load initial schemas
+  // Load from local storage or presets on mount
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem('core_kernel_diagram_v3');
+    const saved = localStorage.getItem('core_kernel_diagram_v4');
     
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.nodes && parsed.edges) {
-          // Re-inject callbacks into parsed nodes
+          // Re-inject callbacks into imported nodes
           const formattedNodes = parsed.nodes.map((node: any) => ({
             ...node,
             data: {
@@ -214,6 +277,25 @@ export default function ERBuilder() {
               onAddColumn: (tableId: string) => {
                 setActiveTableForCol(tableId);
                 setIsAddingCol(true);
+              },
+              onEditColumn: (tableId: string, colIndex: number) => {
+                setActiveTableForEditCol(tableId);
+                setActiveColIndexForEdit(colIndex);
+                setNodes((nds) => {
+                  const n = nds.find((item) => item.id === tableId);
+                  if (n) {
+                    const col = (n.data.columns as Column[])[colIndex];
+                    if (col) {
+                      setEditColName(col.name);
+                      setEditColType(col.type);
+                      setEditColIsPK(!!col.isPK);
+                      setEditColIsFK(!!col.isFK);
+                      setEditColIsNullable(!!col.isNullable);
+                    }
+                  }
+                  return nds;
+                });
+                setIsEditingCol(true);
               },
               onDeleteColumn: (tableId: string, colIndex: number) => {
                 setNodes((nds) =>
@@ -235,11 +317,11 @@ export default function ERBuilder() {
           return;
         }
       } catch (e) {
-        // Fallback
+        // Fail silently
       }
     }
 
-    // Load defaults if no saved state
+    // Load defaults if empty
     const defaultNodes = ECOMMERCE_PRESETS.map((t) => createTableNode(t.id, t.name, t.x, t.y, t.columns));
     const defaultEdges = ECOMMERCE_RELATIONS.map((rel) => {
       let strokeColor = '#10b981';
@@ -273,16 +355,16 @@ export default function ERBuilder() {
     setEdges(defaultEdges);
   }, [createTableNode, setNodes, setEdges]);
 
-  // Auto-save nodes and edges on changes
+  // Auto-save active schemas to local storage
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem(
-      'core_kernel_diagram_v3',
+      'core_kernel_diagram_v4',
       JSON.stringify({ nodes, edges })
     );
   }, [nodes, edges, mounted]);
 
-  // Derive Table metadata state dynamically for SQL generation
+  // Derive Table metadata dynamically for SQL generation
   const tables = useMemo<Table[]>(() => {
     return nodes.map((node) => ({
       id: node.id,
@@ -293,7 +375,7 @@ export default function ERBuilder() {
     }));
   }, [nodes]);
 
-  // Derive Relation metadata state dynamically for SQL generation
+  // Derive Relation metadata dynamically for SQL generation
   const relations = useMemo<Relation[]>(() => {
     return edges.map((edge) => {
       const sourceCol = edge.sourceHandle
@@ -318,6 +400,13 @@ export default function ERBuilder() {
   const onConnect = useCallback((connection: Connection) => {
     setPendingConnection(connection);
   }, []);
+
+  // Double Click Edge to Delete
+  const onEdgeDoubleClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    if (confirm(`Do you want to delete the relationship between ${edge.source} and ${edge.target}?`)) {
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+    }
+  }, [setEdges]);
 
   const handleRelationModalSubmit = (type: '1:1' | '1:N' | 'N:M') => {
     if (!pendingConnection) return;
@@ -380,7 +469,7 @@ export default function ERBuilder() {
     setNewTableName('');
   };
 
-  // Add Column action
+  // Add Column Form Submit Action
   const handleAddColumnSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTableForCol || !newColName.trim()) return;
@@ -391,6 +480,7 @@ export default function ERBuilder() {
       type: newColType,
       isPK: newColIsPK,
       isFK: newColIsFK,
+      isNullable: newColIsNullable,
     };
 
     setNodes((nds) =>
@@ -416,15 +506,131 @@ export default function ERBuilder() {
     setNewColType('INT');
     setNewColIsPK(false);
     setNewColIsFK(false);
+    setNewColIsNullable(false);
   };
 
-  // Clear/Reset Schema
+  // Edit Column Form Submit Action
+  const handleEditColumnSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeTableForEditCol || activeColIndexForEdit === null || !editColName.trim()) return;
+    const cleanName = editColName.trim().toLowerCase().replace(/\s+/g, '_');
+
+    const updatedCol: Column = {
+      name: cleanName,
+      type: editColType,
+      isPK: editColIsPK,
+      isFK: editColIsFK,
+      isNullable: editColIsNullable,
+    };
+
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id !== activeTableForEditCol) return node;
+        const newCols = [...(node.data.columns as Column[])];
+        newCols[activeColIndexForEdit] = updatedCol;
+        return {
+          ...node,
+          data: { ...node.data, columns: newCols },
+        };
+      })
+    );
+
+    setIsEditingCol(false);
+    setActiveTableForEditCol(null);
+    setActiveColIndexForEdit(null);
+  };
+
+  // Clear/Reset entire Schema
   const handleResetDiagram = () => {
     if (confirm('Are you sure you want to delete the entire schema? This action is irreversible.')) {
       setNodes([]);
       setEdges([]);
-      localStorage.removeItem('core_kernel_diagram_v3');
+      localStorage.removeItem('core_kernel_diagram_v4');
     }
+  };
+
+  // Backup System: Export to JSON File
+  const handleExportJSON = () => {
+    const dataStr = JSON.stringify({ nodes, edges }, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `er-diagram-schema-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Backup System: Import from JSON File
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (parsed.nodes && parsed.edges) {
+          // Re-inject callbacks into imported nodes
+          const formattedNodes = parsed.nodes.map((node: any) => ({
+            ...node,
+            data: {
+              ...node.data,
+              onDeleteTable: (tableId: string) => {
+                setNodes((nds) => nds.filter((n) => n.id !== tableId));
+                setEdges((eds) => eds.filter((e) => e.source !== tableId && e.target !== tableId));
+              },
+              onAddColumn: (tableId: string) => {
+                setActiveTableForCol(tableId);
+                setIsAddingCol(true);
+              },
+              onEditColumn: (tableId: string, colIndex: number) => {
+                setActiveTableForEditCol(tableId);
+                setActiveColIndexForEdit(colIndex);
+                setNodes((nds) => {
+                  const n = nds.find((item) => item.id === tableId);
+                  if (n) {
+                    const col = (n.data.columns as Column[])[colIndex];
+                    if (col) {
+                      setEditColName(col.name);
+                      setEditColType(col.type);
+                      setEditColIsPK(!!col.isPK);
+                      setEditColIsFK(!!col.isFK);
+                      setEditColIsNullable(!!col.isNullable);
+                    }
+                  }
+                  return nds;
+                });
+                setIsEditingCol(true);
+              },
+              onDeleteColumn: (tableId: string, colIndex: number) => {
+                setNodes((nds) =>
+                  nds.map((n) => {
+                    if (n.id !== tableId) return n;
+                    const newCols = [...(n.data.columns as Column[])];
+                    newCols.splice(colIndex, 1);
+                    return {
+                      ...n,
+                      data: { ...n.data, columns: newCols },
+                    };
+                  })
+                );
+              },
+            },
+          }));
+          setNodes(formattedNodes);
+          setEdges(parsed.edges);
+          alert('Schema imported successfully!');
+        } else {
+          alert('Invalid backup schema file format!');
+        }
+      } catch (err) {
+        alert('Failed to parse schema JSON file.');
+      }
+    };
+    reader.readAsText(file);
+    // Clear input selection
+    e.target.value = '';
   };
 
   // Preset Loaders
@@ -586,7 +792,7 @@ export default function ERBuilder() {
 
   // Trigger Dagre automatic layout
   const triggerAutoLayout = () => {
-    const { nodes: lNodes, edges: lEdges } = getLayoutedElements(nodes, edges, 'LR');
+    const { nodes: lNodes } = getLayoutedElements(nodes, edges, 'LR');
     setNodes(lNodes);
   };
 
@@ -617,16 +823,48 @@ export default function ERBuilder() {
         <div className="absolute bottom-[10%] right-[-10%] w-[45%] h-[45%] rounded-full bg-teal-500/5 blur-[100px]" />
       </div>
 
+      {/* Hidden File Input for JSON Imports */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImportJSON}
+        accept=".json"
+        className="hidden"
+      />
+
       {/* 📋 Sidebar Controls Panel */}
       <aside className="w-80 h-full border-r border-white/[0.06] bg-[#0c0c10]/40 backdrop-blur-xl flex flex-col shrink-0 z-10 relative">
         {/* Presets and Global Actions */}
         <div className="p-4 border-b border-white/[0.06] space-y-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4.5 w-4.5 text-emerald-400" />
-            <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-              Presets & Engine
-            </h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4.5 w-4.5 text-emerald-400" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                Presets & Engine
+              </h2>
+            </div>
+            
+            {/* Backup Action Icons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleExportJSON}
+                className="h-6 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all text-[9px] font-bold uppercase font-mono cursor-pointer"
+                title="Export Diagram Backups (JSON)"
+              >
+                <Download className="h-3 w-3" />
+                Backup
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="h-6 px-2 flex items-center justify-center gap-1 rounded border border-white/[0.05] bg-white/[0.01] text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all text-[9px] font-bold uppercase font-mono cursor-pointer"
+                title="Import Diagram Backups (JSON)"
+              >
+                <Upload className="h-3 w-3" />
+                Load
+              </button>
+            </div>
           </div>
+          
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => handleLoadPreset('ecommerce')}
@@ -753,6 +991,7 @@ export default function ERBuilder() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onEdgeDoubleClick={onEdgeDoubleClick}
             nodeTypes={NODE_TYPES}
             fitView
             minZoom={0.2}
@@ -764,9 +1003,16 @@ export default function ERBuilder() {
           </ReactFlow>
 
           {/* Quick instructions floating badge */}
-          <div className="absolute top-4 right-4 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-[#0c0c10]/80 px-4 py-2.5 backdrop-blur-md text-[10px] font-mono text-zinc-400 shadow-xl pointer-events-none select-none">
-            <Info className="h-4 w-4 text-emerald-400" />
-            <span>Drag teal circles (Source) to emerald circles (Target) to draw relations!</span>
+          <div className="absolute top-4 right-4 flex flex-col gap-1.5 rounded-xl border border-white/[0.06] bg-[#0c0c10]/85 px-4 py-3.5 backdrop-blur-md text-[10px] font-mono text-zinc-400 shadow-xl pointer-events-none select-none max-w-sm">
+            <div className="flex items-center gap-2 font-bold text-zinc-200">
+              <Info className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>ER Arena System Instructions</span>
+            </div>
+            <ul className="list-disc pl-4 space-y-1 mt-1 text-zinc-400 text-[9px] leading-relaxed">
+              <li>Drag teal circles (Source) to emerald circles (Target) to draw relations.</li>
+              <li>Hover column rows inside table cards to Edit or Delete columns.</li>
+              <li>Double-click any relation line to delete that connection.</li>
+            </ul>
           </div>
         </div>
 
@@ -806,18 +1052,18 @@ export default function ERBuilder() {
         </section>
       </main>
 
-      {/* Column creation dialog popover */}
+      {/* ➕ Column Creation Dialog Popover */}
       {isAddingCol && activeTableForCol && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <form
             onSubmit={handleAddColumnSubmit}
-            className="w-96 rounded-2xl border border-white/[0.08] bg-[#09090c]/90 p-5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 space-y-4"
+            className="w-[420px] rounded-2xl border border-white/[0.08] bg-[#09090c]/95 p-6 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200 space-y-4"
           >
             <div className="border-b border-white/[0.06] pb-3 mb-2 flex justify-between items-center">
               <div className="flex flex-col">
                 <span className="text-xs font-mono font-bold text-emerald-400 uppercase">Create Column</span>
-                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-                  Target: {activeTableForCol}
+                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">
+                  Target Table: {activeTableForCol}
                 </span>
               </div>
               <button
@@ -829,7 +1075,7 @@ export default function ERBuilder() {
               </button>
             </div>
 
-            {/* Name */}
+            {/* Column Name */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
                 Column Name
@@ -845,7 +1091,7 @@ export default function ERBuilder() {
               />
             </div>
 
-            {/* Datatype Select */}
+            {/* Column Datatype Select */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
                 Data Type
@@ -855,31 +1101,37 @@ export default function ERBuilder() {
                 onChange={(e) => setNewColType(e.target.value)}
                 className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white bg-[#09090c] focus:border-emerald-500/30 focus:outline-none transition-colors [&_option]:bg-[#09090c]"
               >
-                <option value="INT">INT</option>
-                <option value="BIGINT">BIGINT</option>
-                <option value="VARCHAR(255)">VARCHAR(255)</option>
-                <option value="TEXT">TEXT</option>
-                <option value="DECIMAL(10,2)">DECIMAL(10,2)</option>
-                <option value="TIMESTAMP">TIMESTAMP</option>
-                <option value="BOOLEAN">BOOLEAN</option>
+                {/* Grouped Datatypes */}
+                {['Numeric', 'String', 'Temporal', 'Advanced'].map((gpName) => (
+                  <optgroup key={gpName} label={gpName.toUpperCase()} className="text-zinc-500 font-bold uppercase tracking-wide text-[9px] my-1">
+                    {DATA_TYPES.filter((d) => d.group === gpName).map((dt) => (
+                      <option key={dt.value} value={dt.value} className="text-white font-mono text-xs normal-case">
+                        {dt.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
             </div>
 
-            {/* Key checkboxes */}
-            <div className="grid grid-cols-2 gap-4 py-2 border-y border-white/[0.04]">
-              <label className="flex items-center gap-2 text-xs font-mono text-zinc-400 select-none cursor-pointer">
+            {/* Key / Nullable toggles */}
+            <div className="grid grid-cols-3 gap-2.5 py-2.5 border-y border-white/[0.04] text-[10px] font-mono">
+              <label className="flex items-center gap-1.5 text-zinc-400 select-none cursor-pointer">
                 <input
                   type="checkbox"
                   checked={newColIsPK}
                   onChange={(e) => {
                     setNewColIsPK(e.target.checked);
-                    if (e.target.checked) setNewColIsFK(false);
+                    if (e.target.checked) {
+                      setNewColIsFK(false);
+                      setNewColIsNullable(false);
+                    }
                   }}
                   className="rounded border-white/[0.1] bg-white/[0.02] text-emerald-500 focus:ring-0 cursor-pointer h-4 w-4"
                 />
-                Primary Key (PK)
+                PK (Primary)
               </label>
-              <label className="flex items-center gap-2 text-xs font-mono text-zinc-400 select-none cursor-pointer">
+              <label className="flex items-center gap-1.5 text-zinc-400 select-none cursor-pointer">
                 <input
                   type="checkbox"
                   checked={newColIsFK}
@@ -889,16 +1141,147 @@ export default function ERBuilder() {
                   }}
                   className="rounded border-white/[0.1] bg-white/[0.02] text-cyan-500 focus:ring-0 cursor-pointer h-4 w-4"
                 />
-                Foreign Key (FK)
+                FK (Foreign)
+              </label>
+              <label className="flex items-center gap-1.5 text-zinc-400 select-none cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newColIsNullable}
+                  disabled={newColIsPK}
+                  onChange={(e) => setNewColIsNullable(e.target.checked)}
+                  className="rounded border-white/[0.1] bg-white/[0.02] text-amber-500 focus:ring-0 cursor-pointer h-4 w-4 disabled:opacity-30"
+                />
+                Nullable
               </label>
             </div>
 
             {/* Submit */}
             <button
               type="submit"
-              className="w-full py-2 px-3 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 text-xs font-black uppercase tracking-wider font-mono rounded-lg transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10"
+              className="w-full py-2 px-3 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 text-xs font-black uppercase tracking-wider font-mono rounded-lg transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10 animate-pulse hover:animate-none"
             >
               Add Column to Table
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* ⚙️ Column Modification dialog popover */}
+      {isEditingCol && activeTableForEditCol && activeColIndexForEdit !== null && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <form
+            onSubmit={handleEditColumnSubmit}
+            className="w-[420px] rounded-2xl border border-white/[0.08] bg-[#09090c]/95 p-6 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200 space-y-4"
+          >
+            <div className="border-b border-white/[0.06] pb-3 mb-2 flex justify-between items-center">
+              <div className="flex flex-col">
+                <span className="text-xs font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
+                  <Settings className="h-4 w-4 text-emerald-400 shrink-0" />
+                  Modify Column Settings
+                </span>
+                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5">
+                  Table: {activeTableForEditCol}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingCol(false);
+                  setActiveTableForEditCol(null);
+                  setActiveColIndexForEdit(null);
+                }}
+                className="text-zinc-500 hover:text-white text-xs font-mono font-bold border border-white/[0.04] bg-white/[0.01] px-2 py-0.5 rounded cursor-pointer"
+              >
+                ESC
+              </button>
+            </div>
+
+            {/* Column Name */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                Column Name
+              </label>
+              <input
+                type="text"
+                required
+                value={editColName}
+                onChange={(e) => setEditColName(e.target.value)}
+                placeholder="e.g. quantity"
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white placeholder-zinc-500 focus:border-emerald-500/30 focus:outline-none transition-colors"
+                autoFocus
+              />
+            </div>
+
+            {/* Column Datatype Select */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                Data Type
+              </label>
+              <select
+                value={editColType}
+                onChange={(e) => setEditColType(e.target.value)}
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs font-mono text-white bg-[#09090c] focus:border-emerald-500/30 focus:outline-none transition-colors [&_option]:bg-[#09090c]"
+              >
+                {/* Grouped Datatypes */}
+                {['Numeric', 'String', 'Temporal', 'Advanced'].map((gpName) => (
+                  <optgroup key={gpName} label={gpName.toUpperCase()} className="text-zinc-500 font-bold uppercase tracking-wide text-[9px] my-1">
+                    {DATA_TYPES.filter((d) => d.group === gpName).map((dt) => (
+                      <option key={dt.value} value={dt.value} className="text-white font-mono text-xs normal-case">
+                        {dt.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            {/* Key / Nullable toggles */}
+            <div className="grid grid-cols-3 gap-2.5 py-2.5 border-y border-white/[0.04] text-[10px] font-mono">
+              <label className="flex items-center gap-1.5 text-zinc-400 select-none cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editColIsPK}
+                  onChange={(e) => {
+                    setEditColIsPK(e.target.checked);
+                    if (e.target.checked) {
+                      setEditColIsFK(false);
+                      setEditColIsNullable(false);
+                    }
+                  }}
+                  className="rounded border-white/[0.1] bg-white/[0.02] text-emerald-500 focus:ring-0 cursor-pointer h-4 w-4"
+                />
+                PK (Primary)
+              </label>
+              <label className="flex items-center gap-1.5 text-zinc-400 select-none cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editColIsFK}
+                  onChange={(e) => {
+                    setEditColIsFK(e.target.checked);
+                    if (e.target.checked) setEditColIsPK(false);
+                  }}
+                  className="rounded border-white/[0.1] bg-white/[0.02] text-cyan-500 focus:ring-0 cursor-pointer h-4 w-4"
+                />
+                FK (Foreign)
+              </label>
+              <label className="flex items-center gap-1.5 text-zinc-400 select-none cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editColIsNullable}
+                  disabled={editColIsPK}
+                  onChange={(e) => setEditColIsNullable(e.target.checked)}
+                  className="rounded border-white/[0.1] bg-white/[0.02] text-amber-500 focus:ring-0 cursor-pointer h-4 w-4 disabled:opacity-30"
+                />
+                Nullable
+              </label>
+            </div>
+
+            {/* Save */}
+            <button
+              type="submit"
+              className="w-full py-2 px-3 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500 hover:text-[#09090b] text-emerald-400 text-xs font-black uppercase tracking-wider font-mono rounded-lg transition-all cursor-pointer shadow-lg hover:shadow-emerald-500/10"
+            >
+              Save Column Settings
             </button>
           </form>
         </div>

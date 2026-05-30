@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Handle, Position, NodeProps, Node } from '@xyflow/react';
-import { Database, Key, Link2, Trash2, Plus } from 'lucide-react';
+import { Database, Key, Link2, Trash2, Plus, Edit3 } from 'lucide-react';
 import { Column } from './types';
 
 // Extend React Flow Node with our custom structure
@@ -11,11 +11,12 @@ export type CustomNode = Node<{
   columns: Column[];
   onDeleteTable: (id: string) => void;
   onAddColumn: (tableId: string) => void;
+  onEditColumn: (tableId: string, colIndex: number) => void;
   onDeleteColumn: (tableId: string, colIndex: number) => void;
 }, 'tableNode'>;
 
 export default function TableNode({ data, id, selected }: NodeProps<CustomNode>) {
-  const { name, columns, onDeleteTable, onAddColumn, onDeleteColumn } = data;
+  const { name, columns, onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn } = data;
 
   return (
     <div
@@ -98,16 +99,29 @@ export default function TableNode({ data, id, selected }: NodeProps<CustomNode>)
                 <span className="text-[10px] font-bold text-zinc-500 font-mono uppercase bg-white/[0.02] border border-white/[0.04] px-1.5 py-0.5 rounded">
                   {column.type}
                 </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteColumn(id, index);
-                  }}
-                  className="opacity-0 group-hover/row:opacity-100 h-5 w-5 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
-                  title="Remove Column"
-                >
-                  <Trash2 className="h-2.5 w-2.5" />
-                </button>
+                
+                <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditColumn(id, index);
+                    }}
+                    className="h-5 w-5 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                    title="Edit Column Settings"
+                  >
+                    <Edit3 className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteColumn(id, index);
+                    }}
+                    className="h-5 w-5 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                    title="Remove Column"
+                  >
+                    <Trash2 className="h-2.5 w-2.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Right Handle (Source) */}
