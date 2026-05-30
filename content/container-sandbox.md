@@ -735,46 +735,94 @@ Kata Containers-এর মূল মেকানিজম হলো প্রত
 
 ## ৯. Linux Capabilities: রুটের সীমাহীন ক্ষমতার সূক্ষ্ম বিভাজন
 
-ঐতিহ্যগতভাবে লিনাক্সে সিকিউরিটি বাইনারি ছিল: হয় আপনি সাধারণ ইউজার (সব ব্লকড) অথবা আপনি রুট ইউজার (সব পারমিটেড)। আধুনিক লিনাক্সে রুটের এই সীমাহীন ও বিপজ্জনক ক্ষমতাকে প্রায় ৪০টি ছোট ছোট সূক্ষ্ম ক্ষমতায় ভাগ করা হয়েছে, যাকে **Capabilities** বলা হয়।
+ঐতিহ্যগতভাবে লিনাক্সে সিকিউরিটি মডেল ছিল অত্যন্ত বাইনারি: হয় আপনি সাধারণ ইউজার (সব ব্লকড) অথবা আপনি রুট ইউজার (সব পারমিটেড)। রুট ইউজারের এই অসীম ক্ষমতা কন্টেইনার সিকিউরিটির জন্য অত্যন্ত বিপজ্জনক। কার্নেল স্তরে রুটের এই সীমাহীন ক্ষমতাকে প্রায় ৪০টি ছোট ছোট অধিকার বা প্রিভিলেজে ভাগ করা হয়েছে, যাকে **Linux Capabilities** বলা হয়।
 
-### key Capabilities & Risks
+### Capabilities এর ৫টি মূল সেট এবং কার্নেল মেকানিজম
 
-| Capability | What it Permits | Threat Level & Risk if Compromised |
-| :--- | :--- | :--- |
-| `CAP_SYS_ADMIN` | কার্নেলের প্রায় সমস্ত মাউন্ট, কনফিগারেশন ও আইসোলেশন পরিবর্তনের ক্ষমতা। | **অত্যন্ত বিপজ্জনক** (কার্যত রুট প্রিভিলেজ)। |
-| `CAP_NET_ADMIN` | নেটওয়ার্ক ইন্টারফেস, আইপি টেবিল রুলস এবং রাউটিং পরিবর্তনের ক্ষমতা। | **উচ্চ ঝুঁকিপূর্ণ** (ম্যান-ইন-দ্য-মিডল অ্যাটাক সম্ভব)। |
-| `CAP_SYS_RAWIO` | হোস্টের ফিজিক্যাল মেমরি ও হার্ডড্রাইভ পোর্টে সরাসরি বাইট লেভেল রিড-রাইট। | **অত্যন্ত বিপজ্জনক** (কার্নেল মেমরি হ্যাকিং সম্ভব)। |
-| `CAP_CHOWN` | যেকোনো ফাইলের ওনারশিপ (মালিকানা) পরিবর্তন করার ক্ষমতা। | **মাঝারি** (ফাইলের এক্সেস পারমিশন বাইপাস সম্ভব)। |
-| `CAP_NET_BIND_SERVICE` | ১০২৪-এর নিচের পোর্টগুলো (যেমন: 80, 443) ওপেন বা বাইন্ড করার ক্ষমতা। | **নিরাপদ** (ডিফল্ট পারমিটেড)। |
+লিনাক্স কার্নেলে প্রতিটি প্রসেসের `task_struct` ডিরেক্টরিতে ৫টি ভিন্ন প্রিভিলেজ সেট (Capabilities Bitmask) মেইনটেইন করা হয়:
 
-### Dropping and Adding Capabilities
-ডকার বা কুবারনেটিসে কন্টেইনারের মেইন প্রসেস রুট হলেও, হোস্ট ওএসের নিরাপত্তার স্বার্থে ডকার ডিফল্ট অবস্থায় বেশিরভাগ শক্তিশালী ক্যাপাবিলিটি কেড়ে নেয়।
+১. **Permitted Set (`CapPrm`):** প্রসেসটির জন্য সর্বোচ্চ অনুমোদিত ক্ষমতার লিমিট। এটি প্রসেসটি কোনো সিস্টেমে সর্বোচ্চ যে ক্ষমতাগুলো ধারণ করতে পারে তার সীমা নির্ধারণ করে।
+২. **Effective Set (`CapEff`):** প্রসেসটির চলমান অবস্থায় ঠিক এই মুহূর্তে কার্নেল লেভেলে যে ক্ষমতাগুলো সচল (Active) রয়েছে। কার্নেল যেকোনো সিস্টেম অ্যাক্সেস চেক করার সময় এই মাস্কটি ভেরিফাই করে।
+৩. **Inheritable Set (`CapInh`):** চাইল্ড প্রসেস স্পন হওয়ার সময় যে ক্যাপাবিলিটিগুলো ইনহেরিট বা উত্তরাধিকার সূত্রে ফরোয়ার্ড করা যায়।
+৪. **Bounding Set (`CapBnd`):** একটি প্রসেস তার লাইফ সাইকেলে সর্বোচ্চ যে ক্যাপাবিলিটি সেট অর্জন করতে পারবে তার সর্বোচ্চ সীমা লক করা। `execve()` সিস্টেম কলের মাধ্যমে কোনো প্রসেস তার বাউন্ডিং সেটের বাইরের ক্ষমতা কখনই অর্জন করতে পারে না।
+৫. **Ambient Set (`CapAmb` - কার্নেল ৪.৩+):** নন-প্রুট প্রসেস বুট করার সময় প্রিভিলেজ লেভেল বজায় রাখতে সাহায্য করে।
 
-প্রোডাকশন গ্রেড কন্টেইনারে জিরো-ট্রাস্ট নিশ্চিত করতে আমরা রান টাইমে সব ক্যাপাবিলিটি ফেলে দিয়ে শুধু প্রয়োজনীয়টি যুক্ত করতে পারি:
+---
 
-```yaml
-# Kubernetes Pod Security Context Specification
-apiVersion: v1
-kind: Pod
-metadata:
-  name: secure-web-pod
-spec:
-  containers:
-  - name: web-nginx
-    image: nginx:alpine
-    securityContext:
-      capabilities:
-        drop:
-        - ALL # ড্রপ অল ক্যাপাবিলিটিজ (জিরো ট্রাস্ট)
-        add:
-        - NET_BIND_SERVICE # শুধু ৮০ পোর্টে বাইন্ড করার পারমিশন
+### `/proc/[PID]/status` থেকে লাইভ Capabilities ডি-কোডিং
+
+আমরা যেকোনো রানিং প্রসেসের মেমরি প্রিভিলেজ তার স্ট্যাটাস ফাইল থেকে ডি-কোড করতে পারি:
+
+```bash
+# প্রসেস আইডি ১৫৭৩০ এর ক্যাপাবিলিটি মাস্ক দেখুন
+grep -i cap /proc/15730/status
+```
+**আউটপুট ইন্টারনালস:**
+```text
+CapInh:	0000000000000000
+CapPrm:	00000000a80425fb
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+```
+এখানে থাকা হেক্সাডেসিমেল নম্বরটি (`00000000a80425fb`) মূলত কার্নেলের Capabilities বিটম্যাপ নির্দেশ করে। লিনাক্সের `capsh` টুলের মাধ্যমে এটিকে মানুষের পড়ার উপযোগী ফরমেটে ডি-কোড করা যায়:
+```bash
+capsh --decode=00000000a80425fb
+```
+এটি কার্নেলের কোন কোন নির্দিষ্ট বিট সচল তা নিখুঁতভাবে বিশ্লেষণ করে প্রিন্ট করে দেবে (যেমন: `cap_chown, cap_dac_override, cap_net_bind_service` ইত্যাদি)।
+
+---
+
+### Capabilities নিয়ন্ত্রণের বাস্তব উদাহরণ (C Code)
+
+প্রোগ্রামে জিরো-ট্রাস্ট সিকিউরিটি নিশ্চিত করতে আমরা `<sys/capability.h>` লাইব্রেরি ব্যবহার করে প্রোগ্রাম্যাটিকভাবে নিজের ক্ষমতা ছাঁটাই বা ড্রপ করতে পারি:
+
+```c
+// C Code: Programmatically checking and dropping capabilities
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/capability.h>
+
+void print_capabilities() {
+    cap_t caps = cap_get_proc();
+    printf("Current Process Capabilities: %s
+", cap_to_text(caps, NULL));
+    cap_free(caps);
+}
+
+int main() {
+    printf("[Main] Checking initial capabilities:
+");
+    print_capabilities();
+
+    // CAP_SYS_BOOT (Reboot block) ক্ষমতা ড্রপ করার প্রিপারেশন
+    cap_t caps = cap_get_proc();
+    cap_value_t cap_list[1] = { CAP_SYS_BOOT };
+    
+    // Effective এবং Permitted সেট থেকে এটি ডিলেট করা হচ্ছে
+    cap_set_flag(caps, CAP_EFFECTIVE, 1, cap_list, CAP_CLEAR);
+    cap_set_flag(caps, CAP_PERMITTED, 1, cap_list, CAP_CLEAR);
+    
+    if (cap_set_proc(caps) == -1) {
+        perror("cap_set_proc failed");
+        exit(1);
+    }
+    cap_free(caps);
+
+    printf("[Main] Capabilities after dropping CAP_SYS_BOOT:
+");
+    print_capabilities();
+    return 0;
+}
 ```
 
 ---
 
 ## ১০. Seccomp (Secure Computing Mode) ও BPF Syscall Filtering
 
-**Seccomp** হলো লিনাক্স কার্নেলের একটি সিস্টেম কল ফিল্টারিং মেকানিজম। কার্নেলে ৩০০-এর বেশি সিস্টেম কল রয়েছে, কিন্তু একটি সাধারণ এনজিনেক্স বা নোড অ্যাপ্লিকেশনের সর্বোচ্চ ৪০-৫০টি কলের প্রয়োজন হয়। বাকি কলগুলো ওপেন রাখা সিকিউরিটি রিস্ক বাড়ায়।
+**Seccomp** হলো লিনাক্স কার্নেলের একটি শক্তিশালী সিস্টেম কল ফিল্টারিং গেটওয়ে। লিনাক্স ওএসে ৩০০টিরও বেশি সিস্টেম কল রয়েছে, কিন্তু একটি নোড বা এনজিনেক্স ওয়েব অ্যাপ্লিকেশনের সর্বোচ্চ ৪০-৫০টি কলের প্রয়োজন হয়। বাকি অপ্রয়োজনীয় ও অত্যন্ত শক্তিশালী সিস্টেম কলগুলো (যেমন: `reboot`, `sys_kexec_load`, `mount`) ওপেন রাখা সিকিউরিটি রিস্ক বাড়ায়। সেকম্প কার্নেল স্তরে এই বিপজ্জনক কলগুলোকে ফিল্টার করে দেয়।
 
 ```mermaid
 flowchart LR
@@ -786,77 +834,137 @@ flowchart LR
     style Block fill:#7f1d1d,stroke:#ef4444,color:#fff
 ```
 
-### Seccomp-BPF Mechanics
-সেকম্প কার্নেল লেভেলে সিস্টেম কল ফিল্টার করতে **BPF (Berkeley Packet Filter)** কোড ব্যবহার করে। যখন কোনো প্রসেস সিস্টেম কল করে, কার্নেল BPF রুলস রান করে দেখে প্রসেসটির এই নির্দিষ্ট কলটি করার পারমিশন আছে কিনা।
+### Seccomp v1 (Strict) বনাম Seccomp-BPF (Filter Mode)
 
-### Custom Seccomp Profile Configuration
-ডকার ডিফল্ট একটি প্রোফাইল ব্যবহার করে যা প্রায় ৪৪টি বিপজ্জনক সিস্টেম কল (যেমন: `reboot`, `mount`, `kexec_load`) সম্পূর্ণ ব্লক করে দেয়। আমরা চাইলে কাস্টম প্রোফাইল তৈরি করতে পারি:
+১. **Seccomp v1 (Strict Mode):**
+   - লিনাক্স কার্নেল ২.৬.১২ সংস্করণে প্রথম চালু হওয়া মোড। এতে প্রসেসটি কেবল এবং শুধুমাত্র ৪টি সিস্টেম কল এক্সিকিউট করতে পারত: `read()`, `write()`, `_exit()`, এবং `sigreturn()`। এর বাইরে অন্য কোনো সিস্টেম কল ফায়ার করলেই কার্নেল সাথে সাথে প্রসেসটিকে `SIGKILL` সংকেত পাঠিয়ে টার্মিনেট করে দিত। এটি অত্যন্ত কঠোর হওয়ায় বাস্তবসম্মত ছিল না।
+২. **Seccomp-BPF (Filter Mode):**
+   - এটি অত্যন্ত নমনীয় ও ডায়নামিক সিকিউরিটি সলিউশন। এটি লিনাক্সের **Classic BPF (Berkeley Packet Filter)** রুলস ব্যবহার করে প্রসেসের প্রতিটি সিস্টেম কলের আর্গুমেন্ট লেভেল পর্যন্ত ফিল্টার করতে পারে।
 
-```json
-{
-  "defaultAction": "SCMP_ACT_ERRNO",
-  "architectures": [
-    "SCMP_ARCH_X86_64",
-    "SCMP_ARCH_AARCH64"
-  ],
-  "syscalls": [
-    {
-      "names": [
-        "read",
-        "write",
-        "exit",
-        "sigreturn"
-      ],
-      "action": "SCMP_ACT_ALLOW"
+---
+
+### Seccomp-BPF লাইব্রেরি ইমপ্লিমেন্টেশন (C Code)
+
+আমরা সরাসরি `libseccomp` ব্যবহার করে কার্নেলে সিস্টেম কল ফিল্টারিং পলিসি রেজিস্টার করতে পারি:
+
+```c
+// C Code: Restricting system calls using libseccomp
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <seccomp.h>
+#include <errno.h>
+
+int main() {
+    // সেকম্প ফিল্টার ইনিশিয়ালাইজ করুন (ডিফল্ট একশন ব্লক করা)
+    scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_KILL);
+    if (ctx == NULL) {
+        printf("seccomp_init failed
+");
+        return 1;
     }
-  ]
+
+    // শুধুমাত্র read, write এবং exit করার অনুমতি দেওয়া হচ্ছে
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(read), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(write), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit), 0);
+    seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit_group), 0);
+
+    // কার্নেলে ফিল্টার লোড করুন
+    if (seccomp_load(ctx) < 0) {
+        perror("seccomp_load failed");
+        seccomp_release(ctx);
+        return 1;
+    }
+
+    printf("Seccomp policy loaded! Attempting to print (write syscall)...
+");
+    
+    // reboot সিস্টেম কল ফায়ার করার চেষ্টা করুন যা কিল অ্যাকশন ট্রিগার করবে
+    printf("Attempting reboot syscall...
+");
+    syscall(169); // System call 169 is reboot in x86_64. 
+    
+    // সেকম্প রুলসের কারণে প্রসেসটি এই লাইনে পৌঁছানোর আগেই কিলড হবে!
+    printf("This line will never print.
+");
+    seccomp_release(ctx);
+    return 0;
 }
 ```
-এই প্রোফাইলটি কন্টেইনারে লোড করলে কন্টেইনারটি `read`, `write`, `exit` ছাড়া আর কোনো সিস্টেম কল কার্নেলে পাঠাতে পারবে না, ফলে তার হ্যাক হওয়ার সম্ভাবনা শূন্যের কোঠায় নেমে আসবে।
+
+### Seccomp Filter Actions (কার্নেলের শাস্তিমূলক অ্যাকশনসমূহ)
+সেকম্প পলিসি লঙ্ঘন করলে কার্নেল নিচের একশনগুলো নিতে পারে:
+- `SECCOMP_RET_ALLOW:` সিস্টেম কলটি এক্সিকিউট করতে কার্নেলে পারমিশন দেওয়া।
+- `SECCOMP_RET_KILL_PROCESS:` সম্পূর্ণ প্রসেস ট্রিসহ কন্টেইনারকে সাথে সাথে টার্মিনেট করা।
+- `SECCOMP_RET_ERRNO:` সিস্টেম কল ব্লক করে প্রসেসের কাছে একটি স্পেসিফিক এরর সংকেত (যেমন: `EPERM` - Permission Denied) পাঠানো, যাতে প্রসেস ক্র্যাশ না করে এরর হ্যান্ডেল করতে পারে।
+- `SECCOMP_RET_LOG:` সিস্টেম কলকে পারমিশন দেওয়া, কিন্তু সিকিউরিটি অডিটের জন্য হোস্টের syslog-এ লগ রাইট করা।
 
 ---
 
 ## ১১. AppArmor ও SELinux: কার্নেল অ্যাক্সেস কন্ট্রোল পলিসি (LSM)
 
-নেমস্পেস এবং ক্যাপাবিলিটি ছাড়াও লিনাক্স কার্নেল লেভেলে আরও শক্তিশালী নিরাপত্তা বাউন্ডারি সেট করতে **LSM (Linux Security Modules)** ব্যবহৃত হয়। এর মধ্যে সবচেয়ে জনপ্রিয় দুটি সিস্টেম হলো **AppArmor** (Ubuntu/Debian) এবং **SELinux** (RHEL/CentOS)।
+নেমস্পেস কন্টেইনারকে ফাইল ও নেটওয়ার্কের ভার্চুয়াল রূপ দেয়, কিন্তু কন্টেইনারের রুট ইউজার যদি হোস্টের কোনো গুরুত্বপূর্ণ ফাইল মডিফাই করতে চায়, তবে লিনাক্স কার্নেলের **LSM (Linux Security Modules)** তা প্রতিরোধ করে। LSM হলো কার্নেলের ফাইল সিস্টেম, প্রসেস এবং নেটওয়ার্ক মাউন্ট পয়েন্টের ভেতর বসানো একগুচ্ছ সিকিউরিটি হুক (`security_inode_permission()`), যা প্রতিটা রিড/রাইট এক্সিকিউট হওয়ার আগে পলিসি ফাইল চেক করে পারমিশন দেয়।
 
-### Path-Based (AppArmor) vs. Inode-Based (SELinux)
-- **AppArmor:** এটি ফাইল পাথের ওপর ভিত্তি করে কাজ করে। উদাহরণস্বরূপ, আমরা অ্যাপ-আর্মর প্রোফাইলে লিখে দিতে পারি যে এই প্রসেসটি `/etc/` ডিরেক্টরির বাইরে কোনো ফাইলে রাইট করতে পারবে না। এটি ব্যবহার করা সহজ।
-- **SELinux:** এটি ওএসের প্রতিটি ফাইল ইনোড (Inode), নেটওয়ার্ক পোর্ট ও প্রসেসের ওপর একটি সিকিউরিটি লেবেল লাগায়। এটি অত্যন্ত শক্তিশালী এবং সূক্ষ্ম সিকিউরিটি পলিসি দেয় কিন্তু কনফিগারেশন অত্যন্ত জটিল।
+### LSM আর্কিটেকচার: AppArmor (Path-based) বনাম SELinux (Inode-based)
 
-### Custom AppArmor Profile Walkthrough
+১. **AppArmor (Ubuntu/Debian-এর ডিফল্ট):**
+   - **মেকানিজম:** এটি সম্পূর্ণ **Path-based**। অর্থাৎ এটি ফাইলের ভৌত পাথের ওপর ভিত্তি করে রিড-রাইট কন্ট্রোল করে। উদাহরণস্বরূপ: `/etc/nginx/nginx.conf` পাথটি রিড-অনলি মোডে লক করে দেওয়া।
+   - **সুবিধা:** পলিসি ফাইলগুলো মানুষের পড়ার ও লেখার উপযোগী অত্যন্ত সহজ সিনট্যাক্সে সাজানো থাকে।
+২. **SELinux (RHEL/CentOS-এর ডিফল্ট):**
+   - **মেকানিজম:** এটি সম্পূর্ণ **Inode Label-based (MAC - Mandatory Access Control)**। ওএসের প্রতিটা ফাইল ইনোড, প্রসেস পোর্ট এবং মেমরি ব্লকের ওপর একটি সিকিউরিটি ট্যাগ বা লেবেল লাগানো থাকে।
+   - **সুবিধা:** অত্যন্ত সূক্ষ্ম ও টাইট সিকিউরিটি নিশ্চিত করে। ফাইল রিনেম বা পাথ চেঞ্জ করলেও সিকিউরিটি পলিসি ব্রেক হয় না, তবে কনফিগারেশন অত্যন্ত জটিল।
 
-হোস্ট ওএসে একটি কাস্টম প্রোফাইল `/etc/apparmor.d/deny-write` তৈরি করে আমরা ডকার কন্টেইনারের ফাইল রাইট ব্লক করতে পারি:
+---
+
+### কন্টেইনার প্রটেক্ট করার জন্য কাস্টম AppArmor প্রোফাইল ডিফিনিশন
+
+আসুন আমরা হোস্ট ওএসে একটি কাস্টম প্রোফাইল তৈরি করি যা কন্টেইনারের ম্যালিশিয়াস রাইট ও শেল এক্সিকিউশন সম্পূর্ণ ব্লক করবে:
 
 ```pro
-# AppArmor Profile Definition
+# AppArmor Profile: /etc/apparmor.d/containers/nginx-secure
 #include <tunables/global>
 
-profile deny-write flags=(attach_disconnected) {
-  # Include default container policies
+profile nginx-secure flags=(attach_disconnected) {
+  # কন্টেইনারের ডিফল্ট পারমিশন রুলস ইমপোর্ট করুন
   #include <abstractions/base>
   
-  # Allow reading everything
+  # হোস্টের সমস্ত ফাইলের রিড অ্যাক্সেস দেওয়া হচ্ছে
   /** r,
   
-  # Explicitly deny writing to crucial folders
+  # কন্টেইনারের গুরুত্বপূর্ণ পাথগুলোতে রাইট অ্যাক্সেস ব্লক করুন
   deny /etc/** w,
+  deny /usr/** w,
   deny /var/log/** w,
+  
+  # রানিং শেলের ভেতর থেকে নতুন কোনো শেল স্পন করা ব্লক করুন (Command Shell Isolation)
+  deny /bin/sh mr,
+  deny /bin/bash mr,
+  deny /bin/dash mr,
+  
+  # শুধুমাত্র এনজিনেক্স এর ক্যাশ ডিরেক্টরিতে রিড-রাইট পারমিশন দেওয়া হচ্ছে
+  /var/cache/nginx/** rw,
+  /var/run/nginx.pid rw,
 }
 ```
-কন্টেইনার রান করার সময় এই প্রোফাইলটি পাস করলে কন্টেইনারের রুট ইউজারও ওই ফোল্ডারে কোনো ফাইল পরিবর্তন করতে পারবে না:
+প্রোফাইলটি লোড করার পর ডকার কন্টেইনারে এটি ইনজেক্ট করলে কন্টেইনারের রুট হ্যাক হলেও হ্যাকার কোনো ফাইলে রাইট বা নতুন প্রসেস রান করতে পারবে না:
 ```bash
-docker run --security-opt apparmor=deny-write nginx
+# হোস্ট কার্নেলে প্রোফাইল লোড করুন
+sudo apparmor_parser -r -W /etc/apparmor.d/containers/nginx-secure
+
+# প্রোফাইলটি ব্যবহার করে কন্টেইনার স্পন করুন
+docker run --security-opt apparmor=nginx-secure -d nginx:alpine
 ```
 
 ---
 
 ## ১২. User Namespaces ও Rootless Containers আর্কিটেকচার
 
-ঐতিহ্যগতভাবে ডকার ডেমোন হোস্ট ওএসে `root` ইউজার হিসেবে চলত। ফলে কন্টেইনারের ভেতরের যেকোনো সিকিউরিটি লিক সরাসরি হোস্টের রুট হ্যাকিংয়ের কারণ হতো। এর সমাধান হলো **User Namespaces** এবং **Rootless Containers**।
+ঐতিহ্যবাহী ডকার সিস্টেমে `dockerd` ডেমোন হোস্ট ওএসে `root (UID 0)` প্রিভিলেজে চলত। এর ফলে কন্টেইনারের কোনো প্রসেস যদি বাউন্ডারি ডিঙিয়ে বের হতে পারত, তবে সে হোস্ট ওএসেরও রুট প্রিভিলেজ পেয়ে যেত। এর চূড়ান্ত সিকিউরিটি সলিউশন হলো লিনাক্সের **User Namespaces** এবং এর ওপর ভিত্তি করে চলা **Rootless Containers**।
 
-### UID/GID Mapping Mechanics
-ইউজার নেমস্পেস কন্টেইনারের ভেতরের ইউজার আইডিকে হোস্টের নন-প্রিভিলেজড আইডির সাথে ম্যাপ করে দেয়।
+### UID/GID Mapping এর কার্নেল মেকানিক্স
+
+ইউজার নেমস্পেস কন্টেইনারের ভেতরের প্রসেসের ইউজার আইডিকে (UID) হোস্ট ওএসের সম্পূর্ণ ভিন্ন এক নন-রুট আইডির সাথে ম্যাপ করে দেয়।
 
 ```mermaid
 flowchart LR
@@ -870,19 +978,54 @@ flowchart LR
     C_Root -->|Mapped programmatically| H_User
 ```
 
-কার্নেলের `/proc/[PID]/uid_map` ফাইলে এই ম্যাপিং কনফিগার করা হয়:
+কার্নেল এই ম্যাপিং টেবিলটি `/proc/[PID]/uid_map` এবং `/proc/[PID]/gid_map` ফাইলে রেজিস্টার করে:
 ```text
 # ContainerUID  HostUID  Range
-0               10001    1
+0               100000   65536
 ```
-এর অর্থ হলো কন্টেইনারের ভেতরে যে প্রসেসটি মনে করছে সে সর্বময় ক্ষমতার অধিকারী `root (UID: 0)`, হোস্ট ওএসের কাছে সে আসলে সাধারণ ইউজার `10001`। ফলে কন্টেইনার ভেঙে বের হলেও সে হোস্টের কোনো ফাইলের ক্ষতি করতে পারবে না।
-
-### Rootless Engines: Podman & Rootless Docker
-আজকের আধুনিক কন্টেইনার ইঞ্জিন **Podman** এবং **Rootless Docker** হোস্টের কোনো ব্যাকগ্রাউন্ড রুট ডেমোন ছাড়াই চলে।
-- **newuidmap / newgidmap:** এগুলো বিশেষ কার্নেল হেল্পার টুল যা নন-রুট ইউজারদের জন্য ইউজার নেমস্পেস কনফিগার করে।
-- **slirp4netns:** যেহেতু নন-রুট ইউজার হোস্টের নেটওয়ার্ক কার্ড মডিফাই করতে পারে না, slirp4netns ইউজার স্পেসে একটি সম্পূর্ণ ভার্চুয়াল TCP/IP স্ট্যাক এবং টানেল তৈরি করে নেটওয়ার্কিং সলভ করে।
+**আর্কিটেকচারাল ব্যাখ্যা:** কন্টেইনারের ভেতরের প্রসেসটি মনে করবে সে ওএসের পরম প্রিভিলেজড ইউজার `root (UID: 0)`। সে কন্টেইনারের ভেতরের ফাইলে রাইট বা অ্যাপ ইনস্টল করতে পারবে। কিন্তু কার্নেল লেভেলে হোস্ট ওএসের ফিজিক্যাল ফাইল সিস্টেমে সে আসলে একজন সাধারণ নন-রুট ইউজার `100000` মাত্র। ফলে কন্টেইনার ভেঙে বের হলেও সে হোস্ট ওএসের কোনো ক্ষতি করতে পারবে না।
 
 ---
+
+### `/etc/subuid` এবং `/etc/subgid` এর ভূমিকা
+নন-রুট ইউজাররা যাতে হোস্টের ইউজার আইডি স্পেস এলোমেলো না করে ফেলে, তার জন্য `/etc/subuid` ফাইলে প্রতিটা ইউজারের জন্য নির্দিষ্ট ইউজার আইডি রেঞ্জ বরাদ্দ থাকে:
+```text
+awolad:100000:65536
+```
+এর অর্থ হলো `awolad` ইউজারটি তার কন্টেইনারের জন্য হোস্টের `100000` থেকে `165535` পর্যন্ত ইউজার আইডিগুলোকে কন্টেইনার ইউজার নেমস্পেসে ম্যাপ করার জন্য বরাদ্দ পেয়েছে। ব্যাকগ্রাউন্ডে ওএসের সেট-ইউজার-আইডি (`setuid`) হেল্পার টুল **`newuidmap`** এবং **`newgidmap`** এই পলিসি ভেরিফাই করে প্রসেসের নেমস্পেস ম্যাপিং টেবিল সেট আপ করে।
+
+---
+
+### Rootless Network Virtualization: slirp4netns
+
+যেহেতু নন-রুট ইউজাররা হোস্ট ওএসের ফিজিক্যাল নেটওয়ার্ক কার্ড মডিফাই করতে পারে না (কারণ `veth` পেয়ার ও নেটওয়ার্ক রাউটিং সেট করতে `CAP_NET_ADMIN` ক্যাপাবিলিটি প্রয়োজন), তাই Rootless Docker/Podman নেটওয়ার্কিং সলভ করার জন্য **slirp4netns** মডিউলটি ব্যবহার করে।
+
+```mermaid
+flowchart TD
+    subgraph RootlessNetworking [slirp4netns Networking Architecture]
+        ContainerApp[Container Application]
+        UserNetNS["Isolated User Network Namespace <br> (Rootless Sandbox)"]
+        SlirpProcess["slirp4netns Process <br> (Runs in User-Space on Host)"]
+        HostSyscalls["Normal User-Space Syscalls <br> (connect, send, recv)"]
+        HostKernel["Host Kernel Network Card"]
+
+        ContainerApp -->|Raw IP Packets| UserNetNS
+        UserNetNS -->|TUN/TAP Device| SlirpProcess
+        SlirpProcess -->|Translates Packets to| HostSyscalls
+        HostSyscalls -->|Unprivileged Ports| HostKernel
+    end
+
+    style UserNetNS fill:#1e3a8a,stroke:#3b82f6,color:#fff
+    style SlirpProcess fill:#7c2d12,stroke:#f97316,color:#fff
+    style HostSyscalls fill:#065f46,stroke:#10b981,color:#fff
+```
+
+#### slirp4netns আর্কিটেকচারাল ফ্লো:
+১. কন্টেইনারের ভেতরে একটি ভার্চুয়াল **TUN/TAP** নেটওয়ার্ক ডিভাইস স্পন করা হয়।
+২. কন্টেইনার অ্যাপ যখন কোনো নেটওয়ার্ক রিকোয়েস্ট পাঠায়, Raw IP প্যাকেটগুলো এই TAP ইন্টারফেসে এসে জমা হয়।
+৩. হোস্ট ওএসের ইউজার স্পেসে চলা **slirp4netns** প্রসেসটি এই Raw IP প্যাকেটগুলোকে রিড করে।
+৪. সে একটি লাইটওয়েট ইউজার-স্পেস **TCP/IP stack (SLIRP)** ব্যবহার করে এই প্যাকেটগুলোকে সাধারণ ও আন-প্রিভিলেজড সিস্টেম কল (যেমন: `connect()`, `send()`, `recv()`) এ রূপান্তরিত করে।
+৫. হোস্টের এই সাধারণ সিস্টেম কলগুলো হোস্ট কার্নেলের নেটওয়ার্ক স্ট্যাকে স্বাভাবিক নন-রুট প্রসেসের মতোই প্রসেসড হয়ে ইন্টারনেটে যাতায়াত করে। এর ফলে সম্পূর্ণ রুট প্রিভিলেজ বা ওআইসি রিসোর্স কন্ট্রোল ছাড়াই নিরাপদ কন্টেইনার নেটওয়ার্কিং সম্ভব হয়।
 
 ## ১৩. WebAssembly (Wasm): ব্রাউজারের বাইরে আধুনিক স্যান্ডবক্সিং
 
