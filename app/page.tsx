@@ -168,6 +168,35 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <TerminalWidget />
         </header>
 
+        {/* Interactive ER Diagram Playground Banner */}
+        <div className="mb-14 relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-[#0c0c10]/90 to-emerald-950/10 p-6 backdrop-blur-xl gsap-scroll-reveal group transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_25px_rgba(16,185,129,0.06)]">
+          {/* Decorative glowing gradient ring */}
+          <div className="absolute right-[-10%] top-[-20%] w-[300px] h-[300px] rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
+          
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[9px] font-mono font-bold uppercase tracking-widest text-emerald-300">
+                <Sparkles className="h-3 w-3 text-emerald-400" />
+                Schema Design Engine
+              </div>
+              <h3 className="text-xl font-bold tracking-tight text-white">
+                Interactive ER Diagram Arena
+              </h3>
+              <p className="text-xs text-zinc-400 font-light leading-relaxed max-w-xl">
+                ১০০+ টেবিল বিশিষ্ট জটিল ডাটাবেজ স্কিমা ড্র্যাগ অ্যান্ড ড্রপ করে তৈরি করুন। সাথে সাথে রিয়েল-টাইমে প্রডাকশন-রেডি SQL DDL স্ক্রিপ্ট জেনারেট ও কপি করুন। ব্রাউজারের IndexedDB প্রযুক্তিতে আপনার ডায়াগ্রাম থাকবে চিরকাল সংরক্ষিত!
+              </p>
+            </div>
+            
+            <Link
+              href="/er-builder"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-3 text-xs font-black uppercase tracking-wider text-[#09090b] shadow-lg shadow-emerald-500/15 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-500/25 active:scale-95 transition-all select-none cursor-pointer font-mono"
+            >
+              Launch ER Arena
+              <ChevronRight className="h-4 w-4 stroke-[3px]" />
+            </Link>
+          </div>
+        </div>
+
         {/* Section Heading & Category Filter */}
         <div className="space-y-6 mb-10">
           <section className="flex items-center justify-between border-b border-white/[0.06] pb-4">
