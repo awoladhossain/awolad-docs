@@ -1,0 +1,216 @@
+'use client';
+
+import React from 'react';
+import { Handle, Position, NodeProps, Node } from '@xyflow/react';
+import { Database, Key, Link2, Trash2, Plus, Edit3 } from 'lucide-react';
+import { Column } from './types';
+
+// Extend React Flow Node with our custom structure
+export type CustomNode = Node<{
+  name: string;
+  columns: Column[];
+  color?: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose';
+  onDeleteTable: (id: string) => void;
+  onAddColumn: (tableId: string) => void;
+  onEditColumn: (tableId: string, colIndex: number) => void;
+  onDeleteColumn: (tableId: string, colIndex: number) => void;
+  onChangeColor: (tableId: string, color: 'slate' | 'emerald' | 'cyan' | 'purple' | 'amber' | 'rose') => void;
+}, 'tableNode'>;
+
+export default function TableNode({ data, id, selected }: NodeProps<CustomNode>) {
+  const { name, columns, color = 'slate', onDeleteTable, onAddColumn, onEditColumn, onDeleteColumn, onChangeColor } = data;
+
+  const borderColors: Record<string, string> = {
+    slate: 'border-white/[0.08] hover:border-white/[0.15] shadow-black/40',
+    emerald: 'border-emerald-500/35 hover:border-emerald-500/50 shadow-emerald-500/5',
+    cyan: 'border-cyan-500/35 hover:border-cyan-500/50 shadow-cyan-500/5',
+    purple: 'border-purple-500/35 hover:border-purple-500/50 shadow-purple-500/5',
+    amber: 'border-amber-500/35 hover:border-amber-500/50 shadow-amber-500/5',
+    rose: 'border-rose-500/35 hover:border-rose-500/50 shadow-rose-500/5',
+  };
+
+  const headerColors: Record<string, string> = {
+    slate: 'bg-white/[0.02] border-white/[0.06]',
+    emerald: 'bg-emerald-950/20 border-emerald-500/10 text-emerald-400',
+    cyan: 'bg-cyan-950/20 border-cyan-500/10 text-cyan-400',
+    purple: 'bg-purple-950/20 border-purple-500/10 text-purple-400',
+    amber: 'bg-amber-950/20 border-amber-500/10 text-amber-400',
+    rose: 'bg-rose-950/20 border-rose-500/10 text-rose-400',
+  };
+
+  const badgeColors: Record<string, string> = {
+    slate: 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400',
+    emerald: 'bg-emerald-500/25 border-emerald-500/40 text-emerald-300',
+    cyan: 'bg-cyan-500/25 border-cyan-500/40 text-cyan-300',
+    purple: 'bg-purple-500/25 border-purple-500/40 text-purple-300',
+    amber: 'bg-amber-500/25 border-amber-500/40 text-amber-300',
+    rose: 'bg-rose-500/25 border-rose-500/40 text-rose-300',
+  };
+
+  return (
+    <div
+      className={`
+        w-72
+        rounded-2xl
+        border
+        bg-[#0a0a0f]/95
+        backdrop-blur-xl
+        shadow-2xl
+        transition-all
+        duration-300
+        group/header
+        ${selected ? 'ring-2 ring-emerald-500/55 scale-[1.01]' : ''}
+        ${borderColors[color]}
+      `}
+    >
+      {/* Table Header */}
+      <div className={`flex items-center justify-between border-b px-4 py-3 rounded-t-2xl transition-all duration-300 ${headerColors[color]}`}>
+        <div className="flex flex-col gap-1.5 w-full">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-300 ${badgeColors[color]}`}>
+                <Database className="h-4 w-4" />
+              </div>
+              <span className="text-sm font-bold tracking-tight text-white font-mono uppercase truncate max-w-[120px]">
+                {name}
+              </span>
+            </div>
+
+            {/* Actions Panel */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteTable(id);
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded-lg border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                title="Delete Table"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Glowing domain color picker dots (appears on header hover) */}
+          <div className="flex items-center gap-1.5 opacity-0 group-hover/header:opacity-100 transition-all duration-200 py-0.5 border-t border-white/[0.04] mt-1 pt-1.5 justify-start">
+            {(['slate', 'emerald', 'cyan', 'purple', 'amber', 'rose'] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChangeColor(id, c);
+                }}
+                className={`h-3 w-3 rounded-full border border-white/20 transition-all hover:scale-125 cursor-pointer ${
+                  c === 'slate' ? 'bg-zinc-600' :
+                  c === 'emerald' ? 'bg-emerald-500' :
+                  c === 'cyan' ? 'bg-cyan-500' :
+                  c === 'purple' ? 'bg-purple-500' :
+                  c === 'amber' ? 'bg-amber-500' : 'bg-rose-500'
+                } ${color === c ? 'ring-1 ring-white scale-110' : ''}`}
+                title={`Set domain color to ${c}`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Columns List */}
+      <div className="p-3.5 space-y-2">
+        {columns.map((column, index) => {
+          const isPK = column.isPK;
+          const isFK = column.isFK;
+
+          return (
+            <div
+              key={index}
+              className="group/row relative flex items-center justify-between rounded-lg border border-white/[0.02] bg-white/[0.01] px-3 py-2 hover:bg-white/[0.03] transition-all"
+            >
+              {/* Left Handle (Target) */}
+              <Handle
+                type="target"
+                position={Position.Left}
+                id={`${id}-${column.name}-target`}
+                className="!h-2.5 !w-2.5 !border-2 !border-[#0a0a0f] !bg-emerald-500 opacity-60 hover:opacity-100 transition-opacity !left-[-5px]"
+              />
+
+              {/* Column Name & Badges */}
+              <div className="flex items-center gap-2 z-10">
+                {isPK && (
+                  <span className="flex h-4 w-4 items-center justify-center rounded bg-amber-500/10 text-amber-400 border border-amber-500/20" title="Primary Key">
+                    <Key className="h-2.5 w-2.5 fill-current" />
+                  </span>
+                )}
+                {isFK && (
+                  <span className="flex h-4 w-4 items-center justify-center rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" title="Foreign Key">
+                    <Link2 className="h-2.5 w-2.5" />
+                  </span>
+                )}
+                <span className="text-[12px] font-semibold text-zinc-200 font-mono tracking-tight group-hover/row:text-white transition-colors">
+                  {column.name}
+                </span>
+              </div>
+
+              {/* Type and Actions */}
+              <div className="flex items-center gap-2 z-10 select-none">
+                <span className="text-[10px] font-bold text-zinc-500 font-mono uppercase bg-white/[0.02] border border-white/[0.04] px-1.5 py-0.5 rounded">
+                  {column.type}
+                </span>
+                
+                <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditColumn(id, index);
+                    }}
+                    className="h-5 w-5 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                    title="Edit Column Settings"
+                  >
+                    <Edit3 className="h-2.5 w-2.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteColumn(id, index);
+                    }}
+                    className="h-5 w-5 flex items-center justify-center rounded border border-white/[0.04] bg-white/[0.01] text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                    title="Remove Column"
+                  >
+                    <Trash2 className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Handle (Source) */}
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={`${id}-${column.name}-source`}
+                className="!h-2.5 !w-2.5 !border-2 !border-[#0a0a0f] !bg-teal-500 opacity-60 hover:opacity-100 transition-opacity !right-[-5px]"
+              />
+            </div>
+          );
+        })}
+
+        {/* Empty State */}
+        {columns.length === 0 && (
+          <div className="text-center py-6 border border-dashed border-white/[0.05] rounded-xl">
+            <span className="text-[10px] text-zinc-500 font-mono">No columns defined</span>
+          </div>
+        )}
+
+        {/* Add Column Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddColumn(id);
+          }}
+          className="w-full flex items-center justify-center gap-1.5 py-2 px-3 border border-dashed border-emerald-500/20 hover:border-emerald-500/40 rounded-xl bg-emerald-500/[0.02] hover:bg-emerald-500/[0.05] text-emerald-400 hover:text-emerald-300 text-[10px] font-bold uppercase tracking-wider font-mono transition-all cursor-pointer select-none"
+        >
+          <Plus className="h-3 w-3" />
+          Add Column
+        </button>
+      </div>
+    </div>
+  );
+}

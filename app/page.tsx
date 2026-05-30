@@ -3,6 +3,8 @@ import TerminalWidget from '@/components/TerminalWidget';
 import { getAllDocSlugs, getDocBySlug } from '@/lib/markdown';
 import Link from 'next/link';
 import { BookOpen, ChevronLeft, ChevronRight, Database, Terminal, Cpu, Sparkles } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 
 interface HomePageProps {
   searchParams: Promise<{
@@ -104,27 +106,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 pt-12 pb-24 relative z-10">
-        {/* Navbar */}
-        <nav className="flex items-center justify-between mb-16 border-b border-white/[0.06] pb-6">
-          <div className="flex items-center gap-3 gsap-magnetic">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
-              <BookOpen className="h-4.5 w-4.5 text-emerald-400" />
-            </div>
-            <span className="text-md font-bold tracking-tight text-white font-mono uppercase">
-              CORE KERNEL HUB
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] px-4 py-1.5 text-xs font-semibold text-zinc-400 shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              {docs.length} Active Modules
-            </span>
-          </div>
-        </nav>
+        {/* Reusable Navbar */}
+        <Navbar activeModulesCount={docs.length} />
+        <div className="mb-16" />
 
         {/* Hero Section */}
         <header className="max-w-4xl mb-20 space-y-6">
@@ -183,6 +167,35 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           {/* Dynamic Interactive Shell Terminal Simulator */}
           <TerminalWidget />
         </header>
+
+        {/* Interactive ER Diagram Playground Banner */}
+        <div className="mb-14 relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-[#0c0c10]/90 to-emerald-950/10 p-6 backdrop-blur-xl gsap-scroll-reveal group transition-all duration-300 hover:border-emerald-500/30 hover:shadow-[0_0_25px_rgba(16,185,129,0.06)]">
+          {/* Decorative glowing gradient ring */}
+          <div className="absolute right-[-10%] top-[-20%] w-[300px] h-[300px] rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
+          
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[9px] font-mono font-bold uppercase tracking-widest text-emerald-300">
+                <Sparkles className="h-3 w-3 text-emerald-400" />
+                Schema Design Engine
+              </div>
+              <h3 className="text-xl font-bold tracking-tight text-white">
+                Interactive ER Diagram Arena
+              </h3>
+              <p className="text-xs text-zinc-400 font-light leading-relaxed max-w-xl">
+                ১০০+ টেবিল বিশিষ্ট জটিল ডাটাবেজ স্কিমা ড্র্যাগ অ্যান্ড ড্রপ করে তৈরি করুন। সাথে সাথে রিয়েল-টাইমে প্রডাকশন-রেডি SQL DDL স্ক্রিপ্ট জেনারেট ও কপি করুন। ব্রাউজারের IndexedDB প্রযুক্তিতে আপনার ডায়াগ্রাম থাকবে চিরকাল সংরক্ষিত!
+              </p>
+            </div>
+            
+            <Link
+              href="/er-builder"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-3 text-xs font-black uppercase tracking-wider text-[#09090b] shadow-lg shadow-emerald-500/15 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-500/25 active:scale-95 transition-all select-none cursor-pointer font-mono"
+            >
+              Launch ER Arena
+              <ChevronRight className="h-4 w-4 stroke-[3px]" />
+            </Link>
+          </div>
+        </div>
 
         {/* Section Heading & Category Filter */}
         <div className="space-y-6 mb-10">
@@ -346,30 +359,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </div>
 
-      {/* Modern Glassmorphic Footer */}
-      <footer className="border-t border-white/[0.06] bg-[#0c0c10]/40 backdrop-blur-md relative z-10">
-        <div className="max-w-5xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between gap-6 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-          <div className="text-center md:text-left">
-            © {new Date().getFullYear()} MD Core Docs by{' '}
-            <span className="text-emerald-400 font-semibold">Awolad Hossain</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 md:justify-end">
-            <a
-              href="mailto:awoladh04@gmail.com"
-              className="text-zinc-500 transition-colors hover:text-emerald-400 normal-case"
-            >
-              awoladh04@gmail.com
-            </a>
-            <span className="text-zinc-800">•</span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Knowledge Base
-            </span>
-            <span className="text-zinc-800">•</span>
-            <span>Next.js V16</span>
-          </div>
-        </div>
-      </footer>
+      {/* Reusable Modern Glassmorphic Footer */}
+      <Footer />
     </div>
   );
 }
