@@ -158,19 +158,19 @@ flowchart LR
 flowchart TD
     subgraph V8Pipeline ["V8 Execution Pipeline"]
         JSCode["JavaScript Text Code"]
-        Parser["AST Parser (Generates Abstract Syntax Tree)"]
-        Ignition["Ignition Interpreter (Generates V8 Bytecode)"]
-        Feedback["Type Feedback Vector (Profiles variable types dynamically)"]
-        TurboFan["TurboFan JIT Compiler (Generates Native Machine Code)"]
+        Parser["AST Parser - Generates Abstract Syntax Tree"]
+        Ignition["Ignition Interpreter - Generates V8 Bytecode"]
+        Feedback["Type Feedback Vector - Profiles variable types dynamically"]
+        TurboFan["TurboFan JIT Compiler - Generates Native Machine Code"]
         CPU["Physical Host CPU Execution"]
 
         JSCode --> Parser
         Parser --> Ignition
         Ignition --> CPU
         Ignition --> Feedback
-        Feedback -->|Hot Functions (Optimization)| TurboFan
+        Feedback -->|Hot Functions Optimization| TurboFan
         TurboFan --> CPU
-        TurboFan -.->|Type Mismatch (De-optimization)| Ignition
+        TurboFan -.->|Type Mismatch Deoptimization| Ignition
     end
 
     style JSCode fill:#1e293b,stroke:#475569,color:#fff
