@@ -136,10 +136,24 @@ flowchart TD
 *   **Chapter 15: Systems-Level Practical Project: Custom File Watcher & Non-blocking Net Socket Server**
     *   **Concept Integration Project:** রানটাইম কনসেপ্ট ব্যবহার করে সম্পূর্ণ স্ক্র্যাচ থেকে একটি হাই-পারফরম্যান্স ফাইল ওয়াচার এবং নন-ব্লকিং নেট সকেট সার্ভার তৈরি করা (Streams, Buffers, Sockets, and Libuv thread interactions)।
 
+
+
+
+### 📂 Module 6: Advanced System Extensions & Performance Tuning (অ্যাডভান্সড সিস্টেম এক্সটেনশন ও পারফরম্যান্স টিউনিং)
+*   **Chapter 16: V8 Memory Profiling & Core Dump Analysis**
+    *   আউট-অব-মেমরি (OOM) প্রসেস ক্র্যাশের পর ওএস-লেভেল Core Dump (`SIGABRT`) স্ন্যাপশট নিষ্কাশন।
+    *   `llnode` (LLDB Debugger) প্লাগইন ব্যবহার করে পোস্ট-মর্টেম C++ হিপ অবজেক্ট ডিকোড ও ডিবাগিং।
+*   **Chapter 17: WebAssembly, SharedArrayBuffer & Atomics**
+    *   Web Workers এবং Thread Concurrency-র হাই-স্পিড শেয়ার্ড মেমরি মেকানিজম (`SharedArrayBuffer`)।
+    *   মেমরি ওভাররাইটিং রোধে ওএস এবং হার্ডওয়্যার CPU-level Atomic Assembly Instructions (`Atomics` API) ব্যবহার।
+*   **Chapter 18: V8 Native Intrinsics & JIT Benchmarking**
+    *   `--allow-natives-syntax` মেমরি ফ্ল্যাগ অন করে V8 Engines-এর অভ্যন্তরীণ সি-লেভেল মেথডগুলো অ্যাক্সেস।
+    *   `%OptimizeFunctionOnNextCall()`, `%GetOptimizationStatus()` এবং `%HasFastProperties()` দিয়ে JIT অপ্টিমাইজেশন ও হিডেন ক্লাসের গতির প্রত্যক্ষ পরীক্ষা।
+
 ---
 
 > [!NOTE]
 > **Learning Journey Note:**
-> এই ১৫টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
+> এই ১৮টি চ্যাপ্টারের প্রতিটি একটি সিস্টেম-লেভেল হ্যান্ডবুক মডিউলের অংশ। প্রতিটি চ্যাপ্টারে থিওরির পাশাপাশি লিনাক্স কার্নেলের আচরণ ও বাস্তব কোড সিমুলেশন থাকবে যাতে আপনি একদম বিগিনার থেকে শুরু করে প্রোডাকশন-গ্রেড হাই-কনকারেন্ট সিস্টেম ডিজাইনার হতে পারেন।
 
 ---

@@ -1129,3 +1129,183 @@ server.listen(PORT, "0.0.0.0", () => {
 ৫. **Multi-threaded Worker Threads:** যখনই লগের ডাটা বা হ্যাশ ডাইজেস্ট করার মতো অতিরিক্ত প্রসেসর ইনটেনসিভ কাজ সামনে আসে, নোড একটি সম্পূর্ণ পৃথক ওএস থ্রেড স্পন করে ওয়ার্কারের সাহায্যে ওই কাজটি সম্পন্ন করে মেইন থ্রেডে পুশ করে। এটি সিঙ্গেল থ্রেডের সরলতা এবং মাল্টি-থ্রেডিংয়ের গতি ও দক্ষতার এক অপূর্ব সিস্টেমের মেলবন্ধন!
 
 ---
+
+
+## মডিউল ৬: অ্যাডভান্সড সিস্টেম এক্সটেনশন ও পারফরম্যান্স টিউনিং
+
+এই পরিপূরক মডিউলটিতে আমরা জাভাস্ক্রিপ্ট রানটাইমের এমন কিছু গভীরতম দিক নিয়ে আলোচনা করব যা চরম স্কেলে অ্যাপ্লিকেশন ডেভেলপমেন্ট, প্রোডাকশন-লেভেল ডিবাগিং এবং সিপিইউ-লেভেল অপ্টিমাইজেশনের জন্য অত্যন্ত জরুরি।
+
+---
+
+## ১৬. V8 Memory Profiling & Core Dump Analysis
+
+প্রোডাকশন এনভায়রনমেন্টে কোনো নোডজেএস অ্যাপ্লিকেশন যখন আউট-অব-মেমরি (OOM) ক্র্যাশ করে, তখন কোনো লগ ফাইলে বা স্ট্যাক ট্রেসে ক্র্যাশের আসল কারণ খুঁজে পাওয়া অসম্ভব। কারণ মেমরি উপচে পড়ার মুহূর্তে প্রসেসটি কোনো ওয়ার্নিং ছাড়াই ওএস দ্বারা চিরতরে বন্ধ (`SIGKILL`) হয়ে যায়।
+
+এই ধরণের মারাত্মক বিপর্যয় ডিবাগ করতে আমাদের ওএস-লেভেল **Core Dump** এবং **Post-Mortem Analysis** আয়ত্ত করতে হবে।
+
+### OOM Crash-এ Core Dump নিষ্কাশন
+যখন কোনো নোড অ্যাপ্লিকেশন চলে, তখন ওএসকে নির্দেশ দেওয়া যায় যেন ক্র্যাশ করার মুহূর্তে সে মেমরির সম্পূর্ণ রানিং বাইনারি স্ন্যাপশট ফিজিক্যাল ডিস্কে রাইট করে রাখে।
+
+নোডজেএস চালু করার সময় নিচের ফ্ল্যাগগুলো ব্যবহার করতে হয়:
+```bash
+node --abort-on-uncaught-exception --max-old-space-size=4096 server.js
+```
+- `--abort-on-uncaught-exception`: কোনো আনহ্যান্ডেলড এরর ঘটলে নোড প্রসেসটিকে জোরপূর্বক সি-লেভেলের `abort()` সিগন্যাল দিয়ে বন্ধ করে এবং ওএসকে প্রসেসটির মেমরি ডাম্প করার অনুমতি দেয়।
+
+লিনাক্স সিস্টেমে কোর ডাম্প সক্রিয় করতে কার্নেলের উলিমিট সেট করতে হয়:
+```bash
+ulimit -c unlimited
+```
+এর ফলে প্রসেসটি ক্র্যাশ হওয়ামাত্র ডিরেক্টরিতে `core.<PID>` নামের একটি বিশাল ফাইল জেনারেট হবে।
+
+---
+
+### llnode (LLDB Debugger) দিয়ে মেমরি অ্যানাটমি বিশ্লেষণ
+
+**`llnode`** হলো একটি অত্যন্ত বৈপ্লবিক **LLDB (Low-Level Debugger)** প্লাগইন। এটি আমাদের ওএস-লেভেল কোর ডাম্প ফাইল রিড করে V8 ইঞ্জিনের C++ মেমরি অবজেক্টগুলোকে জাভাস্ক্রিপ্ট ফরম্যাটে ডিকোড করে রিড করতে সাহায্য করে।
+
+#### LLDB বুট ও কোর ডাম্প লোডিং কমান্ড:
+```bash
+lldb node -c core.19253
+```
+কোর ডাম্প লোড হওয়ার পর llnode প্লাগইন ব্যবহার করে সরাসরি মেমরির ফিজিক্যাল রানিং ফাংশনগুলোর C++ কল স্ট্যাক দেখা যায়:
+
+```text
+(lldb) v8 backtrace
+  * frame #0: 0x00003c2d4a1b02d5 <JSFunction: add (s.js:1:13)>
+    frame #1: 0x00003c2d4a1b0682 <JSFunction: (anonymous) (s.js:8:5)>
+    frame #2: 0x00000e34f8a20ca1 <InternalFrame>
+```
+
+#### হিপ অবজেক্টের মেমরি অ্যাড্রেস অনুসন্ধান:
+আমরা সরাসরি মেমরির কোনো অবজেক্ট অ্যাড্রেস দিয়ে তার ভেতরের ভ্যালু এবং টাইপ ফিজিক্যালি প্রিন্ট করতে পারি:
+```text
+(lldb) v8 inspect 0x00003c2d4a1b02d5
+{
+  "type": "Object",
+  "className": "Object",
+  "properties": [
+    { "name": "resourceId", "value": 409 },
+    { "name": "allocatedMemoryMb", "value": 1024 }
+  ]
+}
+```
+এর ফলে অ্যাপ্লিকেশন কেন ক্র্যাশ করেছিল, কোন কোন অবজেক্ট মেমরির হিপ আটকে রেখেছিল তা পোস্ট-মর্টেম এনালাইসিস করে সরাসরি ওএস লেভেল থেকে বের করা সম্ভব।
+
+---
+
+## ১৭. WebAssembly, SharedArrayBuffer & Atomics (CPU-level Shared Memory Concurrency)
+
+জাভাস্ক্রিপ্টের সিঙ্গেল-থ্রেডেড সীমাবদ্ধতা কাটিয়ে উঠতে ব্রাউজার বা নোডে **Web Workers** বা **Worker Threads** ব্যবহার করা হয়। কিন্তু সাধারণ ওয়ার্কার থ্রেডে মেসেজ পাঠানো বা ডাটা রিসিভ করতে মেমরি ক্লোন ও সিরিয়ালাইজেশন মেকানিজম ব্যবহার করতে হয়, যা চরম ধীরগতির এবং হাই-লেটেন্সি অপারেশন।
+
+এর ওএস-লেভেল সমাধান হলো **`SharedArrayBuffer`** এবং **`Atomics`**।
+
+### SharedArrayBuffer (CPU Shared Memory)
+`SharedArrayBuffer` হলো একটি ফিজিক্যাল মেমরি ব্লক যা মেইন থ্রেড এবং সমস্ত ব্যাকগ্রাউন্ড ওয়ার্কার থ্রেডগুলোর মধ্যে সরাসরি শেয়ার্ড বা উম্মুক্ত থাকে।
+- এখানে কোনো ডাটা ক্লোন করা হয় না। 
+- মেইন থ্রেড এবং ওয়ার্কার থ্রেড একই ফিজিক্যাল র‍্যাম লোকেশন শেয়ার করে ডাটা রিড-রাইট করতে পারে।
+- **Spectre/Meltdown সতর্কবার্তা:** প্রসেসরের স্পেকুলেটিভ এক্সিকিউশন ভালনারেবিলিটির কারণে এই শেয়ার্ড মেমরি ফিচারটি অতীতে সাময়িক বন্ধ ছিল। বর্তমানে ব্রাউজারে `Cross-Origin-Opener-Policy` এবং `Cross-Origin-Embedder-Policy` সিকিউরিটি হেডার ইনজেকশনের মাধ্যমে এটি নিরাপদে চালু করা যায়।
+
+---
+
+### Atomics API: CPU-level Thread Safety
+যেহেতু একাধিক থ্রেড একই মেমরি ব্লক একই সাথে রাইট করতে পারে, সেহেতু প্রসেসর লেভেলে ডাটা ওভাররাইট বা কলাপ্স হওয়া এড়াতে **`Atomics`** API ব্যবহার করা হয়। এটি সরাসরি হোস্ট ওএস ও হার্ডওয়্যার প্রসেসরের **Atomic Assembly Instructions** কল করে থ্রেড সেফটি নিশ্চিত করে।
+
+#### Atomics দিয়ে তৈরি লক-ফ্রি কনকারেন্ট মেমরি কোড ডেমো:
+
+```javascript
+// Atomics Shared Memory Thread-Safety Demo
+const { Worker, isMainThread, workerData } = require("worker_threads");
+
+if (isMainThread) {
+    // ১. হিপ মেমরিতে ১০ বাইটের একটি Shared Array Buffer তৈরি করুন
+    const sharedBuffer = new SharedArrayBuffer(10);
+    const sharedArray = new Int32Array(sharedBuffer);
+    
+    // প্রাথমিক মেমরি ভ্যালু সেট করুন (অফসেট ০-তে ভ্যালু ৫০)
+    sharedArray[0] = 50;
+
+    console.log(`[MAIN THREAD] Initial memory value at index 0: ${sharedArray[0]}`);
+
+    // ২. ব্যাকগ্রাউন্ড ওয়ার্কার থ্রেড স্পন করুন এবং মেমরি শেয়ার করুন
+    const worker = new Worker(__filename, {
+        workerData: { sharedBuffer }
+    });
+
+    worker.on("exit", () => {
+        // ৩. ওয়ার্কারের কাজ শেষে আপডেট মেমরি ভ্যালু চেক করুন
+        console.log(`[MAIN THREAD] Final memory value after worker execution: ${sharedArray[0]}`);
+    });
+} else {
+    // --- ওয়ার্কার থ্রেডের কাজ ---
+    const { sharedBuffer } = workerData;
+    const sharedArray = new Int32Array(sharedBuffer);
+
+    console.log(`[WORKER THREAD] Shared memory accessed. Current value: ${sharedArray[0]}`);
+
+    // ৪. ATOMIC OPERATION: নিরাপদভাবে মেমরি অ্যাড্রেস আপডেট করা
+    // Atomics.add সরাসরি ওএসের CPU-level Atomic ADD ইন্সট্রাকশন ফায়ার করে।
+    // অন্য কোনো থ্রেড এই মিলি-সেকেন্ডে মেমরি লক বা ডিস্টার্ব করতে পারবে না।
+    Atomics.add(sharedArray, 0, 25); 
+    
+    console.log(`[WORKER THREAD] Atomic addition completed. New local value: ${sharedArray[0]}`);
+    process.exit(0);
+}
+```
+
+---
+
+## ১৮. V8 Native Intrinsics & JIT Benchmarking
+
+ভি৮ ইঞ্জিনকে কোড লেভেল থেকে সরাসরি নিয়ন্ত্রণ করা বা তার অপ্টিমাইজেশন পরীক্ষা করার জন্য গুগল ইঞ্জিনিয়াররা V8-এর ভেতরে কিছু নেটিভ সি-লেভেল মেথড তৈরি করে রেখেছেন, যাদের **V8 Intrinsics** বলা হয়।
+
+এই নেটিভ ইন্ট্রিনসিক মেথডগুলো সাধারণ জাভাস্ক্রিপ্ট এপিআইতে অ্যাক্সেস করা যায় না। এদের রান করতে নোডজেএস চালু করার সময় মেমরি ফ্ল্যাগ `--allow-natives-syntax` পাস করতে হয়।
+
+### Natives Syntax ব্যবহার করে JIT ট্র্যাকিং
+এই মেথডগুলোর নামের আগে একটি পারসেন্ট সিম্বল (`%`) বসাতে হয়। যেমন: `%OptimizeFunctionOnNextCall()`, `%GetOptimizationStatus()`।
+
+#### অপ্টিমাইজেশন ট্র্যাক করার চমৎকার প্রুফ-অব-কনসেপ্ট স্ক্রিপ্ট (`jit-bench.js`):
+
+```javascript
+// V8 Native Intrinsics JIT Optimizations Test
+// রান করার নির্দেশ: node --allow-natives-syntax jit-bench.js
+
+function calculator(a, b) {
+    return a * b + 10;
+}
+
+// ১. চেক করুন ফাংশনটির বর্তমান JIT স্ট্যাটাস কি
+// ১ = Function is interpreted (Ignition Interpreter)
+// ২ = Function is optimized (TurboFan optimized machine code)
+console.log("[JIT STATUS] Initial Status:", %GetOptimizationStatus(calculator));
+
+// ২. V8-এর Type Feedback Vector পূরণ করতে ফাংশনটি কল করুন
+calculator(2, 4);
+calculator(5, 10);
+
+// ৩. V8 ইঞ্জিনকে ফোর্স করুন ফাংশনটি পরবর্তী কলে সরাসরি TurboFan JIT-এ কমপাইল করতে!
+%OptimizeFunctionOnNextCall(calculator);
+
+// ৪. অপ্টিমাইজড কোড ফায়ার করার জন্য ফাংশনটি পুনরায় কল করুন
+calculator(6, 8);
+
+const status = %GetOptimizationStatus(calculator);
+if (status === 2 || status === 3) {
+    console.log(`[JIT STATUS] SUCCESS! Function is now fully compiled into Native CPU Assembly Code (Status: ${status})`);
+} else {
+    console.log(`[JIT STATUS] Function is still interpreted or de-optimized. (Status: ${status})`);
+}
+
+// ৫. V8 Fast vs Slow properties চেক করুন (Hidden Classes Benchmark)
+let fastObj = { x: 1, y: 2 };
+let slowObj = { x: 1, y: 2 };
+
+// slowObj-কে ডিকশনারি মোডে পুশ করে দিন (Hidden class ট্রানজিশন ব্রেক করে দেওয়া হলো)
+delete slowObj.x; 
+
+console.log("\n--- Hidden Class Map Benchmarking ---");
+console.log("fastObj has V8 Fast Properties?:", %HasFastProperties(fastObj)); // true
+console.log("slowObj has V8 Fast Properties?:", %HasFastProperties(slowObj)); // false (Slow Dictionary Mode)
+```
+
+---
